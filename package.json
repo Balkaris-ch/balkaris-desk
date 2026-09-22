@@ -1,0 +1,27 @@
+{
+  "name": "balkaris-desk",
+  "version": "0.1.0",
+  "description": "The website's workbench at desk.balkaris.ch — a Telegram link becomes a Balkaris article, written on this machine and committed to the site",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "bot": "tsx --env-file-if-exists=.env src/bot.ts",
+    "console": "tsx --env-file-if-exists=.env src/console.ts",
+    "match": "tsx --env-file-if-exists=.env scripts/match.ts",
+    "draft": "tsx --env-file-if-exists=.env scripts/draft.ts",
+    "check:catalogue": "tsx scripts/check-catalogue.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "hono": "^4.6.0",
+    "jsdom": "^26.0.0",
+    "tsx": "^4.19.0",
+    "zod": "^4.5.2"
+  },
+  "devDependencies": {
+    "@types/jsdom": "^21.1.7",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0"
+  }
+}
