@@ -3,6 +3,9 @@ import { Hono } from "hono";
 import { db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
+import { takeLink } from "./intake.ts";
+import { firstUrl } from "./extract.ts";
+import { esc, send } from "./telegram.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -218,15 +221,114 @@ app.route("/runner", runner);
    The handler is deliberately thin — reading the page and matching it happen
    in src/intake.ts, which the next commit brings.                          */
 
+interface TgMessage {
+  message_id: number;
+  chat: { id: number; type: string; title?: string };
+  from?: { id: number; first_name?: string; username?: string };
+  text?: string;
+  caption?: string;
+}
+
+/**
+ * Who may use it.
+ *
+ * `TELEGRAM_OWNER_ID` in the env is the answer when it is set. When it is not
+ * — a bot minutes old, nobody's id known yet — the FIRST chat to write claims
+ * it, and that claim is written to the events log so the console can show who
+ * it was. The alternative was asking Fini to read a numeric id out of an API
+ * response before the thing could be used once, and a brand-new bot with an
+ * unlisted username is not something a stranger finds in the minutes between
+ * deploy and first message. Everyone after the owner is let in by `desk_allow`
+ * rows, which the owner adds with /allow.
+ */
+function mayUse(chatId: number): { ok: boolean; claimed?: boolean } {
+  const env = Number(process.env.TELEGRAM_OWNER_ID ?? 0);
+  if (env && chatId === env) return { ok: true };
+
+  const owner = db.prepare("SELECT detail FROM events WHERE what = 'owner.claimed' ORDER BY id LIMIT 1").get() as
+    | { detail: string }
+    | undefined;
+
+  if (!owner && !env) {
+    log("owner.claimed", { chat: chatId });
+    return { ok: true, claimed: true };
+  }
+  if (owner && (JSON.parse(owner.detail) as { chat: number }).chat === chatId) return { ok: true };
+
+  const allowed = db.prepare("SELECT 1 FROM events WHERE what = 'chat.allowed' AND detail = ?").get(
+    JSON.stringify({ chat: chatId }),
+  );
+  return { ok: !!allowed };
+}
+
 app.post("/tg/:secret", async (c) => {
   const path = c.req.param("secret");
   const header = c.req.header("x-telegram-bot-api-secret-token") ?? "";
   if (!sameSecret(path, TG_SECRET) || !sameSecret(header, TG_SECRET)) return c.json({ ok: true });
 
-  const update = await c.req.json().catch(() => null);
-  log("telegram.update", update ? { id: (update as { update_id?: number }).update_id } : "unparsable");
-  /* Telegram retries anything that is not a 200, so this always answers 200
-     and keeps its problems in `events`. */
+  const update = (await c.req.json().catch(() => null)) as { message?: TgMessage; edited_message?: TgMessage } | null;
+  const msg = update?.message ?? update?.edited_message;
+  if (!msg) return c.json({ ok: true });
+
+  const chat = msg.chat.id;
+  const text = (msg.text ?? msg.caption ?? "").trim();
+  const name = msg.from?.first_name ?? msg.from?.username ?? "someone";
+
+  const may = mayUse(chat);
+  if (!may.ok) {
+    log("telegram.refused", { chat, name });
+    await send(chat, "This bot belongs to Balkaris and is not open. Ask Fini to add you.");
+    return c.json({ ok: true });
+  }
+
+  /* Telegram retries anything that is not a 200 — including a handler that
+     threw — so the work happens after the response and its problems go to
+     `events` rather than becoming an infinite redelivery loop. */
+  void (async () => {
+    try {
+      if (may.claimed) {
+        await send(chat, `Hello ${esc(name)} — you are the owner of this desk now.`);
+      }
+
+      if (/^\/start\b/.test(text)) {
+        await send(
+          chat,
+          `<b>Balkaris desk</b>\n\nSend me a link to an article. I read it, work out which of our services it is about, ` +
+            `and write it up as a piece for the journal. You approve it before anything is published.\n\n` +
+            `The desk is at ${esc(process.env.DESK_URL ?? "https://desk.balkaris.ch")}.`,
+        );
+        return;
+      }
+
+      if (/^\/status\b/.test(text)) {
+        const q = queueState();
+        const awake = q.lastSeen && Date.now() - Date.parse(`${q.lastSeen}Z`) < 5 * 60_000;
+        await send(
+          chat,
+          `Workstation: <b>${awake ? "awake" : "asleep"}</b>\nQueued: ${q.queued}\nWriting: ${q.running}\n` +
+            `Drafts waiting for you: ${q.drafts}${q.stuck ? `\nStuck: ${q.stuck}` : ""}`,
+        );
+        return;
+      }
+
+      if (!firstUrl(text)) {
+        await send(chat, "Send me a link to an article and I will take it from there. /status tells you what is in the queue.");
+        return;
+      }
+
+      await takeLink(text, {
+        chat,
+        user: msg.from?.id,
+        name,
+        note: text.replace(firstUrl(text) ?? "", "").trim() || undefined,
+        replyTo: msg.message_id,
+      });
+    } catch (e) {
+      log("telegram.handler.failed", e instanceof Error ? e.message : String(e));
+      await send(chat, "Something went wrong on my side. It is in the log on the desk.");
+    }
+  })();
+
   return c.json({ ok: true });
 });
 
