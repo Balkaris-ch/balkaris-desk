@@ -29,11 +29,17 @@ fi
 
 REV=$(git rev-parse --short HEAD)
 echo "→ packing $REV"
-git archive --format=tar.gz -o /tmp/desk-"$REV".tar.gz HEAD
+# mktemp, not a literal /tmp: this runs in Git Bash as often as on Linux, and
+# git for Windows writes to a Windows path. A hard-coded /tmp fails there with
+# "could not open for writing", which reads like a permissions problem and is
+# not one.
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+git archive --format=tar.gz -o "$STAGE/desk.tar.gz" HEAD
 
 echo "→ uploading"
 scp -i "$KEY" -o StrictHostKeyChecking=no -o IdentitiesOnly=yes \
-  /tmp/desk-"$REV".tar.gz "$HOST":/tmp/desk.tar.gz
+  "$STAGE/desk.tar.gz" "$HOST":/tmp/desk.tar.gz
 
 echo "→ installing"
 "${SSH[@]}" bash -se <<'REMOTE'
