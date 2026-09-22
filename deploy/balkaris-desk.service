@@ -10,15 +10,23 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
+# Runs as `deploy`, which owns /opt/balkaris-desk. Not root: the desk fetches
+# arbitrary web pages and parses them with jsdom, which is the last thing that
+# should have the box. It also means a person on the box can run
+# `npm run intake` against the same database instead of meeting
+# "attempt to write a readonly database".
+User=deploy
+Group=deploy
 WorkingDirectory=/opt/balkaris-desk
 ExecStart=/usr/bin/npm run start
 Restart=always
 RestartSec=5
 Environment=NODE_ENV=production
 Environment=DESK_DB=/opt/balkaris-desk/desk.db
-# The box has 3.7 GB and the engine is the tenant that matters. The desk holds
-# a queue and renders HTML; it has no business above a few hundred megabytes.
-MemoryMax=512M
+# The box has 3.7 GB and the engine is the tenant that matters. A jsdom parse
+# of a heavy page is the one thing here that eats memory, so this is set above
+# what the queue and the HTML need and well below what the engine leaves.
+MemoryMax=768M
 
 [Install]
 WantedBy=multi-user.target
