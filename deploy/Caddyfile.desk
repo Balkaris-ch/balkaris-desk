@@ -1,0 +1,18 @@
+# APPENDED to /etc/caddy/Caddyfile, never replacing it — the engine's block
+# lives in the same file and overwriting it takes operation.balkaris.ch down.
+#
+# Not proxied at Cloudflare (the DNS record is grey): Caddy gets its own
+# certificate over HTTP-01, the same way operation.balkaris.ch does.
+desk.balkaris.ch {
+	header {
+		# An internal workbench. It must never be indexed.
+		X-Robots-Tag "noindex, nofollow"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; frame-ancestors 'none'; base-uri 'self'"
+		-Server
+	}
+	reverse_proxy localhost:3400
+}

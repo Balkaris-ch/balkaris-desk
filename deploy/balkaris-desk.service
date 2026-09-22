@@ -1,0 +1,24 @@
+# Installed on the box as `balkaris-desk.service`, running from
+# /opt/balkaris-desk — a tarball deploy, not a git checkout, exactly like the
+# engine next to it. See deploy/README.md.
+#
+# --experimental-sqlite: the queue is node:sqlite, which Node 22 keeps behind
+# that flag. Nothing native is compiled, which is the point on a 3.7 GB box.
+[Unit]
+Description=Balkaris desk — the website's workbench
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/balkaris-desk
+ExecStart=/usr/bin/npm run start
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=DESK_DB=/opt/balkaris-desk/desk.db
+# The box has 3.7 GB and the engine is the tenant that matters. The desk holds
+# a queue and renders HTML; it has no business above a few hundred megabytes.
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

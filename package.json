@@ -1,18 +1,19 @@
 {
   "name": "balkaris-desk",
   "version": "0.1.0",
-  "description": "The website's workbench at desk.balkaris.ch — a Telegram link becomes a Balkaris article, written on this machine and committed to the site",
+  "description": "The website's workbench at desk.balkaris.ch \u2014 a Telegram link becomes a Balkaris article, written on this machine and committed to the site",
   "type": "module",
   "private": true,
   "scripts": {
-    "bot": "tsx --env-file-if-exists=.env src/bot.ts",
-    "console": "tsx --env-file-if-exists=.env src/console.ts",
     "match": "tsx --env-file-if-exists=.env scripts/match.ts",
-    "draft": "tsx --env-file-if-exists=.env scripts/draft.ts",
     "check:catalogue": "tsx scripts/check-catalogue.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "server": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
+    "start": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
+    "runner": "tsx --env-file-if-exists=.env src/runner.ts"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.1",
     "@mozilla/readability": "^0.6.0",
     "hono": "^4.6.0",
     "jsdom": "^26.0.0",
