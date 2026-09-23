@@ -29,7 +29,28 @@ const OLLAMA_EXE =
 const COMFY_URL = (process.env.COMFY_URL ?? "http://127.0.0.1:8189").replace(/\/$/, "");
 const COMFY_PORT = new URL(COMFY_URL).port || "8189";
 const COMFY_DIR = process.env.COMFY_DIR ?? "D:/ComfyUI";
-const COMFY_PY = process.env.COMFY_PYTHON ?? `${COMFY_DIR}/venv/Scripts/python.exe`;
+/*
+ * pythonw, not python, and it matters more than it looks.
+ *
+ * Fini, 24 September 2026, with a screenshot of a black terminal sitting on
+ * top of the site he was reviewing: *"THE FUCK YOU KEEP DOING WITH THIS??? it
+ * distrpts my flow."*
+ *
+ * `launch` below passes `detached: true` so ComfyUI outlives the runner, and
+ * on Windows a detached CONSOLE application gets its own console window —
+ * `windowsHide` does not save you, because the window belongs to the new
+ * console, not to the process. python.exe is a console application.
+ * pythonw.exe is the same interpreter built as a GUI application: no console,
+ * nothing to pop up, nothing to click away.
+ *
+ * Something that starts itself has to start itself INVISIBLY. A background
+ * service that steals focus is not a background service.
+ */
+const COMFY_PY =
+  process.env.COMFY_PYTHON ??
+  (existsSync(`${COMFY_DIR}/venv/Scripts/pythonw.exe`)
+    ? `${COMFY_DIR}/venv/Scripts/pythonw.exe`
+    : `${COMFY_DIR}/venv/Scripts/python.exe`);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
