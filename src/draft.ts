@@ -209,8 +209,23 @@ one short quoted phrase from the source, and put it in quotation marks if you do
           .slice(-2)
           .join("\n\n");
 
+    /* A `blind` beat is given the ARTICLE's own facts and NOT the source.
+       Blinding it to the preceding paragraphs was not enough: the source
+       window was still sitting in context, so the model still opened on
+       "Wikipedia defines…". Nothing to echo means nothing gets echoed. */
+    const brief_context = beat.blind
+      ? `THIS ARTICLE
+It is about: ${input.title}
+Shelf: ${shelf}
+Balkaris services it touches: ${sold.length ? sold.join(", ") : "none directly"}
+
+You are finishing a Balkaris article. Do not describe what the article said and
+do not mention where its subject came from — that is already on the page above
+this paragraph.`
+      : context;
+
     const { value } = await askJson(
-      `${context}
+      `${brief_context}
 
 ${so_far ? `WHAT YOU HAVE WRITTEN SO FAR (do not repeat it):\n${so_far}\n\n` : ""}WRITE THIS SECTION${beat.heading ? ` — it appears under the heading "${beat.heading}"` : " — it is the opening, with no heading"}:
 ${beat.brief}
@@ -229,6 +244,16 @@ shape that is not in the list above.`,
         if (typeof got.blocks[0] !== "string") throw new Error("a section opens on a paragraph, not on a list or a table");
         if (beat.single && got.blocks.length !== 1) {
           throw new Error(`this section is exactly one paragraph and you wrote ${got.blocks.length}`);
+        }
+        /* The doctrine everywhere else here: make the wrong answer impossible
+           to submit rather than ask for it not to be given. A blind beat that
+           names the source has summarised it, whatever else it also did. */
+        if (beat.blind) {
+          const said = proseOf(got.blocks).toLowerCase();
+          const name = publication.toLowerCase().replace(/^the /, "").replace(/^@/, "");
+          if (name.length > 2 && said.includes(name)) {
+            throw new Error(`do not mention ${publication} in this paragraph — it belongs to the opening, not the close`);
+          }
         }
         const n = countWords(got.blocks);
         if (n < lo) throw new Error(`that is ${n} words and the section needs about ${beat.words}`);
