@@ -157,6 +157,14 @@ for (const column of [
 
 /* A flag, never a rejection: see src/echo.ts. It sits on the draft so the
    person approving it sees it at the moment they decide. */
+/* `payload` carries what a job needs beyond its link — which draft to
+   re-close, and as which of the five jobs. */
+try {
+  db.exec("ALTER TABLE jobs ADD COLUMN payload TEXT");
+} catch {
+  /* already there */
+}
+
 for (const column of ["echo TEXT", "closing TEXT"]) {
   try {
     db.exec(`ALTER TABLE drafts ADD COLUMN ${column}`);

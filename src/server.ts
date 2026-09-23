@@ -2,11 +2,11 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
-import { serviceName, TOPICS } from "./catalogue.ts";
 import { takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
 import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
+import { draftPage, linkPage, listPage, page } from "./console.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -32,6 +32,8 @@ import { closingEcho, echoWords } from "./echo.ts";
 const PORT = Number(process.env.DESK_PORT ?? 3400);
 const RUNNER_SECRET = process.env.DESK_RUNNER_SECRET ?? "";
 const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+/** Where a published article actually lives, for the "see it live" link. */
+const SITE_BASE = (process.env.SITE_BASE ?? "https://www.balkaris.ch").replace(/\/$/, "");
 
 const app = new Hono();
 
@@ -56,84 +58,89 @@ app.get("/health", (c) => c.json({ ok: true, service: "balkaris-desk", at: new D
    what is waiting for the workstation. The real console follows; this is the
    page that proves the address answers and says something true.            */
 
-app.get("/", (c) => {
-  reclaim();
-  const q = queueState();
-  const links = db
-    .prepare("SELECT id, url, title, site, topic, services, state, created_at FROM links ORDER BY id DESC LIMIT 40")
-    .all() as {
-    id: number;
-    url: string;
-    title: string | null;
-    site: string | null;
-    topic: string | null;
-    services: string | null;
-    state: string;
-    created_at: string;
-  }[];
+app.get("/", (c) => c.html(listPage()));
 
-  const awake = q.lastSeen && Date.now() - Date.parse(`${q.lastSeen}Z`) < 5 * 60_000;
-  const esc = (s: unknown) =>
-    String(s ?? "").replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[ch]!);
+app.get("/draft/:id", (c) => {
+  const html = draftPage(Number(c.req.param("id")), SITE_BASE);
+  return html ? c.html(html) : c.notFound();
+});
 
-  const rows = links.length
-    ? links
-        .map((l) => {
-          const svc = (l.services ? (JSON.parse(l.services) as string[]) : []).map(serviceName).join(" · ");
-          const topic = TOPICS.find((t) => t.id === l.topic)?.name ?? "";
-          return `<tr>
-            <td class="s">${esc(l.state)}</td>
-            <td><a href="${esc(l.url)}" rel="noreferrer noopener">${esc(l.title ?? l.url)}</a>
-                <em>${esc(l.site ?? "")}</em></td>
-            <td>${esc(topic)}</td>
-            <td>${esc(svc)}</td>
-            <td class="t">${esc(l.created_at)}</td>
-          </tr>`;
-        })
-        .join("")
-    : `<tr><td colspan="5" class="none">Nothing yet. Share a link with the bot.</td></tr>`;
+app.get("/link/:id", (c) => {
+  const html = linkPage(Number(c.req.param("id")));
+  return html ? c.html(html) : c.notFound();
+});
 
-  return c.html(`<!doctype html><html lang="en"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex,nofollow"><title>Balkaris desk</title>
-<style>
-  :root{color-scheme:dark;--bg:#0b0c0d;--fg:#e9eaeb;--dim:#8b8e91;--line:#1e2022;--ok:#25f716}
-  *{box-sizing:border-box}
-  body{margin:0;padding:40px 24px;background:var(--bg);color:var(--fg);
-       font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-  main{max-width:1100px;margin:0 auto}
-  h1{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:0 0 4px}
-  .sub{color:var(--dim);margin:0 0 28px;font-size:13px}
-  .pills{display:flex;flex-wrap:wrap;gap:10px;margin-bottom:28px}
-  .pill{border:1px solid var(--line);border-radius:999px;padding:6px 14px;font-size:12.5px;color:var(--dim)}
-  .pill b{color:var(--fg);font-weight:600}
-  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:7px;vertical-align:1px}
-  table{width:100%;border-collapse:collapse;font-size:13.5px}
-  th{text-align:left;font-weight:500;color:var(--dim);font-size:11px;letter-spacing:.14em;
-     text-transform:uppercase;padding:0 12px 10px 0;border-bottom:1px solid var(--line)}
-  td{padding:13px 12px 13px 0;border-bottom:1px solid var(--line);vertical-align:top}
-  td a{color:var(--fg);text-decoration:none}
-  td a:hover{text-decoration:underline}
-  td em{display:block;color:var(--dim);font-style:normal;font-size:12px;margin-top:2px}
-  .s{color:var(--dim);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;white-space:nowrap}
-  .t{color:var(--dim);font-size:12px;white-space:nowrap}
-  .none{color:var(--dim);padding:28px 0;text-align:center}
-</style></head><body><main>
-  <h1>Balkaris desk</h1>
-  <p class="sub">Share a link with the bot. It is read and matched here, written on the workstation, and published to balkaris.ch when you say so.</p>
-  <div class="pills">
-    <span class="pill"><span class="dot" style="background:${awake ? "var(--ok)" : "#55585a"}"></span>
-      workstation <b>${awake ? "awake" : "asleep"}</b></span>
-    <span class="pill">queued <b>${q.queued}</b></span>
-    <span class="pill">writing <b>${q.running}</b></span>
-    <span class="pill">drafts <b>${q.drafts}</b></span>
-    ${q.stuck ? `<span class="pill">stuck <b>${q.stuck}</b></span>` : ""}
-  </div>
-  <table>
-    <thead><tr><th>State</th><th>Link</th><th>Shelf</th><th>Services</th><th>Shared</th></tr></thead>
-    <tbody>${rows}</tbody>
-  </table>
-</main></body></html>`);
+/* Re-queue a link the workstation could not finish. A paywall that lifts, a
+   rate limit that passes, a model that fell over: none of them is permanent,
+   and a person should not have to re-share the link to try again. */
+app.post("/link/:id/retry", (c) => {
+  const id = Number(c.req.param("id"));
+  const link = db.prepare("SELECT * FROM links WHERE id = ?").get(id) as { kind: string } | undefined;
+  if (!link) return c.notFound();
+
+  db.prepare("UPDATE jobs SET state='queued', attempts=0, error=NULL, runner=NULL, taken_at=NULL WHERE link_id=? AND state IN ('stuck','queued')").run(id);
+  const open = db.prepare("SELECT COUNT(*) c FROM jobs WHERE link_id=? AND state='queued'").get(id) as { c: number };
+  if (!open.c) {
+    db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, ?)").run(id, link.kind === "article" ? "write" : "ingest");
+  }
+  db.prepare("UPDATE links SET state='queued', error=NULL, updated_at=datetime('now') WHERE id=?").run(id);
+  log("link.retried", null, id);
+  return c.redirect(`/link/${id}`, 303);
+});
+
+/* Ask the workstation to write a different ENDING, leaving the article alone.
+   This is what the echo flag is for: the escape from two closings that share a
+   skeleton is picking another job, not rewriting a paragraph by hand. */
+app.post("/draft/:id/reclose", async (c) => {
+  const id = Number(c.req.param("id"));
+  const form = await c.req.parseBody();
+  const job = String(form.job ?? "");
+  const d = db.prepare("SELECT link_id FROM drafts WHERE id = ?").get(id) as { link_id: number } | undefined;
+  if (!d) return c.notFound();
+
+  db.prepare("INSERT INTO jobs (link_id, kind, payload) VALUES (?, 'reclose', ?)").run(
+    d.link_id,
+    JSON.stringify({ draft: id, job }),
+  );
+  log("draft.reclose.queued", { draft: id, job }, d.link_id);
+  return c.redirect(`/draft/${id}`, 303);
+});
+
+/* Publishing is the next piece of work. The button is left in place rather
+   than hidden, because a console that shows an article with no way to act on
+   it teaches somebody the wrong thing about what this is for — and because
+   saying "not yet" in a sentence is more honest than a button that is missing
+   without explanation. */
+app.post("/draft/:id/publish", (c) =>
+  c.html(
+    page(
+      "Not yet",
+      `<a class="back" href="/draft/${Number(c.req.param("id"))}">← back to the article</a>
+       <h1>Publishing is not wired up yet</h1>
+       <p class="sub">The article is written and waiting. The box has the deploy key and can reach the
+       repository — what is missing is the piece that writes the article into the site and pushes it,
+       and the site's own switch for "live at its url but not in the menus".</p>
+       <p class="sub">Nothing has been lost and nothing has gone out.</p>`,
+    ),
+  ),
+);
+
+app.post("/draft/:id/unlist", (c) => c.redirect(`/draft/${Number(c.req.param("id"))}`, 303));
+
+app.post("/draft/:id/remove", (c) => {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT link_id, slug, state FROM drafts WHERE id = ?").get(id) as
+    | { link_id: number; slug: string; state: string }
+    | undefined;
+  if (!d) return c.notFound();
+  if (d.state === "listed") return c.text("Take it off the site before deleting the draft.", 409);
+
+  db.prepare("DELETE FROM drafts WHERE id = ?").run(id);
+  /* The LINK stays. The point of a collector is that nothing shared is lost,
+     and a bad draft is a reason to write it again, not to forget the link. */
+  db.prepare("UPDATE links SET state='queued', updated_at=datetime('now') WHERE id=?").run(d.link_id);
+  log("draft.removed", { slug: d.slug }, d.link_id);
+  return c.redirect("/", 303);
 });
 
 /* ---------- the runner's door ----------------------------------------------
