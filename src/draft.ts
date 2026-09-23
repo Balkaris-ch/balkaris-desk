@@ -194,6 +194,20 @@ one short quoted phrase from the source, and put it in quotation marks if you do
   const body: Block[] = [];
   const dropped: string[] = [];
 
+  /**
+   * One sentence: the claim this piece actually landed on.
+   *
+   * Written just before the closing beat and given to it INSTEAD of the
+   * source, the preceding paragraphs or a window of anything. Blinding the
+   * close to everything specific removed the summary and bought a worse
+   * problem: the advice became true of the shelf rather than of the article,
+   * so every marketing piece would end the same shape and the journal would
+   * grow a tell. A single sentence is too small a surface to pad back into a
+   * summary, and big enough for the closing action to follow from THIS
+   * argument.
+   */
+  let thesis = "";
+
   for (const beat of tpl.beats) {
     const lo = Math.round(beat.words * 0.6);
     const hi = Math.round(beat.words * 1.4);
@@ -209,19 +223,39 @@ one short quoted phrase from the source, and put it in quotation marks if you do
           .slice(-2)
           .join("\n\n");
 
-    /* A `blind` beat is given the ARTICLE's own facts and NOT the source.
-       Blinding it to the preceding paragraphs was not enough: the source
-       window was still sitting in context, so the model still opened on
-       "Wikipedia defines…". Nothing to echo means nothing gets echoed. */
-    const brief_context = beat.blind
-      ? `THIS ARTICLE
-It is about: ${input.title}
-Shelf: ${shelf}
-Balkaris services it touches: ${sold.length ? sold.join(", ") : "none directly"}
+    /* A `blind` beat is given the ARTICLE's own thesis and NOTHING else — not
+       the source, not the preceding paragraphs, not a window of either.
+       Blinding it to the paragraphs alone was not enough: the source window
+       was still in context and the model still opened on "Wikipedia
+       defines…". Proximity does not care which part of the prompt the text
+       came from. */
+    if (beat.blind && !thesis) {
+      const { value } = await askJson(
+        `Here is a Balkaris article:
 
-You are finishing a Balkaris article. Do not describe what the article said and
-do not mention where its subject came from — that is already on the page above
-this paragraph.`
+${proseOf(body)}
+
+In ONE sentence, what does it argue? The claim itself, not a description of the article. Under 30 words.`,
+        { type: "object", properties: { thesis: { type: "string" } }, required: ["thesis"] },
+        (v) => {
+          const got = String((v as { thesis?: unknown })?.thesis ?? "").trim();
+          if (!got) throw new Error("thesis is empty");
+          return got;
+        },
+        { model, system: VOICE, temperature: 0.3 },
+      );
+      thesis = value;
+    }
+
+    const brief_context = beat.blind
+      ? `You are writing the last paragraph of a Balkaris article.
+
+What the article argues: ${thesis}
+
+Everything else about it is already on the page above this paragraph. Do not
+describe the article, do not name where its subject came from, and do not give
+advice that would fit equally well on any other article about ${shelf.toLowerCase()} — it
+has to follow from the claim above.`
       : context;
 
     const { value } = await askJson(

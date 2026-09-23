@@ -155,6 +155,14 @@ for (const column of [
   }
 }
 
+/* A flag, never a rejection: see src/echo.ts. It sits on the draft so the
+   person approving it sees it at the moment they decide. */
+try {
+  db.exec("ALTER TABLE drafts ADD COLUMN echo TEXT");
+} catch {
+  /* already there */
+}
+
 export function log(what: string, detail?: unknown, linkId?: number): void {
   db.prepare("INSERT INTO events (link_id, what, detail) VALUES (?, ?, ?)").run(
     linkId ?? null,

@@ -6,6 +6,7 @@ import { serviceName, TOPICS } from "./catalogue.ts";
 import { takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
 import { esc, send } from "./telegram.ts";
+import { closingEcho, echoWords } from "./echo.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -256,13 +257,22 @@ runner.post("/result/:id", async (c) => {
     log("link.ingested", { kind: s.kind, platform: s.platform, words: s.words, metrics: s.metrics }, job.link_id);
   }
   if (body.post && body.slug) {
-    db.prepare("INSERT INTO drafts (link_id, slug, post, template, model, ms) VALUES (?,?,?,?,?,?)").run(
+    /* Does it end the way the last twenty ended? A flag for whoever approves
+       it — never a rejection. See src/echo.ts. */
+    const paras = ((body.post as { body?: unknown[] }).body ?? []).filter(
+      (b): b is string => typeof b === "string",
+    );
+    const flag = closingEcho(job.link_id, paras.at(-1) ?? "");
+    if (flag) log("draft.echo", flag, job.link_id);
+
+    db.prepare("INSERT INTO drafts (link_id, slug, post, template, model, ms, echo) VALUES (?,?,?,?,?,?,?)").run(
       job.link_id,
       body.slug,
       JSON.stringify(body.post),
       body.template ?? "?",
       body.model ?? null,
       body.ms ?? null,
+      flag ? echoWords(flag) : null,
     );
     db.prepare("UPDATE links SET state='drafted', updated_at=datetime('now') WHERE id=?").run(job.link_id);
   }
