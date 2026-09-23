@@ -431,10 +431,17 @@ export function draftPage(id: number, siteBase: string, who: Person): string | n
                 <form method="post" action="/draft/${d.id}/unlist"><button class="off">Out of the menus</button></form>
                 <form method="post" action="/draft/${d.id}/takedown"><button class="del">Take it off the site</button></form>`
        }
-       <form method="post" action="/draft/${d.id}/reclose">
-         <select name="job">${jobs}</select>
-         <button>Re-write the ending</button>
-       </form>
+       ${
+         /* Only when it is needed. Five ways to end an article is machinery,
+            and machinery on a page somebody reads every day is clutter — so it
+            appears beside the warning that calls for it and nowhere else. */
+         d.echo
+           ? `<form method="post" action="/draft/${d.id}/reclose">
+                <select name="job">${jobs}</select>
+                <button>End it differently</button>
+              </form>`
+           : ""
+       }
        ${
          onSite === "draft"
            ? `<form method="post" action="/draft/${d.id}/remove" onsubmit="return confirm('Delete this draft? The link stays and can be written again.')">
