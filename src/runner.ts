@@ -3,7 +3,8 @@ import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
 import { match } from "./match.ts";
 import { takeSocial } from "./social/pipeline.ts";
-import { comfyUp, cover } from "./cover.ts";
+import { cover } from "./cover.ts";
+import { ensureFor, ensureOllama } from "./ensure.ts";
 import type { TopicId } from "./catalogue.ts";
 
 /**
@@ -190,8 +191,6 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
  * picture; the piece is already written and already publishable.
  */
 async function doCover(draft: { id: number; slug: string; post: string }, topic: string) {
-  if (!(await comfyUp())) throw new Error("ComfyUI is not answering — start it and the cover will retry");
-
   const post = JSON.parse(draft.post) as { title: string; standfirst: string; excerpt: string };
   const out = await cover({
     title: post.title,
@@ -227,6 +226,15 @@ async function once(): Promise<boolean> {
   const { job, link } = got;
   console.log(`\n→ job ${job.id} (${job.kind}, attempt ${job.attempt}): ${link.title || link.url}`);
 
+  /* Start whatever this job needs. A link shared from a phone should end
+     in an article without anybody opening a terminal. */
+  const ready = await ensureFor(job.kind);
+  if (!ready.ok) {
+    console.error(`  ${ready.why}`);
+    await post(`/result/${job.id}`, { ok: false, error: ready.why });
+    return true;
+  }
+
   try {
     const result =
       job.kind === "cover"
@@ -250,14 +258,14 @@ async function once(): Promise<boolean> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/* Start Ollama rather than complain about it. The runner is a service now
+   and a service that exits because another service was not running yet is
+   a service that never comes back after a reboot. */
+await ensureOllama();
+
 const h = await health();
-if (!h.ok) {
-  console.error(`Ollama is not answering (${h.why}). Start it, then start the runner.`);
-  process.exit(1);
-}
-if (!h.models.some((m) => m === WRITE_MODEL)) {
+if (h.ok && !h.models.some((m) => m === WRITE_MODEL)) {
   console.error(`${WRITE_MODEL} is not pulled on this machine. Have: ${h.models.join(", ")}`);
-  process.exit(1);
 }
 
 console.log(`runner "${NAME}" → ${DESK}, writing with ${WRITE_MODEL}`);

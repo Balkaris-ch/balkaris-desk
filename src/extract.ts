@@ -22,7 +22,21 @@ import { JSDOM, VirtualConsole } from "jsdom";
  */
 
 const MAX_BYTES = 6_000_000;
-const MIN_WORDS = 180;
+/**
+ * Fini: *"it needs to take information from websites, it needs to take
+ * information from everything."*
+ *
+ * So the floor is low and there are two ways over it. Readability is built
+ * for articles and returns nothing useful on a product page, a landing
+ * page, a documentation index or a company's about page — all of which are
+ * things somebody will reasonably share. When it finds nothing, the page's
+ * own visible text is used instead.
+ *
+ * 90 words rather than 180: a short announcement is still something to
+ * write about, and the guard in draft.ts is what stops a thin source
+ * becoming a thin article.
+ */
+const MIN_WORDS = 90;
 const TIMEOUT_MS = 20_000;
 
 /* A real browser's UA. Not to sneak past anything — half the web serves a
@@ -107,14 +121,27 @@ export async function extract(url: string): Promise<Extract> {
     return null;
   };
 
-  const article = new Readability(doc, { charThreshold: 250 }).parse();
+  const article = new Readability(doc.cloneNode(true) as Document, { charThreshold: 250 }).parse();
+
+  /* No article? Then read the PAGE. Scripts, styles, navigation and footers
+     out, and whatever visible text is left. It is a worse read than
+     Readability gives on a news piece and it is the difference between
+     "I cannot help with that" and an article about a product page. */
+  let fallbackText = "";
+  if (!article?.textContent || article.textContent.split(/\s+/).length < MIN_WORDS) {
+    for (const el of doc.querySelectorAll("script,style,noscript,svg,nav,header,footer,form,iframe")) el.remove();
+    fallbackText = doc.body?.textContent ?? "";
+  }
+
+  const rawText = article?.textContent && !fallbackText ? article.textContent : fallbackText;
+  const pageTitle = doc.title;
   dom.window.close();
 
-  if (!article?.textContent) throw new ExtractError("there is no article on that page that I can find", "empty");
+  if (!rawText.trim()) throw new ExtractError("that page has no text on it at all", "empty");
 
   /* Readability returns the text with the page's own whitespace. Collapse
      runs of blank lines to one so paragraphs survive and the rest does not. */
-  const text = article.textContent
+  const text = rawText
     .replace(/\r/g, "")
     .replace(/[ \t]+/g, " ")
     .replace(/\n{3,}/g, "\n\n")
@@ -126,7 +153,7 @@ export async function extract(url: string): Promise<Extract> {
   const words = text.split(/\s+/).filter(Boolean).length;
   if (words < MIN_WORDS) {
     throw new ExtractError(
-      `only ${words} words came back — that is usually a paywall or a cookie wall rather than the article`,
+      `only ${words} words came back \u2014 usually a paywall, a cookie wall, or a page that draws itself with script`,
       "thin",
     );
   }
@@ -135,12 +162,12 @@ export async function extract(url: string): Promise<Extract> {
     url,
     finalUrl: res.url,
     site: new URL(res.url).hostname.replace(/^www\./, ""),
-    title: (article.title || meta("og:title", "twitter:title") || doc.title || "").trim(),
-    author: article.byline?.trim() || meta("article:author", "author"),
+    title: (article?.title || meta("og:title", "twitter:title") || pageTitle || "").trim(),
+    author: article?.byline?.trim() || meta("article:author", "author"),
     published: meta("article:published_time", "datePublished", "og:article:published_time"),
     text,
     words,
-    excerpt: article.excerpt?.trim() || meta("og:description", "description"),
+    excerpt: article?.excerpt?.trim() || meta("og:description", "description"),
     lead: meta("og:image", "twitter:image"),
   };
 }
