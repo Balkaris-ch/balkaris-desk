@@ -62,7 +62,7 @@ const CLOSE: Beat[] = [
   {
     heading: null,
     brief:
-      "One closing paragraph: the single sentence a reader should leave with, and an honest note on what is still unknown or still to be proved. Never a promise.",
+      "One closing paragraph, and it is OURS. The single sentence a reader should leave with, plus an honest note on what is still unknown or still to be proved. Do NOT mention the source here, do not summarise it again, do not restate what the article already said. Never a promise.",
     words: 55,
   },
 ];

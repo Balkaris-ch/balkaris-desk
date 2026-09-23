@@ -28,13 +28,14 @@ import { serviceName, TOPICS, type TopicId } from "./catalogue.ts";
 const VOICE = `You write for Balkaris, a Swiss digital studio in Dietlikon near Zurich.
 
 How Balkaris writes:
-- Plain, direct sentences. Under 25 words. No sentence that could be an advert.
+- Plain, direct sentences, mostly under 25 words — but VARY THEM. Eight short sentences in a row reads like a machine. Let a longer one carry a qualification.
 - Specifics instead of adjectives: a number, a name, a date, a decision. Never "cutting-edge", "seamless", "robust", "game-changing", "leverage", "unlock", "in today's fast-paced world", "the landscape of".
 - British spelling: optimise, analyse, colour, recognise.
 - A position, stated. If something is oversold, say so. If the honest answer is "it depends", say what it depends on.
 - Never "we are passionate about". Never a rhetorical question as a heading. Never an em-dash-heavy rhythm.
 - Address the reader as "you". Refer to the company as "we".
-- Nothing invented: no statistics, no client names, no case studies, no quotes. If you do not know a number, do not write one.`;
+- Nothing invented: no statistics, no client names, no case studies, no quotes. If you do not know a number, do not write one.
+- Never paste a URL into the prose. Name the publication; the link is attached afterwards.`;
 
 export interface DraftInput {
   url: string;
@@ -69,6 +70,43 @@ export interface DraftResult {
   because: string;
   model: string;
   ms: number;
+}
+
+/**
+ * The name a writer would actually use. `en.wikipedia.org` is Wikipedia, not
+ * "en.wikipedia.org" — and the first draft off this pipeline wrote the
+ * hostname into the prose four times, which is the single clearest tell that
+ * a machine produced it.
+ *
+ * Subdomains that are plumbing go (www, blog, news, en, m, developers); what
+ * is left is title-cased, with the few names that are not a plain word given
+ * by hand. It is a heuristic and it is allowed to be: the worst case is the
+ * hostname, which is where it started.
+ */
+const KNOWN: Record<string, string> = {
+  "wikipedia.org": "Wikipedia",
+  "google.com": "Google",
+  "theverge.com": "The Verge",
+  "nytimes.com": "The New York Times",
+  "ft.com": "the Financial Times",
+  "nzz.ch": "the NZZ",
+  "srf.ch": "SRF",
+  "techcrunch.com": "TechCrunch",
+  "arstechnica.com": "Ars Technica",
+  "searchengineland.com": "Search Engine Land",
+  "github.com": "GitHub",
+  "openai.com": "OpenAI",
+  "anthropic.com": "Anthropic",
+};
+
+export function publicationName(site: string): string {
+  const host = site.toLowerCase().replace(/^www\./, "");
+  for (const [domain, name] of Object.entries(KNOWN)) {
+    if (host === domain || host.endsWith(`.${domain}`)) return name;
+  }
+  const bare = host.replace(/^(blog|news|en|m|developers|dev|about|help|support)\./, "");
+  const word = bare.split(".")[0];
+  return word.charAt(0).toUpperCase() + word.slice(1);
 }
 
 const slugify = (s: string): string =>
@@ -128,10 +166,11 @@ export async function draft(input: DraftInput, opts: { model?: string } = {}): P
   const shelf = TOPICS.find((t) => t.id === input.topic)?.name ?? input.topic;
   const sold = input.services.map(serviceName);
 
+  const publication = publicationName(input.site);
+
   const context = `THE SOURCE
 Title: ${input.title}
-Publication: ${input.site}${input.author ? `\nAuthor: ${input.author}` : ""}
-URL: ${input.url}
+Publication: ${publication}${input.author ? `\nAuthor: ${input.author}` : ""}
 
 ${window(input.text)}
 
@@ -144,7 +183,7 @@ Shape: ${tpl.name}
 
 THE RULE THAT MATTERS MOST
 You are writing Balkaris's own article ABOUT this source, not a version of it.
-The source is summarised once, in the opening, attributed to ${input.site} by name.
+The source is summarised once, in the opening, attributed to ${publication} by name.
 Everywhere else you write our argument, in our words. Never reproduce more than
 one short quoted phrase from the source, and put it in quotation marks if you do.`;
 
@@ -261,8 +300,12 @@ export function guard(post: DraftPost, input: DraftInput): void {
   if (ours.split(/\s+/).length < 320) throw new Error("the draft came out too short to be worth publishing");
 
   /* The source has to be named. A piece that quietly uses somebody's reporting
-     without saying so is the exact thing this pipeline must not produce. */
-  if (!ours.includes(input.site.toLowerCase().split(".")[0])) {
-    throw new Error(`the draft never names ${input.site}, so the source is not credited`);
+     without saying so is the exact thing this pipeline must not produce.
+     Checked against the PUBLICATION name, not the hostname: the prose says
+     "Wikipedia" now, and `site.split(".")[0]` was "en", which matches almost
+     any English sentence and so checked nothing at all. */
+  const publication = publicationName(input.site).toLowerCase().replace(/^the /, "");
+  if (!ours.includes(publication) && !ours.includes(input.site.toLowerCase())) {
+    throw new Error(`the draft never names ${publicationName(input.site)}, so the source is not credited`);
   }
 }
