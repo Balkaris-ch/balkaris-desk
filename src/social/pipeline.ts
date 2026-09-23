@@ -115,13 +115,44 @@ together.`,
   return reads.join("\n\n");
 }
 
-/** yt-dlp's view of a post, used to tell a carousel from a Reel. */
+/**
+ * yt-dlp's view of a post, used to tell a carousel from a Reel.
+ *
+ * A CAROUSEL SLIDE HAS NO `url` AND NO `ext`. Everything on a photo entry is
+ * in `thumbnails` — thirteen renditions of the same picture — and the biggest
+ * is the one worth reading. The first version of this looked for a `url` with
+ * an image extension, found nothing on every slide, and let every carousel
+ * fall through to the video path to die on "No video formats found".
+ */
+interface YtThumb {
+  url?: string;
+  width?: number;
+  height?: number;
+}
+
 interface YtEntry {
   url?: string;
   ext?: string;
   vcodec?: string;
   width?: number;
   height?: number;
+  thumbnails?: YtThumb[];
+  formats?: { vcodec?: string }[];
+}
+
+/** The largest rendition of a slide. yt-dlp lists them smallest first. */
+function biggestThumb(e: YtEntry): string | null {
+  const thumbs = (e.thumbnails ?? []).filter((x) => x.url);
+  if (!thumbs.length) return null;
+  return thumbs.reduce((a, b) => ((b.width ?? 0) >= (a.width ?? 0) ? b : a)).url ?? null;
+}
+
+/** A slide, not a clip: nothing downloadable as video, but a picture to read. */
+function isStill(e: YtEntry): boolean {
+  const hasVideo =
+    (!!e.url && /mp4|m3u8|webm/i.test(e.ext ?? e.url)) ||
+    (e.formats ?? []).some((f) => f.vcodec && f.vcodec !== "none");
+  return !hasVideo && !!biggestThumb(e);
 }
 
 interface YtPost {
@@ -142,7 +173,11 @@ async function probePost(url: string): Promise<YtPost | null> {
   try {
     const { stdout } = await execFileP(
       YT_DLP,
-      ["--dump-single-json", "--no-warnings", "--no-playlist-reverse", url],
+      /* --ignore-no-formats-error is half the carousel fix: without it yt-dlp
+         refuses a photo-only post outright with "No video formats found" and
+         emits nothing at all, even though it already has the post. With it,
+         the slides come back. */
+      ["--dump-single-json", "--no-warnings", "--ignore-no-formats-error", "--no-playlist-reverse", url],
       { maxBuffer: 24 * 1024 * 1024, timeout: 90_000 },
     );
     return JSON.parse(stdout) as YtPost;
@@ -170,7 +205,7 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
     if (platform === "instagram") {
       const post = await probePost(expanded);
       const entries = post?.entries ?? [];
-      const stills = entries.filter((e) => e.url && (e.vcodec === "none" || /jpe?g|png|webp/i.test(e.ext ?? "")));
+      const stills = entries.filter(isStill);
 
       if (entries.length > 1 && stills.length === entries.length) {
         const caption = post?.description?.trim() || null;
@@ -178,13 +213,20 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
         const files: string[] = [];
 
         for (const [i, e] of take.entries()) {
+          const src = biggestThumb(e);
+          if (!src) continue;
           const f = path.join(dir, `slide-${String(i + 1).padStart(2, "0")}.jpg`);
-          await download(e.url!, f);
+          await download(src, f);
           files.push(f);
         }
+        if (!files.length) throw new ResolveError("the slides could not be fetched", "upstream_failed");
 
         const read = await readSlides(files, caption);
-        const author = post?.uploader ?? post?.uploader_id ?? null;
+        /* `uploader` is a display name ("Matt Diamante") and `uploader_id` is
+           numeric. The handle a reader would recognise is in the title, which
+           yt-dlp writes as "Post by <handle>". */
+        const handle = post?.title?.match(/^Post by (.+)$/)?.[1]?.trim();
+        const author = handle || post?.uploader || post?.uploader_id || null;
         const text = [caption ? `The post's caption: ${caption}` : "", read].filter(Boolean).join("\n\n");
 
         return {
