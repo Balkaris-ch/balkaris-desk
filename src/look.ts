@@ -84,7 +84,10 @@ const MOTION_TERMS: Record<Motion, { strong: string[]; weak: string[] }> = {
   },
   connecting: {
     strong: ["integrate", "integration", "hand off", "handover", "pipeline", "end to end", "bridge", "connect", "wired together"],
-    weak: ["link", "chain", "flow", "route", "path", "between", "thread", "relay", "joined", "feed into"],
+    /* "between" was in here. It is a preposition before it is a claim about
+       connection, and it put six of the first sixteen articles on the same
+       motion. */
+    weak: ["link", "chain", "flow", "route", "path", "thread", "relay", "joined", "feed into"],
   },
   turning: {
     strong: ["loop", "cycle", "feedback", "iterate", "come back", "circle back", "retention", "recurring revenue", "flywheel"],

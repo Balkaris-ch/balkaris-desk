@@ -245,9 +245,24 @@ const BY_MOOD: Record<Mood, string[]> = {
  * the same day are still two different pictures.
  */
 function pick<T>(from: T[], slug: string, salt: string): T {
-  let n = 7;
+  /* FNV-1a with a final avalanche, and both halves matter.
+     The first version was `n = n * 31 + c` and then `n % from.length` — and
+     for a two-element list that is the LOW BIT, which for that hash is only
+     the parity of the slug's characters and never mixes. Six "connecting"
+     articles in a row took the same composition, and three "blocked" ones
+     took the same one as each other, before anybody thought to check whether
+     the tie-breaker was breaking anything. */
+  let n = 2166136261;
   const s = `${slug}:${salt}`;
-  for (let i = 0; i < s.length; i++) n = (n * 31 + s.charCodeAt(i)) >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    n ^= s.charCodeAt(i);
+    n = Math.imul(n, 16777619);
+  }
+  n ^= n >>> 15;
+  n = Math.imul(n, 2246822507);
+  n ^= n >>> 13;
+  n = Math.imul(n, 3266489909);
+  n = (n ^ (n >>> 16)) >>> 0;
   return from[n % from.length];
 }
 
