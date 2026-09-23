@@ -115,6 +115,12 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   const m = match(got.title, got.text);
   const services = m.services.map((s) => s.slug);
 
+  /* A social post is credited by its handle and its platform, not by a
+     hostname. The guard is told to look for the handle, because that is what
+     the model will actually write. */
+  const PLATFORM = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", file: "a file" } as const;
+  const where = PLATFORM[got.platform];
+
   const out = await draft({
     url: got.url,
     title: got.title,
@@ -125,6 +131,8 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
     text: got.text,
     topic: m.topic,
     services,
+    publication: got.author ? `@${got.author} on ${where}` : where,
+    credit: got.author ?? where,
   });
 
   console.log(

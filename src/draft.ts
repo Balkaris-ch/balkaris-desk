@@ -48,6 +48,23 @@ export interface DraftInput {
   text: string;
   topic: TopicId;
   services: string[];
+  /**
+   * What to call the source in the prose, GIVEN rather than derived.
+   *
+   * publicationName() turns a hostname into the name a writer would use, which
+   * is right for an article and nonsense for a social post: the runner hands
+   * the writer a made-up site string like "nomadatoast on tiktok" and it came
+   * back title-cased as "Nomadatoast on tiktok". For a video or a carousel the
+   * credit is the handle and the platform, so the caller says so.
+   */
+  publication?: string;
+  /**
+   * The one word the credit guard must find in the finished prose. For a
+   * social post that is the handle — the model will write "@nomadatoast" or
+   * "nomadatoast", never the whole phrase. Derived from `publication` when
+   * absent.
+   */
+  credit?: string;
 }
 
 export type Block = PostBlock;
@@ -152,7 +169,7 @@ export async function draft(input: DraftInput, opts: { model?: string } = {}): P
   const shelf = TOPICS.find((t) => t.id === input.topic)?.name ?? input.topic;
   const sold = input.services.map(serviceName);
 
-  const publication = publicationName(input.site);
+  const publication = input.publication ?? publicationName(input.site);
 
   const context = `THE SOURCE
 Title: ${input.title}
@@ -308,8 +325,9 @@ export function guard(post: DraftPost, input: DraftInput): void {
      Checked against the PUBLICATION name, not the hostname: the prose says
      "Wikipedia" now, and `site.split(".")[0]` was "en", which matches almost
      any English sentence and so checked nothing at all. */
-  const publication = publicationName(input.site).toLowerCase().replace(/^the /, "");
-  if (!ours.includes(publication) && !ours.includes(input.site.toLowerCase())) {
-    throw new Error(`the draft never names ${publicationName(input.site)}, so the source is not credited`);
+  const named = input.publication ?? publicationName(input.site);
+  const token = (input.credit ?? named).toLowerCase().replace(/^the /, "").replace(/^@/, "");
+  if (!ours.includes(token) && !ours.includes(input.site.toLowerCase())) {
+    throw new Error(`the draft never names ${named}, so the source is not credited`);
   }
 }
