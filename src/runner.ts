@@ -196,9 +196,12 @@ async function doCover(draft: { id: number; slug: string; post: string }, topic:
     title: post.title,
     thesis: post.standfirst || post.excerpt,
     topic: topic as never,
+    slug: draft.slug,
   });
 
-  console.log(`  drew a cover — ${Math.round(out.webp.length / 1024)}KB in ${Math.round(out.ms / 1000)}s`);
+  console.log(
+    `  drew a cover — ${out.layout}, ${Math.round(out.webp.length / 1024)}KB in ${Math.round(out.ms / 1000)}s`,
+  );
   return {
     ok: true,
     cover: {

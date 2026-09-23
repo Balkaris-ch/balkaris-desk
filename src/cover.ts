@@ -38,39 +38,100 @@ const H = 800;
  * reads "electric lime green" and does not read a hex code.
  */
 /*
- * Rewritten after the first real cover came back as a glossy op-art spiral
- * filling the frame edge to edge — abstract and on-palette and completely
- * wrong. Three lessons, all of them about composition rather than subject:
+ * Rewritten a fourth time, because every cover came out looking like the last
+ * one. The house style was ONE recipe — "four or five bold shapes filling the
+ * frame, greyscale with one green" — and a single recipe run thirty times is
+ * thirty variations of one picture, however good that picture is.
  *
- *   · "flat vector" is not enough. The model renders unless it is told, in
- *     several ways, that there is no depth: no shading, no gradient, no
- *     perspective, no highlight.
- *   · "generous negative space" is a hope. "The shapes occupy the lower right
- *     third, the rest empty" is an instruction.
- *   · a shape given no size becomes the whole picture. Concentric rings
- *     became a hypnotic spiral because nothing said small.
+ * So the system now has a CONSTANT and a VARIABLE, the way the articles do.
+ * HOUSE is what never changes: flat, hard-edged, printed, greyscale with one
+ * green, no text. LAYOUTS is eight genuinely different compositions, and
+ * `pickLayout` chooses one from the slug — deterministic, so an article always
+ * has the same cover, and spread, so the journal does not.
  *
- * The composition rules therefore come FIRST, before the subject, because the
- * front of the prompt is what a diffusion model weights most.
+ * Earlier attempts and what each taught, kept so nobody repeats them:
+ *   1. "flat vector, generous negative space" -> a glossy op-art spiral
+ *      filling the frame. A model renders unless told several times that there
+ *      is no depth, and a shape with no stated size becomes the whole picture.
+ *   2. Over-corrected to "one large empty field, small shapes lower right" ->
+ *      a beige field with two tiny marks.
+ *   3. Naming the genre — Bauhaus poster, mid-century Swiss — landed the look
+ *      but not the variety, which is this pass.
+ * And "one shape in green" reads as "green is in the palette" and comes back
+ * three times; saying what the OTHER shapes are is what holds it to one.
  */
 const HOUSE =
-  "Bauhaus poster, flat geometric abstraction, " +
-  "four or five large bold shapes filling most of the frame in an asymmetric arrangement, " +
-  "shapes overlapping and cropped by the edges, " +
+  "flat geometric abstraction, mid-century Swiss graphic design, silkscreen print, " +
   "flat solid colour, hard edges, no shading, no gradient, no perspective, no 3d, no texture, " +
-  "very dark charcoal background, shapes in warm grey, bone white and deep slate, " +
-  /* "one shape in green" is read as "green is in the palette" and comes back
-     three times. Saying what the OTHER shapes are is what holds it to one. */
-  "almost entirely greyscale, every shape grey or white or charcoal, " +
-  "with exactly ONE single shape in bright electric lime green and no other green anywhere, " +
-  "confident, graphic, printed, mid-century Swiss design, " +
+  "almost entirely greyscale — charcoal, warm grey, bone white — " +
+  "with ONE shape in bright electric lime green and every other shape grey, white or charcoal, " +
   "no text, no letters, no logos, no people, not a photograph";
+
+/**
+ * Eight compositions. Each one is a different PICTURE, not a different mood.
+ *
+ * Written as instructions to a printer rather than adjectives, because
+ * "dynamic" gets ignored and "one diagonal band from the lower left to the
+ * upper right" does not.
+ */
+const LAYOUTS: { name: string; how: string }[] = [
+  /* Each layout NAMES the green shape. "exactly one shape in green" was read
+     loosely and came back as a green circle AND a green staircase; pointing
+     at which shape is green leaves nothing to interpret. */
+  {
+    name: "band",
+    how: "a single wide diagonal band crossing from lower left to upper right dividing the frame into two plain grey fields, and one small green square resting on the band — the square is the only green thing in the picture",
+  },
+  {
+    name: "stack",
+    how: "a tall column of six horizontal grey bars of differing thickness stacked up the left half, the right half an empty flat field, and the third bar from the top is green — that bar is the only green thing in the picture",
+  },
+  {
+    name: "orbit",
+    how: "two large grey circles overlapping near the right edge, one cropped by the frame, a thin green bar passing behind them, the left two thirds empty — the bar is the only green thing in the picture",
+  },
+  {
+    name: "grid",
+    how: "a four by three grid of equal squares in charcoal and grey with one square missing entirely, and a single green square in the second row — that square is the only green thing in the picture",
+  },
+  {
+    name: "wedge",
+    how: "one enormous grey triangle occupying the lower right and cropped by two edges, and one small green square floating alone in the empty upper left — the square is the only green thing in the picture",
+  },
+  {
+    name: "steps",
+    how: "a staircase of five grey rectangles descending left to right each overlapping the next, plenty of empty room above, and the smallest rectangle is green — it is the only green thing in the picture",
+  },
+  {
+    name: "split",
+    how: "the frame divided vertically into three unequal flat panels of different greys, and one green circle sitting inside the narrowest panel — the circle is the only green thing in the picture",
+  },
+  {
+    name: "arc",
+    how: "one large grey quarter circle anchored in a corner and a straight green bar cutting across it, the rest of the frame a single flat field — the bar is the only green thing in the picture",
+  },
+];
+
+
+/**
+ * Which composition, from the slug.
+ *
+ * Deterministic so an article keeps its cover across a redraw, and spread
+ * across the eight so two articles published together do not land on the same
+ * one. The same reasoning as the template rule: a journal that varies
+ * unpredictably is as strange as one that repeats.
+ */
+export function pickLayout(slug: string): { name: string; how: string } {
+  let n = 7;
+  for (let i = 0; i < slug.length; i++) n = (n * 31 + slug.charCodeAt(i)) >>> 0;
+  return LAYOUTS[n % LAYOUTS.length];
+}
 
 const AVOID =
   "text, letters, words, numbers, watermark, logo, signature, people, faces, " +
   "photograph, photorealistic, 3d render, glossy, shiny, metallic, drop shadow, " +
-  "spiral, optical illusion, high contrast stripes, busy, cluttered, symmetrical, " +
-  "filling the frame, rainbow colours, neon glow";
+  "spiral, optical illusion, concentric rings, busy, cluttered, symmetrical, " +
+  "rainbow colours, neon glow";
 
 /** A steer per shelf, so a marketing piece does not look like a studio one. */
 const BY_SHELF: Record<TopicId, string> = {
@@ -90,6 +151,8 @@ export interface Cover {
   /** The line under it on the article page. */
   caption: string;
   prompt: string;
+  /** Which of the eight compositions this one is. */
+  layout: string;
   ms: number;
 }
 
@@ -194,12 +257,18 @@ async function draw(prompt: string): Promise<Buffer> {
   throw new Error("ComfyUI did not finish in two minutes");
 }
 
-export async function cover(article: { title: string; thesis: string; topic: TopicId }): Promise<Cover> {
+export async function cover(article: {
+  title: string;
+  thesis: string;
+  topic: TopicId;
+  /** Decides the composition, so an article keeps its cover across a redraw. */
+  slug: string;
+}): Promise<Cover> {
   const started = Date.now();
-  const nouns = await subject(article.title, article.thesis);
-  /* House first: the front of the prompt is what the model weights most, and
-     the composition matters more here than the subject does. */
-  const prompt = `${HOUSE}. The shapes: ${nouns}. ${BY_SHELF[article.topic] ?? ""}. Avoid: ${AVOID}.`;
+  /* The LAYOUT first, because the composition is what makes two covers
+     different and the front of the prompt is what a model weights most. */
+  const layout = pickLayout(article.slug);
+  const prompt = `${layout.how}. ${HOUSE}. ${BY_SHELF[article.topic] ?? ""}. Avoid: ${AVOID}.`;
 
   const png = await draw(prompt);
   /* Straight to webp at the size the page actually draws it. A cover is the
@@ -208,9 +277,10 @@ export async function cover(article: { title: string; thesis: string; topic: Top
 
   return {
     webp,
-    alt: `An abstract composition: ${nouns}, in charcoal and greys with one green accent.`,
+    alt: `An abstract composition in charcoal, grey and bone white with one green shape: ${layout.how.split(",")[0]}.`,
     caption: "Drawn for this article on our own machine. It is not a photograph.",
     prompt,
+    layout: layout.name,
     ms: Date.now() - started,
   };
 }
