@@ -1,6 +1,7 @@
 import { askJson, WRITE_MODEL } from "./llm.ts";
 import { pick, template, type SourceFacts, type TemplateId } from "./templates.ts";
 import { serviceName, TOPICS, type TopicId } from "./catalogue.ts";
+import { countWords, howTo, proseOf, schemaFor, toPostBlocks, type PostBlock } from "./blocks.ts";
 
 /**
  * A read page becomes a Balkaris article.
@@ -49,7 +50,7 @@ export interface DraftInput {
   services: string[];
 }
 
-export type Block = string | { h: string };
+export type Block = PostBlock;
 
 export interface DraftPost {
   slug: string;
@@ -70,6 +71,8 @@ export interface DraftResult {
   because: string;
   model: string;
   ms: number;
+  /** Blocks the model sent that did not survive validation, and why. */
+  dropped: string[];
 }
 
 /**
@@ -132,23 +135,6 @@ function window(text: string, words = 1200): string {
   return `${head}\n\n[…]\n\n${tail}`;
 }
 
-const PARA = {
-  type: "object",
-  properties: { paragraphs: { type: "array", items: { type: "string" } } },
-  required: ["paragraphs"],
-} as const;
-
-function paragraphs(v: unknown, min: number, max: number): string[] {
-  const got = (v as { paragraphs?: unknown })?.paragraphs;
-  if (!Array.isArray(got) || !got.length) throw new Error("answer with {\"paragraphs\": [\"…\"]} and at least one paragraph");
-  const clean = got.map((p) => String(p).trim()).filter(Boolean);
-  if (!clean.length) throw new Error("every paragraph was empty");
-  const n = clean.join(" ").split(/\s+/).length;
-  if (n < min) throw new Error(`that is ${n} words and the section needs about ${Math.round((min + max) / 2)}`);
-  if (n > max) throw new Error(`that is ${n} words, which is too long — the section needs about ${Math.round((min + max) / 2)}`);
-  return clean;
-}
-
 export async function draft(input: DraftInput, opts: { model?: string } = {}): Promise<DraftResult> {
   const started = Date.now();
   const model = opts.model ?? WRITE_MODEL;
@@ -189,9 +175,13 @@ one short quoted phrase from the source, and put it in quotation marks if you do
 
   /* ---- the beats, one call each ---- */
   const body: Block[] = [];
+  const dropped: string[] = [];
+
   for (const beat of tpl.beats) {
     const lo = Math.round(beat.words * 0.6);
     const hi = Math.round(beat.words * 1.4);
+    const allow = beat.allow ?? [];
+
     const so_far = body
       .filter((b): b is string => typeof b === "string")
       .slice(-2)
@@ -203,19 +193,33 @@ one short quoted phrase from the source, and put it in quotation marks if you do
 ${so_far ? `WHAT YOU HAVE WRITTEN SO FAR (do not repeat it):\n${so_far}\n\n` : ""}WRITE THIS SECTION${beat.heading ? ` — it appears under the heading "${beat.heading}"` : " — it is the opening, with no heading"}:
 ${beat.brief}
 
-About ${beat.words} words, as one to three paragraphs. Do not write the heading itself.
-Answer as JSON: {"paragraphs": ["first paragraph", "second paragraph"]}`,
-      PARA,
-      (v) => paragraphs(v, lo, hi),
+About ${beat.words} words. Do not write the heading itself.
+
+Answer as JSON: {"blocks": [ ... ]}, where every block is ONE of these shapes:
+${howTo(allow)}
+
+Open the section on a paragraph. Never a list or a table first, and never a
+shape that is not in the list above.`,
+      schemaFor(allow),
+      (v) => {
+        const got = toPostBlocks(v, allow);
+        if (!got.blocks.length) throw new Error("nothing usable came back");
+        if (typeof got.blocks[0] !== "string") throw new Error("a section opens on a paragraph, not on a list or a table");
+        const n = countWords(got.blocks);
+        if (n < lo) throw new Error(`that is ${n} words and the section needs about ${beat.words}`);
+        if (n > hi) throw new Error(`that is ${n} words, which is too long — the section needs about ${beat.words}`);
+        return got;
+      },
       { model, system: VOICE, temperature: 0.55 },
     );
 
     if (beat.heading) body.push({ h: beat.heading });
-    body.push(...value);
+    body.push(...value.blocks);
+    dropped.push(...value.dropped);
   }
 
   /* ---- the title, standfirst and excerpt, written from the finished piece ---- */
-  const written = body.filter((b): b is string => typeof b === "string").join("\n\n");
+  const written = proseOf(body);
 
   const TOP = {
     type: "object",
@@ -266,14 +270,14 @@ Answer as JSON.`,
     excerpt: top.excerpt,
     topics: [input.topic],
     services: input.services,
-    readingTime: Math.max(2, Math.round(written.split(/\s+/).length / 200)),
+    readingTime: Math.max(2, Math.round(countWords(body) / 200)),
     body,
     takeaways: top.takeaways,
     source: { url: input.url, site: input.site, title: input.title, author: input.author },
   };
 
   guard(post, input);
-  return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started };
+  return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started, dropped };
 }
 
 /**
@@ -285,7 +289,7 @@ Answer as JSON.`,
  * drafts a month will wave one through.
  */
 export function guard(post: DraftPost, input: DraftInput): void {
-  const ours = post.body.filter((b): b is string => typeof b === "string").join(" ").toLowerCase();
+  const ours = proseOf(post.body).toLowerCase();
 
   /* Any run of 12 words shared with the source is a lift, whatever the intent. */
   const src = input.text.toLowerCase().replace(/\s+/g, " ");

@@ -66,6 +66,11 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
         model,
         stream: false,
         format: opts.schema,
+        /* LOCAL-AI.md, the hard way: a thinking model spends its budget
+           reasoning and then truncates the JSON, so a structured call gets a
+           half-finished object and a confusing parse error. Off for every
+           call here, because every call here is structured. */
+        think: false,
         options: { temperature: opts.temperature ?? 0.4, num_ctx: NUM_CTX },
         messages: [
           ...(opts.system ? [{ role: "system", content: opts.system }] : []),

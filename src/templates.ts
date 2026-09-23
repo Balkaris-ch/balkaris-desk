@@ -1,3 +1,4 @@
+import type { BlockKind } from "./blocks.ts";
 import type { TopicId } from "./catalogue.ts";
 
 /**
@@ -28,6 +29,16 @@ export interface Beat {
   brief: string;
   /** Roughly how many words. The writer is held to ±40%. */
   words: number;
+  /**
+   * The block shapes this section may use, beyond plain paragraphs.
+   *
+   * THIS IS THE FORMATTING, AND IT IS HARD-CODED. The schema handed to the
+   * model is built from this list, so a section that may not use a list
+   * cannot produce one. Every article of a given shape therefore lays out the
+   * same way — which is the difference between a journal and thirty pages
+   * that each invented their own furniture.
+   */
+  allow?: BlockKind[];
 }
 
 export interface Template {
@@ -56,8 +67,9 @@ const CLOSE: Beat[] = [
   {
     heading: "What we would do",
     brief:
-      "What Balkaris would actually do about this for a client, in concrete steps. Name the decision, not the service. No sales language, no 'we are passionate', no 'get in touch today'.",
-    words: 110,
+      "What Balkaris would actually do about this for a client. Lead with one paragraph, then give the concrete moves as steps: a named decision and one sentence on what it means. Name the decision, not the service. No sales language, no 'we are passionate', no 'get in touch today'.",
+    words: 130,
+    allow: ["steps"],
   },
   {
     heading: null,
@@ -86,12 +98,14 @@ const TEMPLATES: Record<TemplateId, Template> = {
         brief:
           "Balkaris's own reading: why this is worth a business owner's attention, or why the coverage is overstating it. Take a position. Do not repeat the source.",
         words: 130,
+        allow: ["quote"],
       },
       {
         heading: "What it changes in practice",
         brief:
           "The concrete consequence for a company like the ones we work for — small and mid-sized, mostly Swiss. What is different on Monday, if anything. If the honest answer is 'nothing yet', say that.",
         words: 130,
+        allow: ["list"],
       },
       ...CLOSE,
     ],
@@ -113,14 +127,16 @@ const TEMPLATES: Record<TemplateId, Template> = {
       {
         heading: "The longer answer",
         brief:
-          "The detail behind the short answer: how it actually works, what the moving parts are. Concrete. Reference the source by name and link where a fact comes from it.",
-        words: 160,
+          "The detail behind the short answer: how it actually works, what the moving parts are. Concrete. Reference the source by name where a fact comes from it. If it has named parts, set them out as steps rather than describing them in a row of sentences.",
+        words: 170,
+        allow: ["steps"],
       },
       {
         heading: "Where it goes wrong",
         brief:
-          "The failure modes — what people get wrong about this, and what it costs them. This is the section that proves the piece was written by someone who has done it.",
-        words: 130,
+          "The failure modes — what people get wrong about this, and what it costs them. This is the section that proves the piece was written by someone who has done it. A paragraph, then the mistakes themselves as a list.",
+        words: 140,
+        allow: ["list"],
       },
       ...CLOSE,
     ],
@@ -142,14 +158,16 @@ const TEMPLATES: Record<TemplateId, Template> = {
       {
         heading: "Where it holds up",
         brief:
-          "Where this genuinely works, and under what conditions. Specific situations, not categories.",
+          "Where this genuinely works, and under what conditions. Specific situations, not categories — the conditions themselves belong in a list.",
         words: 130,
+        allow: ["list"],
       },
       {
         heading: "Where it does not",
         brief:
-          "Where it fails or is oversold. Be direct — this is the section a reader trusts the piece for. Never hedge it into nothing.",
+          "Where it fails or is oversold. Be direct — this is the section a reader trusts the piece for. Never hedge it into nothing. One aside is allowed if there is a caveat worth setting apart.",
         words: 130,
+        allow: ["note"],
       },
       ...CLOSE,
     ],
