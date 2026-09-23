@@ -29,6 +29,12 @@ export interface AskOptions {
   temperature?: number;
   /** Ollama has no timeout of its own; a cold 26b load can take a minute. */
   timeoutMs?: number;
+  /**
+   * Base64 images for a vision pass, on the user message the way Ollama wants
+   * them. Used to read a carousel's slides with the 12b, which is the one
+   * model that fits beside ComfyUI and Whisper on the card.
+   */
+  images?: string[];
 }
 
 export interface AskResult {
@@ -74,7 +80,7 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
         options: { temperature: opts.temperature ?? 0.4, num_ctx: NUM_CTX },
         messages: [
           ...(opts.system ? [{ role: "system", content: opts.system }] : []),
-          { role: "user", content: prompt },
+          { role: "user", content: prompt, ...(opts.images?.length ? { images: opts.images } : {}) },
         ],
       }),
     });

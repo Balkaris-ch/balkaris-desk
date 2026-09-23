@@ -3,6 +3,7 @@ import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { edit, esc, send } from "./telegram.ts";
+import { isSocial } from "./social/pipeline.ts";
 
 /**
  * A link arrives.
@@ -90,6 +91,31 @@ export async function takeLink(
     );
     log("link.duplicate", { url }, seen.id);
     return { id: seen.id, already: true };
+  }
+
+  /* A YouTube, TikTok or Instagram link cannot be read here: the box has no
+     yt-dlp, no ffmpeg, no Whisper and no GPU. It is kept with everything we
+     know from the URL alone and handed to the workstation as an 'ingest' job,
+     which resolves it, transcribes or reads it, matches it and writes it in
+     one pass. The shelf and the services therefore arrive LATER for a social
+     link than for an article, which is the honest trade and the reply says so. */
+  if (isSocial(url)) {
+    const info = db
+      .prepare(
+        `INSERT INTO links (url, from_chat, from_user, from_name, note, kind, state)
+         VALUES (?,?,?,?,?,'social','queued')`,
+      )
+      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null);
+    const id = Number(info.lastInsertRowid);
+    db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'ingest')").run(id);
+    log("link.social", { url }, id);
+
+    await say(
+      workstationAwake()
+        ? "That is a video or a carousel — fetching and transcribing it now. I will say what it turned out to be."
+        : "That is a video or a carousel. Kept and queued — it needs the workstation, which is asleep, so it gets read when the machine next wakes.",
+    );
+    return { id, already: false };
   }
 
   await say("Reading it…");

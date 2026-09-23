@@ -7,11 +7,17 @@ import path from "node:path";
 /**
  * Getting a file, measuring it, and getting rid of it.
  *
- * Copied from `sm-fixed/src/ingest/probe.ts` and CUT DOWN. The original also
- * carries `trimWindow`, `extractThumb`, `extractStill`, `detectCuts`,
- * `windowOffsets`, `WINDOW_S` and `MAX_WINDOWS` — the machinery behind
- * sm-fixed's virality windows and filmstrips. None of it is here, and that is
- * deliberate rather than an oversight:
+ * Vendored from `sm-fixed/src/ingest/probe.ts`, and CUT DOWN. THIS IS A
+ * PARTIAL COPY ON PURPOSE — it is not an unfinished one, so please do not
+ * helpfully restore the missing half.
+ *
+ * Absent, deliberately: the frame extractors `extractThumb`, `extractStill`
+ * and `detectCuts`, and the Higgsfield window helpers `trimWindow`,
+ * `windowOffsets`, `WINDOW_S`, `MAX_WINDOWS` and `SCENE_THRESHOLD`. The
+ * window constants exist to feed Higgsfield's 15.5-second brain windows,
+ * which this repo has no credential for and no use for. The extractors cut
+ * stills out of a video, which a blog must never do — covers here are drawn
+ * from scratch by ComfyUI.
  *
  *   Fini, 23 September 2026: "we do not need to capture SS."
  *

@@ -58,6 +58,27 @@ db.exec(`
     body        TEXT,
     state       TEXT NOT NULL DEFAULT 'new',
     error       TEXT,
+    /* 'article' | 'video' | 'carousel'. Decided by what the extractor found,
+       never by the URL: an instagram.com/p/ link is a Reel about as often as
+       it is a carousel. */
+    kind        TEXT NOT NULL DEFAULT 'article',
+    platform    TEXT,
+    /* The source's own public numbers AT THE MOMENT WE LOOKED. captured_at
+       is a real timestamp and NOT inferred from created_at: a re-resolve or a
+       backfill makes those two different, and knowing how old a reading is
+       was the entire point of keeping it.
+       Instagram exposes views, likes and comments but NOT saves or shares.
+       Those stay NULL. A null rendered as a zero is a claim we never made. */
+    posted_at   TEXT,
+    captured_at TEXT,
+    views       INTEGER,
+    likes       INTEGER,
+    comments    INTEGER,
+    shares      INTEGER,
+    saves       INTEGER,
+    duration_s  REAL,
+    slides      INTEGER,
+    spoke       TEXT,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
@@ -104,6 +125,35 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS jobs_open ON jobs(state, kind, id);
   CREATE INDEX IF NOT EXISTS links_state ON links(state, id);
 `);
+
+/**
+ * Columns added after the first rows existed.
+ *
+ * `CREATE TABLE IF NOT EXISTS` does nothing to a table that is already there,
+ * so a new column has to be added by hand. Each one is tried and its
+ * "duplicate column" refusal swallowed — which is the whole migration story a
+ * single-file database with a dozen rows a day deserves.
+ */
+for (const column of [
+  "kind TEXT NOT NULL DEFAULT 'article'",
+  "platform TEXT",
+  "posted_at TEXT",
+  "captured_at TEXT",
+  "views INTEGER",
+  "likes INTEGER",
+  "comments INTEGER",
+  "shares INTEGER",
+  "saves INTEGER",
+  "duration_s REAL",
+  "slides INTEGER",
+  "spoke TEXT",
+]) {
+  try {
+    db.exec(`ALTER TABLE links ADD COLUMN ${column}`);
+  } catch {
+    /* already there */
+  }
+}
 
 export function log(what: string, detail?: unknown, linkId?: number): void {
   db.prepare("INSERT INTO events (link_id, what, detail) VALUES (?, ?, ?)").run(

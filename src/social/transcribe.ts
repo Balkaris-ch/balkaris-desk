@@ -79,3 +79,44 @@ export async function transcribe(wavPath: string): Promise<TranscriptResult> {
     how: parsed.how ?? null,
   }
 }
+
+/**
+ * The wrapper `sm-fixed/src/personal/transcript.ts` has, without the half that
+ * writes to Supabase — this repo has no database but its own SQLite, and no
+ * business in sm-fixed's.
+ *
+ * `how` is the one field worth reading downstream: whisper_json.py runs a
+ * second pass with the speech filter OFF when the first pass finds nothing,
+ * because `vad_filter=True` reports "nobody speaks" on any video carried by a
+ * song. Half the videos worth writing about are scored with music, and a sung
+ * line is often the only line.
+ */
+export interface Spoken {
+  language: string | null
+  full_text: string
+  segments: TranscriptSegment[]
+  seconds: number
+  device: string
+  /** "speech filter" / "no speech filter (…)" — how the words were found */
+  how: string | null
+  deviceError: string | null
+  /** The whisper model that answered, with the pass appended when it was the second. */
+  model: string
+}
+
+export async function transcribeVideo(src: string, workDir: string): Promise<Spoken> {
+  const wav = path.join(workDir, 'audio.wav')
+  await extractAudio(src, wav)
+  const t = await transcribe(wav)
+  const secondPass = !!t.how && /no speech filter/i.test(t.how)
+  return {
+    language: t.language,
+    full_text: t.text,
+    segments: t.segments,
+    seconds: t.seconds,
+    device: t.device,
+    how: t.how,
+    deviceError: t.deviceError,
+    model: secondPass ? `${MODEL} (no-vad)` : MODEL,
+  }
+}

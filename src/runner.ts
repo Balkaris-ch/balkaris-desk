@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
+import { match } from "./match.ts";
+import { takeSocial } from "./social/pipeline.ts";
 import type { TopicId } from "./catalogue.ts";
 
 /**
@@ -93,15 +95,84 @@ async function doWrite(link: LinkRow): Promise<Record<string, unknown>> {
   return { ok: true, slug: out.post.slug, post: out.post, template: out.template, model: out.model, ms: out.ms };
 }
 
+/**
+ * A social link: resolve it, get the substance out of it, and write it — all
+ * in one pass, because the expensive half is fetching the media and doing it
+ * twice doubles that.
+ *
+ * The matcher runs HERE rather than on the box for these, because there is
+ * nothing to match until there is a transcript. It is the same hard-coded
+ * table either way; only the moment differs.
+ */
+async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
+  const got = await takeSocial(link.url);
+  console.log(
+    `  ${got.shape} on ${got.platform}${got.author ? ` by ${got.author}` : ""} — ${got.words} words` +
+      (got.slides ? `, ${got.slides} slides` : "") +
+      (got.spoke === "music" ? ", found only on the second Whisper pass (it is carried by a song)" : ""),
+  );
+
+  const m = match(got.title, got.text);
+  const services = m.services.map((s) => s.slug);
+
+  const out = await draft({
+    url: got.url,
+    title: got.title,
+    site: got.author ? `${got.author} on ${got.platform}` : got.platform,
+    author: got.author,
+    published: got.postedAt,
+    words: got.words,
+    text: got.text,
+    topic: m.topic,
+    services,
+  });
+
+  console.log(
+    `  wrote "${out.post.title}" — ${out.template} (${out.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
+  );
+
+  return {
+    ok: true,
+    slug: out.post.slug,
+    post: out.post,
+    template: out.template,
+    model: out.model,
+    ms: out.ms,
+    /* Everything the box could not know until the media was in hand. */
+    source: {
+      kind: got.shape,
+      platform: got.platform,
+      url: got.url,
+      title: got.title,
+      author: got.author,
+      words: got.words,
+      topic: m.topic,
+      services,
+      text: got.text,
+      postedAt: got.postedAt,
+      capturedAt: got.capturedAt,
+      metrics: got.metrics,
+      durationS: got.durationS ?? null,
+      slides: got.slides ?? null,
+      spoke: got.spoke ?? null,
+    },
+  };
+}
+
 async function once(): Promise<boolean> {
-  const got = await post<{ job: Job | null; link?: LinkRow }>("/next", { name: NAME, kinds: ["write"] });
+  /* One job at a time, in one sequential loop, ON PURPOSE. sm-fixed's worker
+     already drives yt-dlp, Whisper and ComfyUI on this same 4090, and ComfyUI
+     died outright on 2026-09-06 when two processes drew at once. Polling out
+     solves availability; it does nothing about contention. The desk at least
+     cannot collide with ITSELF. */
+  const got = await post<{ job: Job | null; link?: LinkRow }>("/next", { name: NAME, kinds: ["ingest", "write"] });
   if (!got.job || !got.link) return false;
 
   const { job, link } = got;
   console.log(`\n→ job ${job.id} (${job.kind}, attempt ${job.attempt}): ${link.title || link.url}`);
 
   try {
-    const result = await doWrite(link);
+    const result = job.kind === "ingest" ? await doIngest(link) : await doWrite(link);
     await post(`/result/${job.id}`, result);
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);

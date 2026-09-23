@@ -183,6 +183,25 @@ runner.post("/result/:id", async (c) => {
     template?: string;
     model?: string;
     ms?: number;
+    /* Only an 'ingest' sends this: everything the box could not know until
+       the media was in hand on the workstation. */
+    source?: {
+      kind: string;
+      platform: string;
+      url: string;
+      title: string;
+      author: string | null;
+      words: number;
+      topic: string;
+      services: string[];
+      text: string;
+      postedAt: string | null;
+      capturedAt: string;
+      metrics: { views: number | null; likes: number | null; comments: number | null; shares: number | null; saves: number | null };
+      durationS: number | null;
+      slides: number | null;
+      spoke: string | null;
+    };
   };
 
   const job = db.prepare("SELECT * FROM jobs WHERE id = ?").get(id) as { id: number; link_id: number } | undefined;
@@ -198,6 +217,44 @@ runner.post("/result/:id", async (c) => {
   }
 
   db.prepare("UPDATE jobs SET state='done', finished_at=datetime('now'), error=NULL WHERE id=?").run(id);
+
+  /* An ingest fills in the row the box could only stub. The canonical PAGE
+     url replaces whatever was shared — a share link, a redirect, a url with
+     six tracking parameters on it — so a second share of the same post finds
+     this row. The CDN url is never stored at all. */
+  if (body.source) {
+    const s = body.source;
+    db.prepare(
+      `UPDATE links SET url=?, kind=?, platform=?, title=?, author=?, site=?, words=?, topic=?, services=?, body=?,
+                        published=?, posted_at=?, captured_at=?, views=?, likes=?, comments=?, shares=?, saves=?,
+                        duration_s=?, slides=?, spoke=?, updated_at=datetime('now')
+       WHERE id=?`,
+    ).run(
+      s.url,
+      s.kind,
+      s.platform,
+      s.title,
+      s.author,
+      s.author ? `${s.author} on ${s.platform}` : s.platform,
+      s.words,
+      s.topic,
+      JSON.stringify(s.services),
+      s.text,
+      s.postedAt,
+      s.postedAt,
+      s.capturedAt,
+      s.metrics.views,
+      s.metrics.likes,
+      s.metrics.comments,
+      s.metrics.shares,
+      s.metrics.saves,
+      s.durationS,
+      s.slides,
+      s.spoke,
+      job.link_id,
+    );
+    log("link.ingested", { kind: s.kind, platform: s.platform, words: s.words, metrics: s.metrics }, job.link_id);
+  }
   if (body.post && body.slug) {
     db.prepare("INSERT INTO drafts (link_id, slug, post, template, model, ms) VALUES (?,?,?,?,?,?)").run(
       job.link_id,
