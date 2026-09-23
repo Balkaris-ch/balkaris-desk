@@ -191,7 +191,10 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
           shape: "carousel",
           platform,
           url: canonicalUrl(platform, videoId, author).replace("/reel/", "/p/"),
-          title: post?.title?.trim() || caption?.split("\n")[0]?.slice(0, 120) || `A carousel by ${author ?? "someone"}`,
+          /* NOT post.title — yt-dlp writes "Post by <handle>", which is a
+             label and not a title. The first line of the caption is what the
+             post is actually about. */
+          title: caption?.split("\n")[0]?.slice(0, 120) || `A carousel by ${author ?? "someone"}`,
           author,
           caption,
           text,
