@@ -1,5 +1,5 @@
 import { askJson, WRITE_MODEL } from "./llm.ts";
-import { pick, template, type SourceFacts, type TemplateId } from "./templates.ts";
+import { CLOSING_JOBS, pick, pickClosing, template, type ClosingJob, type SourceFacts, type TemplateId } from "./templates.ts";
 import { serviceName, TOPICS, type TopicId } from "./catalogue.ts";
 import { countWords, howTo, proseOf, schemaFor, toPostBlocks, type PostBlock } from "./blocks.ts";
 
@@ -90,6 +90,8 @@ export interface DraftResult {
   ms: number;
   /** Blocks the model sent that did not survive validation, and why. */
   dropped: string[];
+  /** Which of the five jobs the last paragraph was given, and why. */
+  closing: { job: ClosingJob; because: string };
 }
 
 /**
@@ -207,6 +209,7 @@ one short quoted phrase from the source, and put it in quotation marks if you do
    * argument.
    */
   let thesis = "";
+  let closing: { job: ClosingJob; because: string } = { job: "action", because: "not decided yet" };
 
   for (const beat of tpl.beats) {
     const lo = Math.round(beat.words * 0.6);
@@ -229,6 +232,20 @@ one short quoted phrase from the source, and put it in quotation marks if you do
        was still in context and the model still opened on "Wikipedia
        defines…". Proximity does not care which part of the prompt the text
        came from. */
+    /* The last beat's JOB is chosen here, from what the article actually
+       turned out to be — not fixed in the template, because one job produces
+       one habit. See the note above pickClosing in templates.ts. */
+    if (beat.blind) {
+      closing = pickClosing({
+        template: tpl.id,
+        topic: input.topic,
+        services: input.services.length,
+        ageDays: input.published ? (Date.now() - Date.parse(input.published)) / 86_400_000 : null,
+        hasSteps: body.some((b) => typeof b !== "string" && "steps" in b),
+        hasList: body.some((b) => typeof b !== "string" && "list" in b),
+      });
+    }
+
     if (beat.blind && !thesis) {
       const { value } = await askJson(
         `Here is a Balkaris article:
@@ -262,7 +279,7 @@ has to follow from the claim above.`
       `${brief_context}
 
 ${so_far ? `WHAT YOU HAVE WRITTEN SO FAR (do not repeat it):\n${so_far}\n\n` : ""}WRITE THIS SECTION${beat.heading ? ` — it appears under the heading "${beat.heading}"` : " — it is the opening, with no heading"}:
-${beat.brief}
+${beat.blind ? CLOSING_JOBS[closing.job].brief : beat.brief}
 
 About ${beat.words} words. Do not write the heading itself.
 
@@ -361,7 +378,7 @@ Answer as JSON.`,
   };
 
   guard(post, input);
-  return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started, dropped };
+  return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started, dropped, closing };
 }
 
 /**

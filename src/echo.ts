@@ -39,8 +39,19 @@ import { db } from "./db.ts";
  * shape lives in short phrases, not in long runs or in a word count.
  */
 
+/**
+ * THE NUMBERS BELOW WERE FITTED, NOT MEASURED. Read that before defending them.
+ *
+ * 30%, two-shared-phrases and the opener rule were chosen by looking at the
+ * five drafts they were then tested against, and "two flagged, three clean" is
+ * the result they were tuned for. It says the detector can separate those
+ * five. It says nothing yet about false positives, and the first honest test
+ * is the next ten closings nobody has seen. In six months these will look like
+ * measured constants; they are a first guess made at n=5 on 23 September 2026.
+ */
 const LOOK_BACK = 20;
 const RUN = 8;
+const SHAPE_FLAG = 0.3;
 
 /** Words worth comparing: no articles, no prepositions, no auxiliaries. */
 const DULL = new Set(
@@ -95,12 +106,26 @@ export interface EchoFlag {
  * Compare one closing against the closings already written. Returns the
  * worst match, or null when it is unlike all of them.
  */
-export function closingEcho(linkId: number, closing: string): EchoFlag | null {
+export function closingEcho(linkId: number, closing: string, job?: string | null): EchoFlag | null {
   if (!closing.trim()) return null;
 
-  const earlier = db
-    .prepare("SELECT id, slug, post FROM drafts WHERE link_id != ? ORDER BY id DESC LIMIT ?")
-    .all(linkId, LOOK_BACK) as { id: number; slug: string; post: string }[];
+  /* COMPARED WITHIN A JOB, not across all of them.
+     Since templates.ts started choosing one of five jobs for the last
+     paragraph, two closings sharing a skeleton only means something when they
+     were asked the same question. An "action" ending and a "question" ending
+     sharing bones is nearly impossible, and comparing them dilutes the signal
+     that matters. Drafts written before the jobs existed have no job and are
+     compared against everything, which is the old behaviour and right for
+     them. */
+  const earlier = (
+    job
+      ? db
+          .prepare("SELECT id, slug, post FROM drafts WHERE link_id != ? AND closing = ? ORDER BY id DESC LIMIT ?")
+          .all(linkId, job, LOOK_BACK)
+      : db
+          .prepare("SELECT id, slug, post FROM drafts WHERE link_id != ? ORDER BY id DESC LIMIT ?")
+          .all(linkId, LOOK_BACK)
+  ) as { id: number; slug: string; post: string }[];
 
   const mine = words(closing);
   const myVocab = meaningful(closing);
@@ -145,7 +170,7 @@ export function closingEcho(linkId: number, closing: string): EchoFlag | null {
 
     /* 0.3 rather than 0.4, and either two shared phrases or one alongside the
        same opener. Tuned against the real pair above, which scored 0.27. */
-    const hit = !!run || shape >= 0.3 || phrases.length >= 2 || (!!opener && phrases.length >= 1);
+    const hit = !!run || shape >= SHAPE_FLAG || phrases.length >= 2 || (!!opener && phrases.length >= 1);
     if (hit) {
       const weight = shape + phrases.length * 0.15 + (opener ? 0.1 : 0);
       const worstWeight = worst ? worst.shape + worst.phrases.length * 0.15 + (worst.opener ? 0.1 : 0) : -1;
@@ -166,7 +191,7 @@ export function echoWords(flag: EchoFlag): string {
   const bits: string[] = [];
   if (flag.opener) bits.push(`both open on "${flag.opener}"`);
   if (flag.phrases.length) bits.push(`both use ${flag.phrases.map((p) => `"${p}"`).join(" and ")}`);
-  if (flag.shape >= 0.3) bits.push(`${Math.round(flag.shape * 100)}% the same vocabulary`);
+  if (flag.shape >= SHAPE_FLAG) bits.push(`${Math.round(flag.shape * 100)}% the same vocabulary`);
 
   return (
     `It ends the same shape as "${flag.slug}" — ${bits.join(", ")}. ` +

@@ -90,9 +90,17 @@ async function doWrite(link: LinkRow): Promise<Record<string, unknown>> {
 
   const out = await draft(input);
   console.log(
-    `  wrote "${out.post.title}" — ${out.template} (${out.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
+    `  wrote "${out.post.title}" — ${out.template} (${out.because}), ends on ${out.closing.job} (${out.closing.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
   );
-  return { ok: true, slug: out.post.slug, post: out.post, template: out.template, model: out.model, ms: out.ms };
+  return {
+    ok: true,
+    slug: out.post.slug,
+    post: out.post,
+    template: out.template,
+    model: out.model,
+    ms: out.ms,
+    closing: out.closing.job,
+  };
 }
 
 /**
@@ -136,7 +144,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   });
 
   console.log(
-    `  wrote "${out.post.title}" — ${out.template} (${out.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
+    `  wrote "${out.post.title}" — ${out.template} (${out.because}), ends on ${out.closing.job} (${out.closing.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
   );
 
   return {
@@ -146,6 +154,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
     template: out.template,
     model: out.model,
     ms: out.ms,
+    closing: out.closing.job,
     /* Everything the box could not know until the media was in hand. */
     source: {
       kind: got.shape,

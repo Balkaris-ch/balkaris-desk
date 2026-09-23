@@ -241,3 +241,98 @@ export function pick(s: SourceFacts): { id: TemplateId; because: string } {
   /* 5. Everything else answers a question. */
   return { id: "explainer", because: "no stronger signal — treated as a question to answer" };
 }
+
+/* ---------- how a piece ends -------------------------------------------------
+
+   FIVE JOBS AND A RULE, for the same reason there are three templates and a
+   rule. One job produces one habit: every article was given "the one thing to
+   do differently this week", and "Stop X. Audit your last N Y." is what that
+   job reaches for. Giving the close the article's own thesis fixed the CONTENT
+   of the sentence and could not touch its bones, because the bones come from
+   the job.
+
+   Five jobs do not make convergence impossible. They make it five times
+   slower and far more visible when it happens, because then two closings that
+   share a skeleton are two closings doing the SAME job — which is a habit —
+   rather than two doing different ones, which is nearly impossible.
+
+   The rule is deterministic and reads real facts, never a coin toss: a journal
+   that varies unpredictably is as strange to a reader as one that repeats. */
+
+export type ClosingJob = "action" | "question" | "caution" | "contrast" | "prediction";
+
+export const CLOSING_JOBS: Record<ClosingJob, { name: string; brief: string }> = {
+  action: {
+    name: "The one thing to do",
+    brief:
+      "End on the single thing a reader should do differently this week. Specific enough to act on before Friday. Not a list, not a plan — one move.",
+  },
+  question: {
+    name: "The open question",
+    brief:
+      "End on the question the source leaves unanswered and that nobody has answered yet. State it plainly and say why it is still open. Do not answer it yourself.",
+  },
+  caution: {
+    name: "How it goes wrong",
+    brief:
+      "End on the way this most often fails for the people who try it — the specific mistake, and what it costs them. Not a warning in general terms; the actual failure.",
+  },
+  contrast: {
+    name: "What the good ones do",
+    brief:
+      "End on what the people who get this right do differently from everybody else. One concrete difference in how they work, not a quality they possess.",
+  },
+  prediction: {
+    name: "Where this goes",
+    brief:
+      "End on what is likely to be different about this within a year, and say what would have to be true for that to happen. Commit to a view. Never hedge it into nothing.",
+  },
+};
+
+export interface ClosingFacts {
+  template: TemplateId;
+  topic: TopicId;
+  /** How many Balkaris services the matcher found. Zero changes the ending. */
+  services: number;
+  /** Days since the source was published, when it said. */
+  ageDays: number | null;
+  /** Did "What we would do" actually produce a steps block? */
+  hasSteps: boolean;
+  /** Did any earlier section produce a list? */
+  hasList: boolean;
+}
+
+/** First rule that fires wins, and each one has a reason worth reading. */
+export function pickClosing(f: ClosingFacts): { job: ClosingJob; because: string } {
+  /* Nothing we sell. "What we would do" was thin, so do not end on doing. */
+  if (f.services === 0) {
+    return { job: "contrast", because: "no service matched — we cannot end on what we would do" };
+  }
+
+  /* The actions are ALREADY on the page, as steps, immediately above this
+     paragraph. Asking for another action is asking for the duplication. This
+     is the rule that would have caught the two closings that converged: both
+     carried a steps block and both were then asked for one more action. */
+  if (f.hasSteps) {
+    return { job: "question", because: "the actions are already set out as steps above" };
+  }
+
+  if (f.topic === "industry-trends") {
+    return { job: "prediction", because: "shelved under Industry Trends" };
+  }
+
+  if (f.ageDays !== null && f.ageDays >= 0 && f.ageDays <= 45) {
+    return { job: "prediction", because: `the source is ${Math.round(f.ageDays)} days old — a reader wants to know where it goes` };
+  }
+
+  /* A list of failure modes is already up there; end on the sharpest one. */
+  if (f.hasList && f.template === "explainer") {
+    return { job: "caution", because: "it already lists what goes wrong — end on the worst of it" };
+  }
+
+  if (f.template === "explainer") {
+    return { job: "question", because: "an explainer that answers everything is lying" };
+  }
+
+  return { job: "action", because: "nothing above tells the reader what to do" };
+}

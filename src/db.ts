@@ -157,10 +157,12 @@ for (const column of [
 
 /* A flag, never a rejection: see src/echo.ts. It sits on the draft so the
    person approving it sees it at the moment they decide. */
-try {
-  db.exec("ALTER TABLE drafts ADD COLUMN echo TEXT");
-} catch {
-  /* already there */
+for (const column of ["echo TEXT", "closing TEXT"]) {
+  try {
+    db.exec(`ALTER TABLE drafts ADD COLUMN ${column}`);
+  } catch {
+    /* already there */
+  }
 }
 
 export function log(what: string, detail?: unknown, linkId?: number): void {

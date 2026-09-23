@@ -184,6 +184,8 @@ runner.post("/result/:id", async (c) => {
     template?: string;
     model?: string;
     ms?: number;
+    /** Which of the five jobs the last paragraph was given. */
+    closing?: string;
     /* Only an 'ingest' sends this: everything the box could not know until
        the media was in hand on the workstation. */
     source?: {
@@ -262,10 +264,12 @@ runner.post("/result/:id", async (c) => {
     const paras = ((body.post as { body?: unknown[] }).body ?? []).filter(
       (b): b is string => typeof b === "string",
     );
-    const flag = closingEcho(job.link_id, paras.at(-1) ?? "");
+    const flag = closingEcho(job.link_id, paras.at(-1) ?? "", body.closing ?? null);
     if (flag) log("draft.echo", flag, job.link_id);
 
-    db.prepare("INSERT INTO drafts (link_id, slug, post, template, model, ms, echo) VALUES (?,?,?,?,?,?,?)").run(
+    db.prepare(
+      "INSERT INTO drafts (link_id, slug, post, template, model, ms, echo, closing) VALUES (?,?,?,?,?,?,?,?)",
+    ).run(
       job.link_id,
       body.slug,
       JSON.stringify(body.post),
@@ -273,6 +277,7 @@ runner.post("/result/:id", async (c) => {
       body.model ?? null,
       body.ms ?? null,
       flag ? echoWords(flag) : null,
+      body.closing ?? null,
     );
     db.prepare("UPDATE links SET state='drafted', updated_at=datetime('now') WHERE id=?").run(job.link_id);
   }
