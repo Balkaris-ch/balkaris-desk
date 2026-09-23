@@ -46,7 +46,26 @@ export interface Person {
   author: string;
   /** Publishing needs an email. Everything else does not. */
   canPublish: boolean;
+  /**
+   * The owner can change anybody's email, byline and access; everyone else
+   * can see the team and change nothing about it.
+   *
+   * Fini, 23 September 2026: *"fini is the super admin and people cannot
+   * change other one's emails — they might see the team but they cannot
+   * change the emails, and only me I can change, revoke or stuff like
+   * that."*
+   *
+   * Read from DESK_OWNER rather than a column, so ownership cannot be
+   * granted from inside the console by anybody, including the owner. It
+   * moves by editing the box's .env, which needs the server.
+   */
+  owner: boolean;
+  /** Somebody an owner has switched off. They can sign in and do nothing. */
+  revoked: boolean;
 }
+
+/** The one account that can change other people. */
+export const OWNER_EMAIL = (process.env.DESK_OWNER ?? "fini@balkaris.ch").toLowerCase();
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS people (
@@ -54,6 +73,7 @@ db.exec(`
     name       TEXT NOT NULL,
     email      TEXT,
     author     TEXT NOT NULL DEFAULT 'balkaris',
+    revoked    INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -68,6 +88,13 @@ db.exec(`
   );
 `);
 
+/* Added after the table existed. */
+try {
+  db.exec("ALTER TABLE people ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0");
+} catch {
+  /* already there */
+}
+
 const row = (r: Record<string, unknown> | undefined): Person | null =>
   r
     ? {
@@ -75,7 +102,9 @@ const row = (r: Record<string, unknown> | undefined): Person | null =>
         name: String(r.name),
         email: (r.email as string | null) ?? null,
         author: String(r.author ?? "balkaris"),
-        canPublish: !!r.email,
+        canPublish: !!r.email && !r.revoked,
+        owner: String(r.email ?? "").toLowerCase() === OWNER_EMAIL,
+        revoked: !!r.revoked,
       }
     : null;
 
@@ -118,7 +147,15 @@ export function rememberGoogle(email: string, name: string): Person {
     "balkaris",
   );
   log("person.google", { email });
-  return { telegram: id, name, email, author: "balkaris", canPublish: true };
+  return {
+    telegram: id,
+    name,
+    email,
+    author: "balkaris",
+    canPublish: true,
+    owner: email.toLowerCase() === OWNER_EMAIL,
+    revoked: false,
+  };
 }
 
 export const everyone = (): Person[] =>
@@ -141,12 +178,42 @@ export function remember(telegram: number, name: string): Person {
   }
   db.prepare("INSERT INTO people (telegram, name) VALUES (?, ?)").run(telegram, name);
   log("person.new", { telegram, name });
-  return { telegram, name, email: null, author: "balkaris", canPublish: false };
+  return { telegram, name, email: null, author: "balkaris", canPublish: false, owner: false, revoked: false };
 }
 
 export function setEmail(telegram: number, email: string | null): void {
   db.prepare("UPDATE people SET email = ? WHERE telegram = ?").run(email, telegram);
   log("person.email", { telegram, set: !!email });
+}
+
+export function setRevoked(telegram: number, revoked: boolean): void {
+  db.prepare("UPDATE people SET revoked = ? WHERE telegram = ?").run(revoked ? 1 : 0, telegram);
+  log("person.revoked", { telegram, revoked });
+}
+
+/**
+ * Tie a Telegram account to an email already on the desk.
+ *
+ * Somebody signs in with Google and gets a row keyed by their address;
+ * they then write to the bot and get a second row keyed by a Telegram id.
+ * They are one person, and the byline on what they share should be theirs,
+ * so the owner joins the two on the people page: the Telegram row's id is
+ * kept, the email and byline come across, and the placeholder row goes.
+ */
+export function link(telegram: number, email: string): boolean {
+  const tg = getPerson(telegram);
+  const acct = byEmail(email);
+  if (!tg || !acct || tg.telegram === acct.telegram) return false;
+
+  db.prepare("UPDATE people SET email = ?, author = ?, revoked = ? WHERE telegram = ?").run(
+    acct.email,
+    acct.author,
+    acct.revoked ? 1 : 0,
+    telegram,
+  );
+  db.prepare("DELETE FROM people WHERE telegram = ?").run(acct.telegram);
+  log("person.linked", { telegram, email });
+  return true;
 }
 
 export function setAuthor(telegram: number, author: string): void {

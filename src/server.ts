@@ -8,7 +8,8 @@ import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
-import { everyone, getPerson, remember, rememberGoogle, setAuthor, setEmail, type Person } from "./people.ts";
+import { everyone, getPerson, link, remember, rememberGoogle, setAuthor, setEmail, setRevoked, type Person } from "./people.ts";
+import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, issue, whoIs } from "./session.ts";
 
@@ -172,7 +173,19 @@ app.get("/", (c) => c.html(listPage(me(c))));
    can publish: an email, which must be the one on their Vercel account. */
 app.get("/people", (c) => c.html(peoplePage(everyone(), me(c))));
 
+/**
+ * Only the owner changes other people.
+ *
+ * Fini: "people cannot change other one's emails — they might see the team but
+ * they cannot change the emails, and only me I can change, revoke or stuff
+ * like that." The people page hides the fields from everybody else; this
+ * refuses the POST, because hiding a form is courtesy and the check is the
+ * rule.
+ */
+const ownerOnly = (c: { get: (k: "who") => Person }) => me(c).owner;
+
 app.post("/people/:telegram", async (c) => {
+  if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
   const id = Number(c.req.param("telegram"));
   const form = await c.req.parseBody();
   if (!getPerson(id)) return c.notFound();
@@ -181,8 +194,45 @@ app.post("/people/:telegram", async (c) => {
   return c.redirect("/people", 303);
 });
 
-app.get("/draft/:id", (c) => {
-  const html = draftPage(Number(c.req.param("id")), SITE_BASE, me(c));
+/* Join a Google account to the Telegram account that is the same person. */
+app.post("/people/:telegram/link", async (c) => {
+  if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
+  const acct = getPerson(Number(c.req.param("telegram")));
+  const form = await c.req.parseBody();
+  const tg = Number(String(form.telegram ?? "").trim());
+  if (!acct?.email || !tg) return c.redirect("/people", 303);
+  link(tg, acct.email);
+  return c.redirect("/people", 303);
+});
+
+/* Switched off: they can still sign in, and can do nothing. */
+app.post("/people/:telegram/revoke", (c) => {
+  if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
+  const id = Number(c.req.param("telegram"));
+  const p = getPerson(id);
+  if (!p || p.owner) return c.redirect("/people", 303);
+  setRevoked(id, !p.revoked);
+  return c.redirect("/people", 303);
+});
+
+app.get("/draft/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT slug FROM drafts WHERE id = ?").get(id) as { slug: string } | undefined;
+
+  /* The article's OWN numbers, read from GA4 and cached for ten minutes. A
+     failure here is shown and never fatal: the page is the article, and the
+     views are a column on it. */
+  let ours: { stats: ReturnType<typeof Object> | null; error: string | null; on: boolean } = {
+    stats: null,
+    error: null,
+    on: ga4On(),
+  };
+  if (d && ga4On()) {
+    const got = await ga4Pages();
+    ours = { stats: got.pages.get(`/insights/${d.slug}`) ?? null, error: got.error, on: true };
+  }
+
+  const html = draftPage(id, SITE_BASE, me(c), ours as never);
   return html ? c.html(html) : c.notFound();
 });
 
@@ -243,6 +293,7 @@ async function act(
 ) {
   const id = Number(c.req.param("id"));
   const by = me(c);
+  if (by.revoked) return { ok: false as const, id, html: page("No", `<h1>Your access has been switched off</h1>`) };
   const d = db.prepare("SELECT id, link_id, slug FROM drafts WHERE id = ?").get(id) as
     | { id: number; link_id: number; slug: string }
     | undefined;

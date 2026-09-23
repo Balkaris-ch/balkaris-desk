@@ -3,6 +3,7 @@ import { serviceName, TOPICS } from "./catalogue.ts";
 import { CLOSING_JOBS, type ClosingJob } from "./templates.ts";
 import type { PostBlock } from "./blocks.ts";
 import type { Person } from "./people.ts";
+import { spell, type PageStats } from "./ga4.ts";
 
 /**
  * The desk, as a person sees it.
@@ -162,10 +163,32 @@ export const CSS = `
   .ppl .me{color:var(--ok)}
 `;
 
+
+/**
+ * The desk's mark: the site's green on ink, a page with a line lifting off it.
+ *
+ * Inline SVG in a data url rather than a file, because the box serves no
+ * static assets at all and adding a directory, a route and a cache header for
+ * sixteen pixels would be the wrong trade. It is drawn once here and every
+ * page points at the same string.
+ */
+const FAVICON =
+  "data:image/svg+xml," +
+  encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+       <rect width="32" height="32" rx="7" fill="#0b0c0d"/>
+       <rect x="7" y="6" width="14" height="20" rx="2" fill="none" stroke="#25f716" stroke-width="2.2"/>
+       <path d="M11 12h6M11 16h6M11 20h3" stroke="#25f716" stroke-width="2" stroke-linecap="round" opacity=".55"/>
+       <path d="M19 20l6-6" stroke="#25f716" stroke-width="2.6" stroke-linecap="round"/>
+       <path d="M21.5 14H25v3.5" fill="none" stroke="#25f716" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+     </svg>`.replace(/\s+/g, " "),
+  );
+
 export function page(title: string, inner: string): string {
   return `<!doctype html><html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>${esc(title)} · Balkaris desk</title>
+<link rel="icon" href="${FAVICON}" />
 <style>${CSS}</style></head><body><main>${inner}</main></body></html>`;
 }
 
@@ -194,33 +217,73 @@ function bar(who: Person): string {
  * in the site's content/journal.ts.
  */
 export function peoplePage(people: Person[], who: Person): string {
+  /* Two kinds of row, and the desk should say so plainly: somebody who signed
+     in with Google (has an email, negative id until Telegram is linked), and
+     somebody the bot has met (has a Telegram id, maybe no email yet). The
+     owner joins them; everybody else reads. */
   const rows = people
-    .map(
-      (p) => `<tr>
-        <td${p.telegram === who.telegram ? ' class="me"' : ""}>${esc(p.name)}${
-          p.telegram === who.telegram ? " (you)" : ""
-        }</td>
-        <td><form method="post" action="/people/${p.telegram}" style="display:flex;gap:8px;align-items:center">
-          <input name="email" type="email" value="${esc(p.email ?? "")}" placeholder="their Vercel email" />
-          <input name="author" value="${esc(p.author)}" placeholder="byline" style="max-width:120px" />
+    .map((p) => {
+      const tg = p.telegram > 0 ? String(p.telegram) : "—";
+      const mine = p.telegram === who.telegram;
+      const tags = [
+        p.owner ? `<span class="tag live">owner</span>` : "",
+        p.revoked ? `<span class="tag bad">revoked</span>` : "",
+        p.canPublish ? `<span class="tag">can publish</span>` : `<span class="tag wait">cannot publish</span>`,
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      if (!who.owner) {
+        return `<tr>
+          <td${mine ? ' class="me"' : ""}>${esc(p.name)}${mine ? " (you)" : ""}<br><em style="color:var(--dim);font-size:12px">${esc(p.email ?? "no email yet")}</em></td>
+          <td style="color:var(--dim)">${esc(tg)}</td>
+          <td>${esc(p.author)}</td>
+          <td>${tags}</td>
+        </tr>`;
+      }
+
+      return `<tr>
+        <td${mine ? ' class="me"' : ""}>${esc(p.name)}${mine ? " (you)" : ""}</td>
+        <td><form method="post" action="/people/${p.telegram}" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <input name="email" type="email" value="${esc(p.email ?? "")}" placeholder="their @balkaris.ch address" />
+          <input name="author" value="${esc(p.author)}" placeholder="byline" style="max-width:110px" />
           <button>Save</button>
         </form></td>
-      </tr>`,
-    )
+        <td style="color:var(--dim)">${esc(tg)}${
+          p.telegram < 0
+            ? `<form method="post" action="/people/${p.telegram}/link" style="margin-top:6px">
+                 <input name="telegram" placeholder="their Telegram id" style="max-width:130px" />
+                 <button>Link</button>
+               </form>`
+            : ""
+        }</td>
+        <td>${tags}${
+          p.owner
+            ? ""
+            : `<form method="post" action="/people/${p.telegram}/revoke" style="margin-top:6px">
+                 <button class="${p.revoked ? "" : "del"}">${p.revoked ? "Allow again" : "Revoke"}</button>
+               </form>`
+        }</td>
+      </tr>`;
+    })
     .join("");
 
   return page(
     "People",
     `${bar(who)}
      <h1>People</h1>
-     <p class="sub">Publishing commits to the website under your own name, so the email here has to be the one on
-     your Vercel account \u2014 Vercel refuses to build a commit from somebody who is not on the team, which is
-     exactly what it did the first time the desk tried. Somebody with no email can read and queue, and cannot publish.</p>
-     <p class="sub">The byline is which name goes on an article they share: <b>fini</b>, <b>damir</b>,
-     <b>tihomir</b>, or <b>balkaris</b> for the studio.</p>
+     <p class="sub">Signing in is a <b>@balkaris.ch</b> Google account and nothing else. Publishing commits to the
+     website under that same address, which is what makes Vercel build it.</p>
+     <p class="sub">${
+       who.owner
+         ? "You are the owner, so you can change anybody's address, byline and access. Nobody else can."
+         : "You can see the team. Only the owner changes addresses, bylines and access."
+     }</p>
+     <p class="sub">A person can appear twice — once from signing in, once from writing to the bot — until the
+     two are linked. The byline on an article is whoever <b>shared</b> it on Telegram.</p>
      <table class="ppl">
-       <thead><tr><th>Who</th><th>Email for publishing &nbsp;\u00b7&nbsp; byline</th></tr></thead>
-       <tbody>${rows || `<tr><td colspan="2" class="none">Nobody has written to the bot yet.</td></tr>`}</tbody>
+       <thead><tr><th>Who</th><th>Email for publishing${who.owner ? " &nbsp;·&nbsp; byline" : ""}</th><th>Telegram</th><th></th></tr></thead>
+       <tbody>${rows || `<tr><td colspan="4" class="none">Nobody yet.</td></tr>`}</tbody>
      </table>`,
   );
 }
@@ -312,7 +375,12 @@ export function listPage(who: Person): string {
 
 /* ---------- one article ---------------------------------------------------- */
 
-export function draftPage(id: number, siteBase: string, who: Person): string | null {
+export function draftPage(
+  id: number,
+  siteBase: string,
+  who: Person,
+  ours?: { stats: PageStats | null; error: string | null; on: boolean },
+): string | null {
   const d = db.prepare("SELECT * FROM drafts WHERE id = ?").get(id) as
     | {
         id: number;
@@ -385,6 +453,26 @@ export function draftPage(id: number, siteBase: string, who: Person): string | n
        d.ms ? Math.round(d.ms / 1000) : "?"
      }s · ${esc(d.template)}, ends on ${esc(d.closing ?? "—")}</p>
 
+     ${
+       /* OUR numbers, beside the source's. Fini: "I also need the metric of the
+          page. Like how many views we have. How much time people spend on the
+          page." A page nobody has visited yet reads as zero rather than as a
+          gap, because a gap looks like a broken feature. */
+       onSite === "draft"
+         ? ""
+         : !ours?.on
+           ? `<p class="caveat">Page views are not switched on yet \u2014 the desk has no analytics key.</p>`
+           : ours.error
+             ? `<p class="flag">Could not read the page's views: ${esc(ours.error)}</p>`
+             : `<div class="stats">
+                  <div class="stat"><i>views</i><b>${num(ours.stats?.views ?? 0)}</b></div>
+                  <div class="stat"><i>people</i><b>${num(ours.stats?.people ?? 0)}</b></div>
+                  <div class="stat"><i>time on page</i><b>${esc(spell(ours.stats?.seconds ?? 0))}</b></div>
+                  <div class="stat"><i>since</i><b style="font-size:13px">published</b></div>
+                </div>
+                <p class="caveat">This article's own numbers, last 28 days. GA4 only counts a visitor who accepted
+                the cookie banner, so it undercounts \u2014 fair between articles, not an audited figure.</p>`
+     }
      ${sourceStats}
      ${d.echo ? `<p class="flag"><b>Ends like another article.</b> ${esc(d.echo)}</p>` : ""}
 
