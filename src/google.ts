@@ -1,4 +1,5 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 
 /**
  * Signing in with Google, and only at balkaris.ch.
@@ -54,8 +55,10 @@ export function client(): GoogleClient | null {
   if (!file) return null;
   try {
     /* Synchronous on purpose: it happens once per sign-in, and an async read
-       here would make every caller async for no benefit. */
-    const raw = require("node:fs").readFileSync(file, "utf8") as string;
+       here would make every caller async for no benefit. `require` was the
+       first attempt and this file is an ES module, so it was not defined and
+       every sign-in answered 500. */
+    const raw = readFileSync(file, "utf8");
     const json = JSON.parse(raw) as Record<string, { client_id?: string; client_secret?: string }>;
     const c = json.web ?? json.installed ?? Object.values(json)[0];
     if (!c?.client_id || !c.client_secret) return null;
