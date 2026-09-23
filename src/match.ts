@@ -326,7 +326,8 @@ function pattern(term: string): RegExp {
   return re;
 }
 
-function count(haystack: string, term: string): number {
+/** Exported for look.ts, which reads the same way with a different table. */
+export function count(haystack: string, term: string): number {
   const re = pattern(term);
   let n = 0;
   while (re.exec(haystack) !== null) n += 1;

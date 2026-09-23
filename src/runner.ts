@@ -3,6 +3,7 @@ import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
 import { match } from "./match.ts";
 import { takeSocial } from "./social/pipeline.ts";
+import { proseOf } from "./blocks.ts";
 import { cover } from "./cover.ts";
 import { ensureFor, ensureOllama } from "./ensure.ts";
 import type { TopicId } from "./catalogue.ts";
@@ -191,16 +192,30 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
  * picture; the piece is already written and already publishable.
  */
 async function doCover(draft: { id: number; slug: string; post: string }, topic: string) {
-  const post = JSON.parse(draft.post) as { title: string; standfirst: string; excerpt: string };
+  const post = JSON.parse(draft.post) as {
+    title: string;
+    standfirst: string;
+    excerpt: string;
+    services?: string[];
+    body?: never[];
+  };
+
+  /* The WHOLE piece, not the headline. look.ts is reading for the shape of an
+     argument, and an argument is not in its title — the fourth pass proved
+     what happens when the cover only knows six words. */
   const out = await cover({
     title: post.title,
-    thesis: post.standfirst || post.excerpt,
+    text: [post.standfirst, post.excerpt, proseOf((post.body ?? []) as never)].filter(Boolean).join("\n\n"),
     topic: topic as never,
+    services: post.services ?? [],
     slug: draft.slug,
   });
 
   console.log(
-    `  drew a cover — ${out.layout}, ${Math.round(out.webp.length / 1024)}KB in ${Math.round(out.ms / 1000)}s`,
+    `  read it as ${out.read.motion}/${out.read.mood} (${out.read.because.motion.join(", ") || "nothing fired"})`,
+  );
+  console.log(
+    `  drew a cover — ${out.layout} in ${out.palette}, ${Math.round(out.webp.length / 1024)}KB in ${Math.round(out.ms / 1000)}s`,
   );
   return {
     ok: true,
