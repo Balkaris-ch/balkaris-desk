@@ -136,6 +136,20 @@ const PRACTICE_MOOD: Record<string, Mood> = {
   studio: "human",
 };
 
+/**
+ * When the words argue no shape at all, the register picks one.
+ *
+ * Not one default for everything: a piece with no shape still has a subject,
+ * and "a growth piece with nothing else to say is about things going up" is a
+ * real claim rather than a shrug.
+ */
+const FALLBACK_MOTION: Record<Mood, Motion> = {
+  technical: "layering",
+  growth: "rising",
+  human: "connecting",
+  urgent: "blocked",
+};
+
 export interface Look {
   motion: Motion;
   mood: Mood;
@@ -156,9 +170,10 @@ function tally<K extends string>(
   terms: Record<K, { strong: string[]; weak: string[] }>,
   title: string,
   body: string,
-): { winner: K; because: string[]; scores: Record<string, number> } {
+): { winner: K; because: string[]; argued: boolean; scores: Record<string, number> } {
   const scores = {} as Record<string, number>;
   const reasons = {} as Record<string, string[]>;
+  const argued = {} as Record<string, boolean>;
 
   for (const key of Object.keys(terms) as K[]) {
     let score = 0;
@@ -174,6 +189,7 @@ function tally<K extends string>(
            do not make a piece ten times more about being stuck. */
         score += weight * (1 + Math.log2(Math.min(n, 8)));
         because.push(term);
+        if (strength === "strong") argued[key] = true;
       }
     }
     scores[key] = Math.round(score * 10) / 10;
@@ -181,7 +197,7 @@ function tally<K extends string>(
   }
 
   const winner = (Object.keys(scores) as K[]).reduce((a, b) => (scores[b] > scores[a] ? b : a));
-  return { winner, because: reasons[winner] ?? [], scores };
+  return { winner, because: reasons[winner] ?? [], argued: argued[winner] ?? false, scores };
 }
 
 /**
@@ -201,11 +217,6 @@ export function look(article: {
   const body = ` ${article.title} ${article.text} `;
 
   const m = tally(MOTION_TERMS, title, body);
-  /* Nothing fired at all — a short piece, or one written entirely in nouns.
-     `layering` is the fallback because it is the least committal claim a
-     composition can make: things built on other things. */
-  const motion: Motion = m.scores[m.winner] > 0 ? (m.winner as Motion) : "layering";
-
   const d = tally(MOOD_TERMS, title, body);
 
   /* The shelf and the matched practices vote too, but quietly: they are worth
@@ -219,9 +230,21 @@ export function look(article: {
   }
   const mood = (Object.keys(votes) as Mood[]).reduce((a, b) => (votes[b] > votes[a] ? b : a));
 
+  /* THE MOTION HAS TO BE ARGUED. A winner made only of weak terms is not a
+     reading, it is a coincidence of vocabulary: "Landing pages require
+     specific intent to function" won `connecting` on the strength of the
+     words "link" and "path", and got a picture of a route across the frame
+     for an article that is not about routes at all.
+     When nothing strong fired, the register decides instead — which is a
+     smaller claim, honestly made, and still a great deal better than a hash. */
+  const motion: Motion = m.argued ? (m.winner as Motion) : FALLBACK_MOTION[mood];
+
   return {
     motion,
     mood,
-    because: { motion: m.because.slice(0, 4), mood: (d.because.length ? d.because : [article.topic]).slice(0, 4) },
+    because: {
+      motion: m.argued ? m.because.slice(0, 4) : [`nothing argued, so: ${mood}`],
+      mood: (d.because.length ? d.because : [article.topic]).slice(0, 4),
+    },
   };
 }
