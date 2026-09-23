@@ -338,6 +338,7 @@ export function draftPage(id: number, siteBase: string, who: Person): string | n
     readingTime: number;
     body: PostBlock[];
     takeaways: string[];
+    faq?: { q: string; a: string }[];
     services: string[];
     source: { url: string; site: string; title: string; author: string | null };
   };
@@ -391,6 +392,18 @@ export function draftPage(id: number, siteBase: string, who: Person): string | n
        <h1 class="t">${esc(post.title)}</h1>
        <p class="stand">${esc(post.standfirst)}</p>
        ${renderArticle(post.body)}
+       ${
+         post.takeaways?.length
+           ? `<h2>Key takeaways</h2><ul>${post.takeaways.map((k) => `<li>${esc(k)}</li>`).join("")}</ul>`
+           : ""
+       }
+       ${
+         post.faq?.length
+           ? `<h2>Asked before deciding</h2><dl class="steps">${post.faq
+               .map((f) => `<dt>${esc(f.q)}</dt><dd>${esc(f.a)}</dd>`)
+               .join("")}</dl>`
+           : `<p class="unknown">No questions section \u2014 the site's template has one.</p>`
+       }
      </article>
 
      ${

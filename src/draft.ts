@@ -79,6 +79,11 @@ export interface DraftPost {
   readingTime: number;
   body: Block[];
   takeaways: string[];
+  /** The questions the piece leaves, answered on the page. The site's own
+   *  article template has this section and renders it as an FAQPage in the
+   *  structured data, so an article without one is missing furniture every
+   *  hand-written piece has. */
+  faq: { q: string; a: string }[];
   source: { url: string; site: string; title: string; author: string | null };
 }
 
@@ -329,8 +334,16 @@ shape that is not in the list above.`,
       standfirst: { type: "string" },
       excerpt: { type: "string" },
       takeaways: { type: "array", items: { type: "string" } },
+      faq: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: { q: { type: "string" }, a: { type: "string" } },
+          required: ["q", "a"],
+        },
+      },
     },
-    required: ["title", "standfirst", "excerpt", "takeaways"],
+    required: ["title", "standfirst", "excerpt", "takeaways", "faq"],
   } as const;
 
   const { value: top } = await askJson(
@@ -344,21 +357,35 @@ title: under 70 characters. A statement, not a question, not a listicle. Not the
 standfirst: one sentence under the title. ${tpl.standfirst}
 excerpt: one sentence for a card in a list. Different words from the standfirst.
 takeaways: three short lines, each a thing the article actually argues.
+faq: three questions a reader still has AFTER reading this, each answered in one or two
+     sentences. A real question somebody would ask us — never a heading turned into a
+     question, and never one the article already answers in full.
 
 Answer as JSON.`,
     TOP,
     (v) => {
-      const o = v as { title?: string; standfirst?: string; excerpt?: string; takeaways?: string[] };
+      const o = v as {
+        title?: string;
+        standfirst?: string;
+        excerpt?: string;
+        takeaways?: string[];
+        faq?: { q?: string; a?: string }[];
+      };
       if (!o.title?.trim()) throw new Error("title is empty");
       if (o.title.length > 90) throw new Error(`the title is ${o.title.length} characters and must be under 70`);
       if (!o.standfirst?.trim()) throw new Error("standfirst is empty");
       if (!o.excerpt?.trim()) throw new Error("excerpt is empty");
       if (!Array.isArray(o.takeaways) || o.takeaways.length < 3) throw new Error("takeaways must have three entries");
+      const faq = (Array.isArray(o.faq) ? o.faq : [])
+        .map((f) => ({ q: String(f?.q ?? "").trim(), a: String(f?.a ?? "").trim() }))
+        .filter((f) => f.q && f.a);
+      if (faq.length < 3) throw new Error("faq must have three questions, each with an answer");
       return {
         title: o.title.trim().replace(/^["']|["']$/g, ""),
         standfirst: o.standfirst.trim(),
         excerpt: o.excerpt.trim(),
         takeaways: o.takeaways.slice(0, 3).map((t) => String(t).trim()),
+        faq: faq.slice(0, 3),
       };
     },
     { model, system: VOICE, temperature: 0.4 },
@@ -374,6 +401,7 @@ Answer as JSON.`,
     readingTime: Math.max(2, Math.round(countWords(body) / 200)),
     body,
     takeaways: top.takeaways,
+    faq: top.faq,
     source: { url: input.url, site: input.site, title: input.title, author: input.author },
   };
 

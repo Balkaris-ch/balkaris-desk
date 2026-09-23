@@ -176,6 +176,7 @@ export interface StoredPost {
   readingTime: number;
   body: PostBlock[];
   takeaways: string[];
+  faq?: { q: string; a: string }[];
   source: { url: string; site: string; title: string; author: string | null };
 }
 
@@ -226,7 +227,14 @@ export const ${ident || "article"}: Post = {
   metaDescription: ${q(post.excerpt.slice(0, 160))},
   takeaways: [
 ${post.takeaways.map((t) => `    ${q(t)},`).join("\n")}
-  ],
+  ],${
+    post.faq?.length
+      ? `
+  faq: [
+${post.faq.map((f) => `    { q: ${q(f.q)}, a: ${q(f.a)} },`).join("\n")}
+  ],`
+      : ""
+  }
   body: [
 ${post.body.map(blockLiteral).filter(Boolean).join("\n")}
   ],
