@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { db, log } from "./db.ts";
 import type { PostBlock } from "./blocks.ts";
+import type { Person } from "./people.ts";
 
 /**
  * An approved article becomes a file in the website, and a push.
@@ -44,20 +45,73 @@ const KNOWN = process.env.SITE_KNOWN_HOSTS ?? "/opt/balkaris-desk/.ssh/known_hos
 
 const POSTS_DIR = "content/posts";
 
-/** Every git call carries the deploy key and nothing else. */
-const GIT_ENV = {
+/**
+ * Every git call carries the deploy key, and every COMMIT carries a person.
+ *
+ * THE DESK HAS NO IDENTITY OF ITS OWN, and that is not a stylistic choice.
+ * The first real publish was authored as desk@balkaris.ch and Vercel refused
+ * to build it: "desk@balkaris.ch attempted to deploy a commit to Balkaris on
+ * Vercel through GitHub, but they're not a member of the team." The article
+ * sat on main doing nothing. So a commit is authored as whoever pressed the
+ * button, with the email on their own Vercel account, and the build goes
+ * through under their name.
+ */
+const GIT_ENV = (by?: Person | null) => ({
   ...process.env,
   GIT_SSH_COMMAND: `ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=${KNOWN} -i ${KEY}`,
   GIT_TERMINAL_PROMPT: "0",
-  GIT_AUTHOR_NAME: "Balkaris desk",
-  GIT_AUTHOR_EMAIL: "desk@balkaris.ch",
-  GIT_COMMITTER_NAME: "Balkaris desk",
-  GIT_COMMITTER_EMAIL: "desk@balkaris.ch",
-};
+  ...(by?.email
+    ? {
+        GIT_AUTHOR_NAME: by.name,
+        GIT_AUTHOR_EMAIL: by.email,
+        GIT_COMMITTER_NAME: by.name,
+        GIT_COMMITTER_EMAIL: by.email,
+      }
+    : {}),
+});
 
-async function git(args: string[], cwd = REPO): Promise<string> {
-  const { stdout } = await execFileP("git", args, { cwd, env: GIT_ENV, timeout: 120_000, maxBuffer: 16 * 1024 * 1024 });
+async function git(args: string[], by?: Person | null, cwd = REPO): Promise<string> {
+  const { stdout } = await execFileP("git", args, {
+    cwd,
+    env: GIT_ENV(by),
+    timeout: 120_000,
+    maxBuffer: 16 * 1024 * 1024,
+  });
   return stdout.trim();
+}
+
+/**
+ * One git operation at a time.
+ *
+ * Two clicks on Publish raced on the very first use and the second died on
+ * "Unable to create .git/shallow.lock: File exists" — while the first was
+ * quietly succeeding, so the page said "nothing changed" about a push that
+ * was going through. A promise chain is the whole fix: the second caller
+ * waits rather than colliding.
+ */
+let queue: Promise<unknown> = Promise.resolve();
+function serialise<T>(work: () => Promise<T>): Promise<T> {
+  const run = queue.then(work, work);
+  queue = run.catch(() => {});
+  return run;
+}
+
+/**
+ * Clear a lock nothing is holding.
+ *
+ * A git process killed mid-fetch — a restart, a timeout, an OOM — leaves its
+ * lock behind and every later fetch fails on it forever. Since `serialise`
+ * guarantees nothing else here is running git, a lock at this point is dead
+ * by definition.
+ */
+async function clearStaleLocks(): Promise<void> {
+  for (const lock of ["shallow.lock", "index.lock", "HEAD.lock", "config.lock"]) {
+    const f = path.join(REPO, ".git", lock);
+    if (existsSync(f)) {
+      await rm(f, { force: true });
+      log("publish.stalelock", { lock });
+    }
+  }
 }
 
 /**
@@ -70,6 +124,7 @@ async function git(args: string[], cwd = REPO): Promise<string> {
  */
 async function ensureRepo(): Promise<void> {
   if (existsSync(path.join(REPO, ".git"))) {
+    await clearStaleLocks();
     /* Always start from what is actually on the branch. Another session, or a
        person, has almost certainly pushed since the last publish. */
     await git(["fetch", "--depth", "1", "origin", BRANCH]);
@@ -80,7 +135,7 @@ async function ensureRepo(): Promise<void> {
   }
   await mkdir(path.dirname(REPO), { recursive: true });
   await execFileP("git", ["clone", "--depth", "1", "--branch", BRANCH, REMOTE, REPO], {
-    env: GIT_ENV,
+    env: GIT_ENV(),
     timeout: 300_000,
   });
   log("publish.cloned", { repo: REPO, branch: BRANCH });
@@ -131,7 +186,11 @@ export interface StoredPost {
  * layer is, it type-checks in CI, and a reviewer reading the commit sees the
  * article rather than an escaped blob.
  */
-function articleFile(post: StoredPost, listed: boolean, meta: { model: string | null; kind: string }): string {
+function articleFile(
+  post: StoredPost,
+  listed: boolean,
+  meta: { model: string | null; kind: string; sharedBy: string; byline: string },
+): string {
   const ident = post.slug.replace(/[^a-z0-9]+(.)/g, (_, c: string) => c.toUpperCase()).replace(/[^a-zA-Z0-9]/g, "");
   const date = new Date().toISOString().slice(0, 10);
 
@@ -140,7 +199,7 @@ function articleFile(post: StoredPost, listed: boolean, meta: { model: string | 
 /**
  * WRITTEN BY THE DESK — desk.balkaris.ch, ${date}.
  *
- * Drafted from ${post.source.author ? `@${post.source.author}` : post.source.site} (${meta.kind})
+ * Shared by ${meta.sharedBy}, drafted from ${post.source.author ? `@${post.source.author}` : post.source.site} (${meta.kind})
  * by ${meta.model ?? "a local model"} on the workstation, and approved by a person before it
  * reached this repository. Edit it at the desk, not here: the next approval
  * overwrites this file.
@@ -155,7 +214,11 @@ export const ${ident || "article"}: Post = {
   excerpt: ${q(post.excerpt)},
   date: ${q(date)},
   author: "Balkaris",
-  by: "balkaris",
+  /* The byline is whoever SHARED the link, not whoever pressed publish: they
+     found the thing and thought it was worth writing about. A key of
+     \`authors\` in content/journal.ts; an unknown one falls back to the studio,
+     so a typo costs a byline and never a page. */
+  by: ${q(meta.byline)},
   readingTime: ${post.readingTime},
   topics: [${post.topics.map(q).join(", ")}],
   services: [${post.services.map(q).join(", ")}],
@@ -227,13 +290,35 @@ export interface PublishResult {
   listed: boolean;
 }
 
-export async function publish(draftId: number, action: PublishAction): Promise<PublishResult> {
+export async function publish(draftId: number, action: PublishAction, by: Person): Promise<PublishResult> {
+  return serialise(() => doPublish(draftId, action, by));
+}
+
+async function doPublish(draftId: number, action: PublishAction, by: Person): Promise<PublishResult> {
+  if (!by.email) {
+    throw new Error(
+      `${by.name} has no email on the desk yet, and Vercel refuses a commit from somebody who is not on the team. Add it on the people page first.`,
+    );
+  }
   const d = db.prepare("SELECT * FROM drafts WHERE id = ?").get(draftId) as
     | { id: number; link_id: number; slug: string; post: string; model: string | null; state: string }
     | undefined;
   if (!d) throw new Error("no such draft");
 
-  const link = db.prepare("SELECT kind FROM links WHERE id = ?").get(d.link_id) as { kind: string };
+  const link = db.prepare("SELECT kind, from_user, from_name FROM links WHERE id = ?").get(d.link_id) as {
+    kind: string;
+    from_user: number | null;
+    from_name: string | null;
+  };
+
+  /* Whose name goes on the article: whoever sent the link to the bot. */
+  const sharer = link.from_user
+    ? (db.prepare("SELECT name, author FROM people WHERE telegram = ?").get(link.from_user) as
+        | { name: string; author: string }
+        | undefined)
+    : undefined;
+  const byline = sharer?.author ?? "balkaris";
+  const sharedBy = sharer?.name ?? link.from_name ?? "the studio";
   const post = JSON.parse(d.post) as StoredPost;
   const listed = action === "list";
 
@@ -246,20 +331,20 @@ export async function publish(draftId: number, action: PublishAction): Promise<P
   if (action === "remove") {
     await rm(file, { force: true });
   } else {
-    await writeFile(file, articleFile(post, listed, { model: d.model, kind: link.kind }), "utf8");
+    await writeFile(file, articleFile(post, listed, { model: d.model, kind: link.kind, sharedBy, byline }), "utf8");
   }
   const count = await writeBarrel(dir);
 
   /* Nothing to say to git? Then nothing happened, and saying so is better
      than an empty commit that looks like a publish in the history. */
-  const dirty = await git(["status", "--porcelain", "--", POSTS_DIR]);
+  const dirty = await git(["status", "--porcelain", "--", POSTS_DIR], by);
   if (!dirty) {
     log("publish.nochange", { draft: draftId, action }, d.link_id);
-    const sha = await git(["rev-parse", "HEAD"]);
+    const sha = await git(["rev-parse", "HEAD"], by);
     return { sha, url: `/insights/${post.slug}`, listed };
   }
 
-  await git(["add", "--", POSTS_DIR]);
+  await git(["add", "--", POSTS_DIR], by);
   const subject =
     action === "remove"
       ? `Take "${post.title}" off the site`
@@ -269,21 +354,23 @@ export async function publish(draftId: number, action: PublishAction): Promise<P
           ? `Take "${post.title}" out of the menus`
           : `Add "${post.title}", live but unlisted`;
 
-  const body = `Written by the desk from ${post.source.author ? `@${post.source.author}` : post.source.site} and approved by a person.
+  const body = `Shared by ${sharedBy}, written by the desk from ${
+    post.source.author ? `@${post.source.author}` : post.source.site
+  }, published by ${by.name}.
 It ${WORDS[action]}.
 
 Source: ${post.source.url}
 Desk: ${process.env.DESK_URL ?? "https://desk.balkaris.ch"}/draft/${draftId}
 ${count} generated article${count === 1 ? "" : "s"} in content/posts after this.`;
 
-  await git(["commit", "-m", subject, "-m", body]);
-  const sha = await git(["rev-parse", "--short", "HEAD"]);
+  await git(["commit", "-m", subject, "-m", body], by);
+  const sha = await git(["rev-parse", "--short", "HEAD"], by);
 
   /* The push is the only step that can fail in a way that matters, and it is
      last: if it throws, the caller leaves the draft where it was and the
      console offers to try again. Nothing here has touched the desk's own
      state yet. */
-  await git(["push", "origin", `HEAD:${BRANCH}`]);
+  await git(["push", "origin", `HEAD:${BRANCH}`], by);
 
   log("publish.pushed", { draft: draftId, action, sha, slug: post.slug }, d.link_id);
   return { sha, url: `/insights/${post.slug}`, listed };
@@ -293,7 +380,7 @@ ${count} generated article${count === 1 ? "" : "s"} in content/posts after this.
 export async function publishReady(): Promise<{ ok: boolean; why?: string }> {
   try {
     if (!existsSync(KEY)) return { ok: false, why: `no deploy key at ${KEY}` };
-    await execFileP("git", ["ls-remote", "--heads", REMOTE, BRANCH], { env: GIT_ENV, timeout: 30_000 });
+    await execFileP("git", ["ls-remote", "--heads", REMOTE, BRANCH], { env: GIT_ENV(), timeout: 30_000 });
     return { ok: true };
   } catch (e) {
     return { ok: false, why: (e instanceof Error ? e.message : String(e)).split("\n")[0].slice(0, 160) };

@@ -2,6 +2,7 @@ import { db, log, queueState, reclaim } from "./db.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { CLOSING_JOBS, type ClosingJob } from "./templates.ts";
 import type { PostBlock } from "./blocks.ts";
+import type { Person } from "./people.ts";
 
 /**
  * The desk, as a person sees it.
@@ -147,6 +148,18 @@ export const CSS = `
          border-radius:8px;padding:8px 10px}
   .src{color:var(--dim);font-size:13px;margin:0 0 18px}
   .src a{color:var(--fg)}
+  .who{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:22px;
+       font-size:12.5px;color:var(--dim)}
+  .who a{text-decoration:none}
+  .who a:hover{color:var(--fg)}
+  .who form{display:inline}
+  .who button{font-size:12px;padding:4px 10px;border-radius:6px;color:var(--dim)}
+  .ppl{width:100%;border-collapse:collapse;font-size:14px}
+  .ppl td,.ppl th{padding:12px 12px 12px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+  .ppl th{color:var(--dim);font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:500;text-align:left}
+  .ppl input{font:inherit;font-size:13.5px;background:#0b0c0d;color:var(--fg);border:1px solid var(--line);
+             border-radius:7px;padding:8px 10px;width:100%;max-width:260px}
+  .ppl .me{color:var(--ok)}
 `;
 
 export function page(title: string, inner: string): string {
@@ -154,6 +167,62 @@ export function page(title: string, inner: string): string {
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>${esc(title)} · Balkaris desk</title>
 <style>${CSS}</style></head><body><main>${inner}</main></body></html>`;
+}
+
+
+/** Who is signed in, and the way to the people page. On every page. */
+function bar(who: Person): string {
+  return `<div class="who">
+    <span>Signed in as <b style="color:var(--fg)">${esc(who.name)}</b>${
+      who.canPublish ? "" : ` \u2014 <span style="color:var(--warn)">no email yet, so you cannot publish</span>`
+    }</span>
+    <span><a href="/">Everything</a> &nbsp;\u00b7&nbsp; <a href="/people">People</a> &nbsp;
+      <form method="post" action="/logout"><button>Sign out</button></form></span>
+  </div>`;
+}
+
+/**
+ * The people the desk knows.
+ *
+ * It learns a Telegram id the first time somebody writes to the bot, and
+ * nothing else. The email is typed in here BY A PERSON, because guessing one
+ * produces exactly what happened on the first real publish: Vercel refused
+ * the build, the article sat on main doing nothing, and the domain owner got
+ * an email about a deployment from an address nobody recognised.
+ *
+ * The byline is which name goes on an article they share — a key of `authors`
+ * in the site's content/journal.ts.
+ */
+export function peoplePage(people: Person[], who: Person): string {
+  const rows = people
+    .map(
+      (p) => `<tr>
+        <td${p.telegram === who.telegram ? ' class="me"' : ""}>${esc(p.name)}${
+          p.telegram === who.telegram ? " (you)" : ""
+        }</td>
+        <td><form method="post" action="/people/${p.telegram}" style="display:flex;gap:8px;align-items:center">
+          <input name="email" type="email" value="${esc(p.email ?? "")}" placeholder="their Vercel email" />
+          <input name="author" value="${esc(p.author)}" placeholder="byline" style="max-width:120px" />
+          <button>Save</button>
+        </form></td>
+      </tr>`,
+    )
+    .join("");
+
+  return page(
+    "People",
+    `${bar(who)}
+     <h1>People</h1>
+     <p class="sub">Publishing commits to the website under your own name, so the email here has to be the one on
+     your Vercel account \u2014 Vercel refuses to build a commit from somebody who is not on the team, which is
+     exactly what it did the first time the desk tried. Somebody with no email can read and queue, and cannot publish.</p>
+     <p class="sub">The byline is which name goes on an article they share: <b>fini</b>, <b>damir</b>,
+     <b>tihomir</b>, or <b>balkaris</b> for the studio.</p>
+     <table class="ppl">
+       <thead><tr><th>Who</th><th>Email for publishing &nbsp;\u00b7&nbsp; byline</th></tr></thead>
+       <tbody>${rows || `<tr><td colspan="2" class="none">Nobody has written to the bot yet.</td></tr>`}</tbody>
+     </table>`,
+  );
 }
 
 /* ---------- the list ------------------------------------------------------- */
@@ -187,7 +256,7 @@ const STATE_TAG: Record<string, { cls: string; word: string }> = {
   failed: { cls: "bad", word: "could not be read" },
 };
 
-export function listPage(): string {
+export function listPage(who: Person): string {
   reclaim();
   const q = queueState();
   const rows = db
@@ -227,7 +296,8 @@ export function listPage(): string {
 
   return page(
     "Desk",
-    `<h1>Balkaris desk</h1>
+    `${bar(who)}
+     <h1>Balkaris desk</h1>
      <p class="sub">Send a link to @insight_balkaris_bot. It is read and matched here, written on the workstation, and goes to balkaris.ch when you say so.</p>
      <div class="pills">
        <span class="pill"><span class="dot" style="background:${awake ? "var(--ok)" : "#55585a"}"></span>workstation <b>${awake ? "awake" : "asleep"}</b></span>
@@ -242,7 +312,7 @@ export function listPage(): string {
 
 /* ---------- one article ---------------------------------------------------- */
 
-export function draftPage(id: number, siteBase: string): string | null {
+export function draftPage(id: number, siteBase: string, who: Person): string | null {
   const d = db.prepare("SELECT * FROM drafts WHERE id = ?").get(id) as
     | {
         id: number;
@@ -306,7 +376,8 @@ export function draftPage(id: number, siteBase: string): string | null {
 
   return page(
     post.title,
-    `<a class="back" href="/">← everything</a>
+    `${bar(who)}
+     <a class="back" href="/">← everything</a>
      <p class="src">${esc(kind)} · from <a href="${esc(post.source.url)}" rel="noreferrer noopener">${esc(
        post.source.author ? `@${post.source.author}` : post.source.site,
      )}</a> · ${esc(shelf)} · written ${esc(ago(d.created_at))} by ${esc(d.model ?? "?")} in ${
@@ -334,7 +405,10 @@ export function draftPage(id: number, siteBase: string): string | null {
 
      <div class="acts">
        ${
-         onSite === "draft"
+         !who.canPublish
+           ? `<p class="caveat" style="margin:0">Add your Vercel email on the <a href="/people">people page</a>
+              before you can publish \u2014 the commit goes out under your name and Vercel will refuse it otherwise.</p>`
+           : onSite === "draft"
            ? `<form method="post" action="/draft/${d.id}/publish"><button class="go">Put it on the site, unlisted</button></form>`
            : onSite === "unlisted"
              ? `<form method="post" action="/draft/${d.id}/list"><button class="go">Publish it properly</button></form>

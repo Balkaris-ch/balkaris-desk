@@ -6,8 +6,10 @@ import { takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
 import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
-import { draftPage, linkPage, listPage, page } from "./console.ts";
+import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
+import { everyone, getPerson, mintLogin, remember, setAuthor, setEmail, spendLogin, type Person } from "./people.ts";
+import { clear, issue, whoIs } from "./session.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -36,7 +38,10 @@ const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 /** Where a published article actually lives, for the "see it live" link. */
 const SITE_BASE = (process.env.SITE_BASE ?? "https://www.balkaris.ch").replace(/\/$/, "");
 
-const app = new Hono();
+/** What travels on a request: the signed-in person, set by the gate below. */
+type Vars = { Variables: { who: Person } };
+
+const app = new Hono<Vars>();
 
 /** Timing-safe compare that does not leak length either. */
 function sameSecret(a: string, b: string): boolean {
@@ -59,10 +64,74 @@ app.get("/health", (c) => c.json({ ok: true, service: "balkaris-desk", at: new D
    what is waiting for the workstation. The real console follows; this is the
    page that proves the address answers and says something true.            */
 
-app.get("/", (c) => c.html(listPage()));
+/**
+ * WHO IS LOOKING.
+ *
+ * Everything past the login routes needs a person, because publishing commits
+ * under their own email now and "who did this" has to be a real answer rather
+ * than "the desk". The identity is the Telegram account — the only one this
+ * thing can actually prove — so the login is: ask the bot, get a link in a
+ * chat only you can read, open it. No passwords anywhere.
+ */
+app.get("/login/:token", (c) => {
+  const who = spendLogin(c.req.param("token"));
+  if (!who) {
+    return c.html(
+      page(
+        "That link is spent",
+        `<h1>That link has been used, or it is over fifteen minutes old</h1>
+         <p class="sub">Send <b>/login</b> to @insight_balkaris_bot and it will give you another.</p>`,
+      ),
+      401,
+    );
+  }
+  issue(c, who.telegram);
+  return c.redirect("/", 303);
+});
+
+app.post("/logout", (c) => {
+  clear(c);
+  return c.html(SIGN_IN, 401);
+});
+
+const SIGN_IN = page(
+  "Sign in",
+  `<h1>Balkaris desk</h1>
+   <p class="sub">Send <b>/login</b> to <b>@insight_balkaris_bot</b> on Telegram. It replies with a link that
+   signs you in here for thirty days.</p>
+   <p class="sub">There is no password. The desk can prove exactly one thing about you — your Telegram
+   account — so that is what it uses.</p>`,
+);
+
+app.use("*", async (c, next) => {
+  const p = c.req.path;
+  if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p.startsWith("/login/")) return next();
+
+  const who = whoIs(c);
+  if (!who) return c.html(SIGN_IN, 401);
+  c.set("who", who);
+  await next();
+});
+
+const me = (c: { get: (k: "who") => Person }) => c.get("who");
+
+app.get("/", (c) => c.html(listPage(me(c))));
+
+/* The people the desk knows, and the one field that decides whether somebody
+   can publish: an email, which must be the one on their Vercel account. */
+app.get("/people", (c) => c.html(peoplePage(everyone(), me(c))));
+
+app.post("/people/:telegram", async (c) => {
+  const id = Number(c.req.param("telegram"));
+  const form = await c.req.parseBody();
+  if (!getPerson(id)) return c.notFound();
+  setEmail(id, String(form.email ?? "").trim() || null);
+  setAuthor(id, String(form.author ?? "balkaris").trim() || "balkaris");
+  return c.redirect("/people", 303);
+});
 
 app.get("/draft/:id", (c) => {
-  const html = draftPage(Number(c.req.param("id")), SITE_BASE);
+  const html = draftPage(Number(c.req.param("id")), SITE_BASE, me(c));
   return html ? c.html(html) : c.notFound();
 });
 
@@ -116,21 +185,26 @@ app.post("/draft/:id/reclose", async (c) => {
  * something marked published that is not, and the fix must never be to write
  * the article again.
  */
-async function act(c: { req: { param: (k: string) => string } }, action: PublishAction, nextState: string) {
+async function act(
+  c: { req: { param: (k: string) => string }; get: (k: "who") => Person },
+  action: PublishAction,
+  nextState: string,
+) {
   const id = Number(c.req.param("id"));
+  const by = me(c);
   const d = db.prepare("SELECT id, link_id, slug FROM drafts WHERE id = ?").get(id) as
     | { id: number; link_id: number; slug: string }
     | undefined;
   if (!d) return { ok: false as const, id, html: null };
 
   try {
-    const out = await publish(id, action);
+    const out = await publish(id, action, by);
     db.prepare("UPDATE drafts SET state = ?, published_sha = ? WHERE id = ?").run(nextState, out.sha, id);
     db.prepare("UPDATE links SET state = ?, updated_at = datetime('now') WHERE id = ?").run(
       nextState === "removed" ? "drafted" : nextState,
       d.link_id,
     );
-    log(`draft.${action}`, { sha: out.sha, slug: d.slug }, d.link_id);
+    log(`draft.${action}`, { sha: out.sha, slug: d.slug, by: by.name }, d.link_id);
     return { ok: true as const, id, html: null };
   } catch (e) {
     const why = (e instanceof Error ? e.message : String(e)).split(/\r?\n/).slice(0, 3).join(" ").slice(0, 400);
@@ -197,7 +271,7 @@ app.post("/draft/:id/remove", (c) => {
    port forward, no tunnel, and it can vanish mid-job without breaking
    anything (db.ts `reclaim`).                                              */
 
-const runner = new Hono();
+const runner = new Hono<Vars>();
 
 runner.use("*", async (c, next) => {
   const given = (c.req.header("authorization") ?? "").replace(/^Bearer\s+/i, "");
@@ -416,6 +490,23 @@ app.post("/tg/:secret", async (c) => {
     try {
       if (may.claimed) {
         await send(chat, `Hello ${esc(name)} — you are the owner of this desk now.`);
+      }
+
+      if (msg.from?.id) remember(msg.from.id, name);
+
+      if (/^\/login\b/.test(text)) {
+        if (!msg.from?.id) {
+          await send(chat, "I can sign in a person, not a channel.");
+          return;
+        }
+        const token = mintLogin(msg.from.id);
+        await send(
+          chat,
+          `Here is your way in — good once, and for fifteen minutes:\n\n${
+            process.env.DESK_URL ?? "https://desk.balkaris.ch"
+          }/login/${token}`,
+        );
+        return;
       }
 
       if (/^\/start\b/.test(text)) {
