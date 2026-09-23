@@ -298,6 +298,82 @@ app.post("/draft/:id/reclose", async (c) => {
   return c.redirect(`/draft/${id}`, 303);
 });
 
+
+/**
+ * SEND A LINK, GET A PUBLISHED ARTICLE.
+ *
+ * Fini, 23 September 2026: *"I want when I have a link, from a Telegram, to
+ * fucking post it. And have everything set up."*
+ *
+ * So the desk finishes the job itself. When the cover lands — or when the
+ * cover has given up — the article is written into the site, pushed, listed,
+ * and the person who shared the link gets the live URL in the chat. Nobody
+ * opens the console unless they want to.
+ *
+ * WHO IT PUBLISHES AS. The commit is authored by whoever SHARED the link if
+ * the desk knows their address, and by the owner otherwise. It has to be a
+ * real person either way: Vercel refuses a commit from somebody who is not on
+ * the team, which is the whole reason the desk has no identity of its own.
+ *
+ * WHAT STILL STOPS IT. Everything that stopped it before. guard() in draft.ts
+ * throws away a draft that leans on its source, never names it, or came out
+ * too short — and a thrown draft never reaches this function. The echo flag
+ * does NOT stop it, by design: two articles ending alike is a thing for a
+ * person to notice, not a reason to hold a piece back.
+ *
+ * DESK_AUTOPUBLISH=0 turns it off and the buttons work as before.
+ */
+async function autoPublish(draftId: number, linkId: number): Promise<void> {
+  if ((process.env.DESK_AUTOPUBLISH ?? "1") === "0") return;
+
+  const d = db.prepare("SELECT id, slug, state FROM drafts WHERE id = ?").get(draftId) as
+    | { id: number; slug: string; state: string }
+    | undefined;
+  if (!d || d.state !== "draft") return;
+
+  /* The sharer publishes it if we know their address; the owner otherwise. */
+  const l = db.prepare("SELECT from_user, from_chat FROM links WHERE id = ?").get(linkId) as {
+    from_user: number | null;
+    from_chat: number | null;
+  };
+  const sharer = l.from_user ? getPerson(l.from_user) : null;
+  const by = sharer?.canPublish ? sharer : everyone().find((p) => p.owner && p.canPublish);
+
+  if (!by) {
+    log("auto.nobody", { draft: draftId }, linkId);
+    if (l.from_chat) {
+      await send(
+        l.from_chat,
+        "It is written, and I have nobody to publish it as — add a Vercel email on the desk's people page.",
+      );
+    }
+    return;
+  }
+
+  try {
+    await publish(draftId, "publish", by);
+    const out = await publish(draftId, "list", by);
+    db.prepare("UPDATE drafts SET state = 'listed', published_sha = ? WHERE id = ?").run(out.sha, draftId);
+    db.prepare("UPDATE links SET state = 'listed', updated_at = datetime('now') WHERE id = ?").run(linkId);
+    log("auto.published", { draft: draftId, sha: out.sha, by: by.name }, linkId);
+
+    if (l.from_chat) {
+      const url = `${SITE_BASE}/insights/${d.slug}`;
+      await send(
+        l.from_chat,
+        `Published.\n\n${esc(url)}\n\n<i>The site takes about two minutes to build, so give it a moment. ` +
+          `It is on the journal, in the menu and in the sitemap.</i>`,
+      );
+    }
+  } catch (e) {
+    const why = (e instanceof Error ? e.message : String(e)).split(/\r?\n/)[0].slice(0, 300);
+    log("auto.failed", why, linkId);
+    if (l.from_chat) {
+      await send(l.from_chat, `It is written but it did not go out: ${esc(why)}\n\nIt is on the desk, ready to retry.`);
+    }
+  }
+}
+
 /**
  * Publish, list, unlist, take down.
  *
@@ -480,11 +556,26 @@ runner.post("/result/:id", async (c) => {
   if (!job) return c.json({ error: "no such job" }, 404);
 
   if (!body.ok) {
-    db.prepare("UPDATE jobs SET state='queued', runner=NULL, taken_at=NULL, error=? WHERE id=?").run(
+    const tries = (db.prepare("SELECT attempts FROM jobs WHERE id = ?").get(id) as { attempts: number }).attempts;
+    const done = tries >= 3;
+    db.prepare("UPDATE jobs SET state=?, runner=NULL, taken_at=NULL, error=? WHERE id=?").run(
+      done ? "stuck" : "queued",
       (body.error ?? "").slice(0, 500),
       id,
     );
-    log("job.failed", body.error, job.link_id);
+    log("job.failed", { why: body.error, attempt: tries, gaveUp: done }, job.link_id);
+
+    /* A cover that will not draw must not hold the article. The journal draws
+       its own plate for a piece with no picture, and a written article sitting
+       unpublished because of a failed image is the worse outcome. */
+    const kind = (db.prepare("SELECT kind, payload FROM jobs WHERE id = ?").get(id) as {
+      kind: string;
+      payload: string | null;
+    });
+    if (done && kind.kind === "cover" && kind.payload) {
+      const draft = (JSON.parse(kind.payload) as { draft?: number }).draft;
+      if (draft) void autoPublish(draft, job.link_id);
+    }
     return c.json({ ok: true });
   }
 
@@ -499,6 +590,9 @@ runner.post("/result/:id", async (c) => {
       body.cover.draft,
     );
     log("cover.drawn", { slug: body.cover.slug, bytes: body.cover.webp.length }, job.link_id);
+
+    /* The picture was the last thing missing. Finish the job. */
+    void autoPublish(body.cover.draft, job.link_id);
   }
 
   /* An ingest fills in the row the box could only stub. The canonical PAGE
