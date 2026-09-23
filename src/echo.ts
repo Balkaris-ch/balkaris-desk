@@ -45,9 +45,16 @@ import { db } from "./db.ts";
  * 30%, two-shared-phrases and the opener rule were chosen by looking at the
  * five drafts they were then tested against, and "two flagged, three clean" is
  * the result they were tuned for. It says the detector can separate those
- * five. It says nothing yet about false positives, and the first honest test
- * is the next ten closings nobody has seen. In six months these will look like
- * measured constants; they are a first guess made at n=5 on 23 September 2026.
+ * five. In six months these will look like measured constants; they are a
+ * first guess made on 23 September 2026.
+ *
+ * AND THE SAMPLE IS SMALLER THAN THE DRAFT COUNT SUGGESTS. Since the
+ * comparison became within-job, twelve drafts across five jobs means each
+ * closing is checked against two or three others, not eleven. "No false
+ * positives in twelve drafts" is really "none across a handful of within-job
+ * pairs", which is five times weaker than it sounds and is the number to
+ * quote. It will take a few dozen articles before these thresholds have been
+ * tested rather than fitted.
  */
 const LOOK_BACK = 20;
 const RUN = 8;

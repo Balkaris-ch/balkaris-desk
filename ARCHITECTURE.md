@@ -75,3 +75,54 @@ of preparation around it.
 | GitHub deploy key | private half stays on the box, generated there | Fini pastes the PUBLIC half into the repo's Deploy keys, write access |
 
 No tunnel token. The tunnel is gone.
+
+## What a gate can and cannot do
+
+Written 23 September 2026, after a day of chasing one flaw through four fixes.
+It is here rather than in a `CLAUDE.md` because nobody has asked for one in
+this repo and a file that instructs future sessions is Fini's to create, not a
+thing to add on a working session's own initiative.
+
+**Every structural gate can only check the shape it was told to look for, and
+every gate you add relocates the drift to an axis nobody has named yet.**
+
+The day's evidence, in order:
+
+1. Articles all closed by re-summarising their source. The beat was told, in
+   capitals, not to. **A capitalised prohibition always loses to a job whose
+   most probable completion is the thing prohibited.**
+2. So the job changed: not "close the piece" but "name the one thing to do
+   differently this week". The summary survived anyway — the source window was
+   still sitting in the prompt. **Proximity does not care which part of the
+   context the text came from.**
+3. So the close was blinded to everything and given only the article's thesis.
+   The summary went. In its place: advice true of the *shelf* rather than the
+   article, because removing everything specific left the category as the only
+   thing to be specific about.
+4. So the close got five jobs and a rule to pick one — and the rule's second
+   test was true of nearly every article, collapsing five jobs back to one.
+   **The same bug, reproduced one level down, inside the fix for it.**
+5. Fixed. Five jobs, genuinely spread. Result: **five habits.** Within a job
+   the model has exactly one reach, and it is as strong as the single habit
+   was.
+
+Each fix was correct and each one moved the problem somewhere the previous
+gate was not looking. That is not a run of bad luck; it is what gates do.
+
+**So the design is: partition it, surface it, let a person judge it.** Five
+jobs make convergence five times slower and far more legible, because two
+closings sharing a skeleton now means two closings *asked the same question* —
+which is a habit — rather than two asked different ones, which is noise. The
+detector compares within a job and names the shared phrase. `reclose()` makes
+acting on that flag one choice rather than a rewrite.
+
+The levers deliberately **not** taken, so nobody revisits them as oversights:
+
+- **Raising the temperature.** Buys variety by spending coherence.
+- **Showing the model its own recent closings as negative examples.** Walks
+  straight back into (2): the nearest text gets imitated as readily as it gets
+  summarised.
+- **A sixth rule.** Buys five more slower habits and a rule table nobody can
+  reason about.
+
+The person is the variety. The machine's job is to make their judgement cheap.

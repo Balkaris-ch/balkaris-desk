@@ -431,3 +431,89 @@ export function guard(post: DraftPost, input: DraftInput): void {
     throw new Error(`the draft never names ${named}, so the source is not credited`);
   }
 }
+
+/**
+ * Rewrite ONLY the last paragraph, as a different one of the five jobs.
+ *
+ * The echo detector flags a pair of closings that share a skeleton, and the
+ * whole design rests on a person doing something about it. This is that
+ * something, with the typing removed: the escape from a flagged pair is
+ * picking another job, not writing a paragraph.
+ *
+ * It is the human lever with the friction taken out, not a sixth rule. The
+ * machine does not choose here — the person does, having seen the two
+ * closings side by side, which is the one judgement no rule has been able to
+ * make all day.
+ *
+ * Everything else in the article is untouched, and the same guard runs
+ * afterwards: a re-closed draft is still checked for lifted runs, for naming
+ * its source, and for ending the way it began.
+ */
+export async function reclose(
+  post: DraftPost,
+  input: DraftInput,
+  job: ClosingJob,
+  opts: { model?: string } = {},
+): Promise<{ post: DraftPost; model: string; ms: number }> {
+  const started = Date.now();
+  const model = opts.model ?? WRITE_MODEL;
+
+  const body = [...post.body];
+  const lastIndex = body.map((b) => typeof b === "string").lastIndexOf(true);
+  if (lastIndex < 0) throw new Error("this draft has no closing paragraph to replace");
+
+  const withoutClose = body.slice(0, lastIndex);
+  const shelf = TOPICS.find((t) => t.id === input.topic)?.name ?? input.topic;
+  const publication = input.publication ?? publicationName(input.site);
+
+  /* The same one-sentence thesis the first close was given: the claim the
+     piece landed on, and nothing else. Blind, for the reason in the note on
+     the last beat in templates.ts. */
+  const { value: thesis } = await askJson(
+    `Here is a Balkaris article:\n\n${proseOf(withoutClose)}\n\nIn ONE sentence, what does it argue? The claim itself, not a description of the article. Under 30 words.`,
+    { type: "object", properties: { thesis: { type: "string" } }, required: ["thesis"] },
+    (v) => {
+      const got = String((v as { thesis?: unknown })?.thesis ?? "").trim();
+      if (!got) throw new Error("thesis is empty");
+      return got;
+    },
+    { model, system: VOICE, temperature: 0.3 },
+  );
+
+  const { value } = await askJson(
+    `You are writing the last paragraph of a Balkaris article.
+
+What the article argues: ${thesis}
+
+${CLOSING_JOBS[job].brief}
+
+About 40 words, as exactly one paragraph. Everything else about the article is
+already on the page above this paragraph — do not describe it, do not name
+where its subject came from, and do not give advice that would fit equally
+well on any other article about ${shelf.toLowerCase()}.
+
+Answer as JSON: {"blocks": [ ... ]}, where the single block is:
+${howTo([])}`,
+    schemaFor([]),
+    (v) => {
+      const got = toPostBlocks(v, []);
+      if (got.blocks.length !== 1 || typeof got.blocks[0] !== "string") {
+        throw new Error("this is exactly one paragraph");
+      }
+      const n = countWords(got.blocks);
+      if (n < 24) throw new Error(`that is ${n} words and it needs about 40`);
+      if (n > 60) throw new Error(`that is ${n} words, which is too long — it needs about 40`);
+      const said = proseOf(got.blocks).toLowerCase();
+      const name = publication.toLowerCase().replace(/^the /, "").replace(/^@/, "");
+      if (name.length > 2 && said.includes(name)) {
+        throw new Error(`do not mention ${publication} — that belongs to the opening, not the close`);
+      }
+      return got.blocks[0] as string;
+    },
+    { model, system: VOICE, temperature: 0.55 },
+  );
+
+  const next: DraftPost = { ...post, body: [...withoutClose, value] };
+  guard(next, input);
+  return { post: next, model, ms: Date.now() - started };
+}
