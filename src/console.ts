@@ -482,7 +482,10 @@ export function draftPage(
          /* The real picture, served by the desk from what it drew. */
          d.cover_alt
            ? `<img src="/cover/${esc(d.slug)}.webp" alt="${esc(d.cover_alt)}"
-                   style="width:100%;border-radius:10px;margin:0 0 22px;display:block" />`
+                   style="width:100%;border-radius:10px;margin:0 0 10px;display:block" />
+              <form method="post" action="/draft/${d.id}/redraw" style="margin:0 0 22px">
+                <button class="off">Draw another cover</button>
+              </form>`
            : `<p class="caveat" style="margin:0 0 20px">No cover drawn yet \u2014 it is queued for the workstation.</p>`
        }
        <h1 class="t">${esc(post.title)}</h1>

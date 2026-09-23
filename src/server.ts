@@ -375,6 +375,61 @@ async function autoPublish(draftId: number, linkId: number): Promise<void> {
 }
 
 /**
+ * A new picture for an article that is already out.
+ *
+ * `autoPublish` deliberately refuses anything that is not still a draft, so a
+ * redraw of a published piece stopped in the database and the site kept the
+ * old cover. This is the other half: rewrite the article file and the webp at
+ * whatever visibility the piece already has, and let the commit be empty if
+ * the bytes happen to match.
+ */
+async function pushCover(draftId: number, linkId: number): Promise<void> {
+  const d = db.prepare("SELECT state FROM drafts WHERE id = ?").get(draftId) as { state: string } | undefined;
+  if (!d || (d.state !== "published" && d.state !== "listed")) return;
+
+  const l = db.prepare("SELECT from_user FROM links WHERE id = ?").get(linkId) as { from_user: number | null };
+  const sharer = l.from_user ? getPerson(l.from_user) : null;
+  const by = sharer?.canPublish ? sharer : everyone().find((p) => p.owner && p.canPublish);
+  if (!by) return;
+
+  try {
+    const out = await publish(draftId, d.state === "listed" ? "list" : "publish", by);
+    db.prepare("UPDATE drafts SET published_sha = ? WHERE id = ?").run(out.sha, draftId);
+    log("cover.pushed", { draft: draftId, sha: out.sha, by: by.name }, linkId);
+  } catch (e) {
+    log("cover.push.failed", (e instanceof Error ? e.message : String(e)).slice(0, 300), linkId);
+  }
+}
+
+/**
+ * Draw another one.
+ *
+ * The cover system reads the article and then picks from a fixed set, so a
+ * redraw of the same piece lands on the same composition and the same palette
+ * on purpose -- what changes is the seed, and the seed is most of what makes
+ * one printing of a poster differ from the next. Press it twice and you get
+ * two takes on one idea, which is the useful kind of variation. To get a
+ * different IDEA, change the words in src/look.ts.
+ *
+ * Nothing else about the article is touched. The words are already written
+ * and a picture is not worth rewriting them over.
+ */
+app.post("/draft/:id/redraw", (c) => {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT link_id, slug FROM drafts WHERE id = ?").get(id) as
+    | { link_id: number; slug: string }
+    | undefined;
+  if (!d) return c.notFound();
+
+  db.prepare("INSERT INTO jobs (link_id, kind, payload) VALUES (?, 'cover', ?)").run(
+    d.link_id,
+    JSON.stringify({ draft: id }),
+  );
+  log("cover.redraw.queued", { draft: id, slug: d.slug }, d.link_id);
+  return c.redirect(`/draft/${id}`, 303);
+});
+
+/**
  * Publish, list, unlist, take down.
  *
  * Every one of them is the same shape: write the file, commit, push, and only
@@ -593,6 +648,10 @@ runner.post("/result/:id", async (c) => {
 
     /* The picture was the last thing missing. Finish the job. */
     void autoPublish(body.cover.draft, job.link_id);
+    /* Unless the article is already out, in which case the new picture has to
+       be walked over to the site itself — a redraw that only lands in the
+       desk's database is a redraw nobody can see. */
+    void pushCover(body.cover.draft, job.link_id);
   }
 
   /* An ingest fills in the row the box could only stub. The canonical PAGE
