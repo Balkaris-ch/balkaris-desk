@@ -165,7 +165,7 @@ try {
   /* already there */
 }
 
-for (const column of ["echo TEXT", "closing TEXT"]) {
+for (const column of ["echo TEXT", "closing TEXT", "cover_alt TEXT", "cover_caption TEXT"]) {
   try {
     db.exec(`ALTER TABLE drafts ADD COLUMN ${column}`);
   } catch {

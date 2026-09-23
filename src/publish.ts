@@ -6,6 +6,7 @@ import path from "node:path";
 import { db, log } from "./db.ts";
 import type { PostBlock } from "./blocks.ts";
 import type { Person } from "./people.ts";
+import { coverPath } from "./covers.ts";
 
 /**
  * An approved article becomes a file in the website, and a push.
@@ -190,7 +191,7 @@ export interface StoredPost {
 function articleFile(
   post: StoredPost,
   listed: boolean,
-  meta: { model: string | null; kind: string; sharedBy: string; byline: string },
+  meta: { model: string | null; kind: string; sharedBy: string; byline: string; cover?: { alt: string; caption: string } },
 ): string {
   const ident = post.slug.replace(/[^a-z0-9]+(.)/g, (_, c: string) => c.toUpperCase()).replace(/[^a-zA-Z0-9]/g, "");
   const date = new Date().toISOString().slice(0, 10);
@@ -223,7 +224,14 @@ export const ${ident || "article"}: Post = {
   readingTime: ${post.readingTime},
   topics: [${post.topics.map(q).join(", ")}],
   services: [${post.services.map(q).join(", ")}],
-  metaTitle: ${q(post.title.slice(0, 70))},
+${
+    meta.cover
+      ? `  cover: ${q(`/insights/${post.slug}.webp`)},
+  coverAlt: ${q(meta.cover.alt)},
+  coverCaption: ${q(meta.cover.caption)},
+`
+      : ""
+  }  metaTitle: ${q(post.title.slice(0, 70))},
   metaDescription: ${q(post.excerpt.slice(0, 160))},
   takeaways: [
 ${post.takeaways.map((t) => `    ${q(t)},`).join("\n")}
@@ -309,7 +317,16 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
     );
   }
   const d = db.prepare("SELECT * FROM drafts WHERE id = ?").get(draftId) as
-    | { id: number; link_id: number; slug: string; post: string; model: string | null; state: string }
+    | {
+        id: number;
+        link_id: number;
+        slug: string;
+        post: string;
+        model: string | null;
+        state: string;
+        cover_alt: string | null;
+        cover_caption: string | null;
+      }
     | undefined;
   if (!d) throw new Error("no such draft");
 
@@ -339,20 +356,37 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
   if (action === "remove") {
     await rm(file, { force: true });
   } else {
-    await writeFile(file, articleFile(post, listed, { model: d.model, kind: link.kind, sharedBy, byline }), "utf8");
+    /* The picture goes in beside the article. Its absence is never fatal: a
+       piece with no cover is a piece the journal draws its own plate for. */
+    const picture = coverPath(post.slug);
+    if (picture) {
+      await mkdir(path.join(REPO, "public", "insights"), { recursive: true });
+      await writeFile(path.join(REPO, "public", "insights", `${post.slug}.webp`), picture);
+    }
+    await writeFile(
+      file,
+      articleFile(post, listed, {
+        model: d.model,
+        kind: link.kind,
+        sharedBy,
+        byline,
+        cover: picture && d.cover_alt ? { alt: d.cover_alt, caption: d.cover_caption ?? "" } : undefined,
+      }),
+      "utf8",
+    );
   }
   const count = await writeBarrel(dir);
 
   /* Nothing to say to git? Then nothing happened, and saying so is better
      than an empty commit that looks like a publish in the history. */
-  const dirty = await git(["status", "--porcelain", "--", POSTS_DIR], by);
+  const dirty = await git(["status", "--porcelain", "--", POSTS_DIR, "public/insights"], by);
   if (!dirty) {
     log("publish.nochange", { draft: draftId, action }, d.link_id);
     const sha = await git(["rev-parse", "HEAD"], by);
     return { sha, url: `/insights/${post.slug}`, listed };
   }
 
-  await git(["add", "--", POSTS_DIR], by);
+  await git(["add", "--", POSTS_DIR, "public/insights"], by);
   const subject =
     action === "remove"
       ? `Take "${post.title}" off the site`

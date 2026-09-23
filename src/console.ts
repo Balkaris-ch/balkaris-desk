@@ -392,6 +392,7 @@ export function draftPage(
         ms: number | null;
         state: string;
         echo: string | null;
+        cover_alt: string | null;
         closing: string | null;
         created_at: string;
       }
@@ -477,6 +478,13 @@ export function draftPage(
      ${d.echo ? `<p class="flag"><b>Ends like another article.</b> ${esc(d.echo)}</p>` : ""}
 
      <article>
+       ${
+         /* The real picture, served by the desk from what it drew. */
+         d.cover_alt
+           ? `<img src="/cover/${esc(d.slug)}.webp" alt="${esc(d.cover_alt)}"
+                   style="width:100%;border-radius:10px;margin:0 0 22px;display:block" />`
+           : `<p class="caveat" style="margin:0 0 20px">No cover drawn yet \u2014 it is queued for the workstation.</p>`
+       }
        <h1 class="t">${esc(post.title)}</h1>
        <p class="stand">${esc(post.standfirst)}</p>
        ${renderArticle(post.body)}

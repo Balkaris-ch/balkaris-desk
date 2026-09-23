@@ -3,6 +3,7 @@ import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
 import { match } from "./match.ts";
 import { takeSocial } from "./social/pipeline.ts";
+import { comfyUp, cover } from "./cover.ts";
 import type { TopicId } from "./catalogue.ts";
 
 /**
@@ -48,6 +49,7 @@ interface Job {
   id: number;
   kind: string;
   attempt: number;
+  payload?: { draft?: number; job?: string };
 }
 
 interface LinkRow {
@@ -176,20 +178,64 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   };
 }
 
+/**
+ * Draw the article's cover.
+ *
+ * Its own job kind, and never in the same one as the writing: Ollama and
+ * ComfyUI both want this card, and ComfyUI is the one that dies rather than
+ * queues when two processes draw at once (sm-fixed, 2026-09-06). The runner's
+ * single sequential loop is what keeps them apart.
+ *
+ * A failure here is NOT fatal to the article. A missing picture is a missing
+ * picture; the piece is already written and already publishable.
+ */
+async function doCover(draft: { id: number; slug: string; post: string }, topic: string) {
+  if (!(await comfyUp())) throw new Error("ComfyUI is not answering — start it and the cover will retry");
+
+  const post = JSON.parse(draft.post) as { title: string; standfirst: string; excerpt: string };
+  const out = await cover({
+    title: post.title,
+    thesis: post.standfirst || post.excerpt,
+    topic: topic as never,
+  });
+
+  console.log(`  drew a cover — ${Math.round(out.webp.length / 1024)}KB in ${Math.round(out.ms / 1000)}s`);
+  return {
+    ok: true,
+    cover: {
+      draft: draft.id,
+      slug: draft.slug,
+      webp: out.webp.toString("base64"),
+      alt: out.alt,
+      caption: out.caption,
+    },
+  };
+}
+
 async function once(): Promise<boolean> {
   /* One job at a time, in one sequential loop, ON PURPOSE. sm-fixed's worker
      already drives yt-dlp, Whisper and ComfyUI on this same 4090, and ComfyUI
      died outright on 2026-09-06 when two processes drew at once. Polling out
      solves availability; it does nothing about contention. The desk at least
      cannot collide with ITSELF. */
-  const got = await post<{ job: Job | null; link?: LinkRow }>("/next", { name: NAME, kinds: ["ingest", "write"] });
+  const got = await post<{ job: Job | null; link?: LinkRow; draft?: { id: number; slug: string; post: string } }>(
+    "/next",
+    { name: NAME, kinds: ["ingest", "write", "cover"] },
+  );
   if (!got.job || !got.link) return false;
 
   const { job, link } = got;
   console.log(`\n→ job ${job.id} (${job.kind}, attempt ${job.attempt}): ${link.title || link.url}`);
 
   try {
-    const result = job.kind === "ingest" ? await doIngest(link) : await doWrite(link);
+    const result =
+      job.kind === "cover"
+        ? got.draft
+          ? await doCover(got.draft, link.topic)
+          : { ok: false, error: "the draft that cover belongs to is gone" }
+        : job.kind === "ingest"
+          ? await doIngest(link)
+          : await doWrite(link);
     await post(`/result/${job.id}`, result);
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);

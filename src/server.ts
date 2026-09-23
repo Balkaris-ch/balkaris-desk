@@ -10,6 +10,7 @@ import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
 import { everyone, getPerson, link, remember, rememberGoogle, setAuthor, setEmail, setRevoked, type Person } from "./people.ts";
 import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
+import { coverPath, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, issue, whoIs } from "./session.ts";
 
@@ -236,6 +237,16 @@ app.get("/draft/:id", async (c) => {
   return html ? c.html(html) : c.notFound();
 });
 
+/* The desk serves the cover it drew, so the preview shows the real picture
+   rather than describing one. */
+app.get("/cover/:slug", (c) => {
+  const file = coverPath(c.req.param("slug").replace(/\.webp$/, ""));
+  if (!file) return c.notFound();
+  return new Response(new Uint8Array(file), {
+    headers: { "content-type": "image/webp", "cache-control": "no-store" },
+  });
+});
+
 app.get("/link/:id", (c) => {
   const html = linkPage(Number(c.req.param("id")));
   return html ? c.html(html) : c.notFound();
@@ -391,7 +402,9 @@ runner.post("/next", async (c) => {
   const marks = want.map(() => "?").join(",");
   const job = db
     .prepare(`SELECT * FROM jobs WHERE state = 'queued' AND kind IN (${marks}) ORDER BY id LIMIT 1`)
-    .get(...want) as { id: number; link_id: number; kind: string; attempts: number } | undefined;
+    .get(...want) as
+    | { id: number; link_id: number; kind: string; attempts: number; payload: string | null }
+    | undefined;
 
   if (!job) return c.json({ job: null });
 
@@ -401,8 +414,20 @@ runner.post("/next", async (c) => {
   );
 
   const link = db.prepare("SELECT * FROM links WHERE id = ?").get(job.link_id);
+
+  /* A cover job needs the ARTICLE, not the source: its title and what it
+     argues are what the picture stands for. */
+  const payload = job.payload ? (JSON.parse(job.payload) as { draft?: number; job?: string }) : {};
+  const draft = payload.draft
+    ? db.prepare("SELECT id, slug, post FROM drafts WHERE id = ?").get(payload.draft)
+    : null;
+
   log("job.taken", { job: job.id, kind: job.kind, runner: name }, job.link_id);
-  return c.json({ job: { id: job.id, kind: job.kind, attempt: job.attempts + 1 }, link });
+  return c.json({
+    job: { id: job.id, kind: job.kind, attempt: job.attempts + 1, payload },
+    link,
+    draft,
+  });
 });
 
 /** What came back. A failure is a row, not a silence. */
@@ -418,6 +443,8 @@ runner.post("/result/:id", async (c) => {
     ms?: number;
     /** Which of the five jobs the last paragraph was given. */
     closing?: string;
+    /** A drawn cover, as base64 webp. */
+    cover?: { draft: number; slug: string; webp: string; alt: string; caption: string };
     /* Only an 'ingest' sends this: everything the box could not know until
        the media was in hand on the workstation. */
     source?: {
@@ -452,6 +479,17 @@ runner.post("/result/:id", async (c) => {
   }
 
   db.prepare("UPDATE jobs SET state='done', finished_at=datetime('now'), error=NULL WHERE id=?").run(id);
+
+  /* A drawn cover: bytes, and the two lines that go with it. */
+  if (body.cover) {
+    saveCover(body.cover.slug, Buffer.from(body.cover.webp, "base64"));
+    db.prepare("UPDATE drafts SET cover_alt = ?, cover_caption = ? WHERE id = ?").run(
+      body.cover.alt,
+      body.cover.caption,
+      body.cover.draft,
+    );
+    log("cover.drawn", { slug: body.cover.slug, bytes: body.cover.webp.length }, job.link_id);
+  }
 
   /* An ingest fills in the row the box could only stub. The canonical PAGE
      url replaces whatever was shared — a share link, a redirect, a url with
@@ -512,6 +550,19 @@ runner.post("/result/:id", async (c) => {
       body.closing ?? null,
     );
     db.prepare("UPDATE links SET state='drafted', updated_at=datetime('now') WHERE id=?").run(job.link_id);
+
+    /* And draw it a cover, unasked. Fini: "remember I need this to be
+       automated." A cover job is queued the moment an article exists, so the
+       workstation picks it up on its next poll and nobody has to think about
+       it. It is deliberately a SEPARATE job: drawing needs ComfyUI, writing
+       needs Ollama, and the two must not run at once on one card. */
+    const draftId = Number(
+      (db.prepare("SELECT MAX(id) id FROM drafts WHERE link_id = ?").get(job.link_id) as { id: number }).id,
+    );
+    db.prepare("INSERT INTO jobs (link_id, kind, payload) VALUES (?, 'cover', ?)").run(
+      job.link_id,
+      JSON.stringify({ draft: draftId }),
+    );
   }
   log("job.done", { job: id, slug: body.slug }, job.link_id);
   return c.json({ ok: true });
