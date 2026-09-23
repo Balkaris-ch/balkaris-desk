@@ -82,6 +82,45 @@ const row = (r: Record<string, unknown> | undefined): Person | null =>
 export const getPerson = (telegram: number): Person | null =>
   row(db.prepare("SELECT * FROM people WHERE telegram = ?").get(telegram) as Record<string, unknown> | undefined);
 
+/**
+ * The same person, found by the address they signed in with.
+ *
+ * Since the login became Google, the EMAIL is the identity and it arrives
+ * already proved — so there is nothing to type in on a people page and
+ * nothing to keep in step. Somebody who has also written to the bot is
+ * matched to that row by address, so their byline and their Telegram
+ * sharing stay one person.
+ */
+export const byEmail = (email: string): Person | null =>
+  row(db.prepare("SELECT * FROM people WHERE lower(email) = lower(?)").get(email) as Record<string, unknown> | undefined);
+
+/**
+ * Remember somebody who signed in with Google.
+ *
+ * The address is the key. A row already carrying that address is updated;
+ * otherwise a new one is made with a NEGATIVE id, because `telegram` is the
+ * primary key and this person may never write to the bot at all. When they
+ * do, `remember()` links the real id to the same address.
+ */
+export function rememberGoogle(email: string, name: string): Person {
+  const had = byEmail(email);
+  if (had) {
+    db.prepare("UPDATE people SET name = ? WHERE telegram = ?").run(name, had.telegram);
+    return { ...had, name };
+  }
+  const id = -Math.abs(
+    [...email].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) || 1,
+  );
+  db.prepare("INSERT OR REPLACE INTO people (telegram, name, email, author) VALUES (?,?,?,?)").run(
+    id,
+    name,
+    email,
+    "balkaris",
+  );
+  log("person.google", { email });
+  return { telegram: id, name, email, author: "balkaris", canPublish: true };
+}
+
 export const everyone = (): Person[] =>
   (db.prepare("SELECT * FROM people ORDER BY name").all() as Record<string, unknown>[])
     .map(row)

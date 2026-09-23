@@ -5,7 +5,7 @@ import { getPerson, type Person } from "./people.ts";
 /**
  * Who is looking at the console.
  *
- * A signed cookie carrying one number — the Telegram id — and nothing else.
+ * A signed cookie carrying one number — the person's row id — and nothing else.
  * No session table, no store to clean up, no state that can disagree with
  * itself. The signature is HMAC over "id.expiry" with the desk's own secret,
  * so a cookie cannot be edited into somebody else's and cannot outlive its

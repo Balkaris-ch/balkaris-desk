@@ -8,7 +8,8 @@ import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
-import { everyone, getPerson, mintLogin, remember, setAuthor, setEmail, spendLogin, type Person } from "./people.ts";
+import { everyone, getPerson, remember, rememberGoogle, setAuthor, setEmail, type Person } from "./people.ts";
+import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, issue, whoIs } from "./session.ts";
 
 /**
@@ -73,19 +74,55 @@ app.get("/health", (c) => c.json({ ok: true, service: "balkaris-desk", at: new D
  * thing can actually prove — so the login is: ask the bot, get a link in a
  * chat only you can read, open it. No passwords anywhere.
  */
-app.get("/login/:token", (c) => {
-  const who = spendLogin(c.req.param("token"));
-  if (!who) {
-    return c.html(
-      page(
-        "That link is spent",
-        `<h1>That link has been used, or it is over fifteen minutes old</h1>
-         <p class="sub">Send <b>/login</b> to @insight_balkaris_bot and it will give you another.</p>`,
-      ),
-      401,
-    );
+/**
+ * Signing in with Google, at balkaris.ch and nowhere else.
+ *
+ * Fini, 23 September 2026: "I need login with Gmail, and only domain level
+ * can have access to this desk."
+ *
+ * The domain check is on the claim Google signed, not on the button — a
+ * consent screen with `hd` only puts the right domain in front of somebody,
+ * and the account picker still lists every account they have. See
+ * src/google.ts.
+ *
+ * It also settles a thing the Telegram login left awkward: the email IS the
+ * identity now, and the email is exactly what publishing needs, so being
+ * signed in and being able to publish stopped being two separate facts.
+ */
+app.get("/auth/google", (c) => {
+  const g = client();
+  if (!g) return c.html(NO_CLIENT, 500);
+  return c.redirect(authUrl(g, mintState()), 302);
+});
+
+app.get("/auth/google/callback", async (c) => {
+  const g = client();
+  if (!g) return c.html(NO_CLIENT, 500);
+
+  const code = c.req.query("code") ?? "";
+  const state = c.req.query("state") ?? "";
+  const denied = c.req.query("error");
+
+  if (denied) return c.html(refused(`Google said: ${denied}`), 401);
+  if (!checkState(state)) return c.html(refused("That sign-in did not start here, or it took too long."), 401);
+  if (!code) return c.html(refused("Google sent no code back."), 401);
+
+  let who;
+  try {
+    who = await exchange(g, code);
+  } catch (e) {
+    return c.html(refused(e instanceof Error ? e.message : String(e)), 401);
   }
-  issue(c, who.telegram);
+
+  const may = allowed(who);
+  if (!may.ok) {
+    log("auth.refused", { email: who.email, hd: who.hd });
+    return c.html(refused(may.why), 403);
+  }
+
+  const person = rememberGoogle(who.email, who.name);
+  log("auth.in", { email: who.email });
+  issue(c, person.telegram);
   return c.redirect("/", 303);
 });
 
@@ -97,15 +134,29 @@ app.post("/logout", (c) => {
 const SIGN_IN = page(
   "Sign in",
   `<h1>Balkaris desk</h1>
-   <p class="sub">Send <b>/login</b> to <b>@insight_balkaris_bot</b> on Telegram. It replies with a link that
-   signs you in here for thirty days.</p>
-   <p class="sub">There is no password. The desk can prove exactly one thing about you — your Telegram
-   account — so that is what it uses.</p>`,
+   <p class="sub">Sign in with your <b>@${DOMAIN}</b> Google account. Nothing else gets in.</p>
+   <p style="margin:26px 0"><a class="btn go" href="/auth/google" style="padding:12px 22px">Sign in with Google</a></p>`,
 );
+
+const NO_CLIENT = page(
+  "Not configured",
+  `<h1>Google sign-in is not configured</h1>
+   <p class="sub">The desk has no OAuth client. Point <code>GOOGLE_OAUTH_FILE</code> at the JSON Google
+   gives you when you create a Web application client, with
+   <code>https://desk.balkaris.ch/auth/google/callback</code> as its redirect.</p>`,
+);
+
+const refused = (why: string) =>
+  page(
+    "Not allowed",
+    `<h1>That account cannot use the desk</h1>
+     <p class="flag">${why.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!)}</p>
+     <p style="margin:24px 0"><a class="btn" href="/auth/google">Try another account</a></p>`,
+  );
 
 app.use("*", async (c, next) => {
   const p = c.req.path;
-  if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p.startsWith("/login/")) return next();
+  if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p.startsWith("/auth/")) return next();
 
   const who = whoIs(c);
   if (!who) return c.html(SIGN_IN, 401);
@@ -494,17 +545,14 @@ app.post("/tg/:secret", async (c) => {
 
       if (msg.from?.id) remember(msg.from.id, name);
 
+      /* The bot no longer hands out a way in. Signing in is a Google account
+         on the company's own domain; Telegram's job is sharing links and
+         whose name goes on the article. */
       if (/^\/login\b/.test(text)) {
-        if (!msg.from?.id) {
-          await send(chat, "I can sign in a person, not a channel.");
-          return;
-        }
-        const token = mintLogin(msg.from.id);
         await send(
           chat,
-          `Here is your way in — good once, and for fifteen minutes:\n\n${
-            process.env.DESK_URL ?? "https://desk.balkaris.ch"
-          }/login/${token}`,
+          `The desk is at ${process.env.DESK_URL ?? "https://desk.balkaris.ch"} — sign in there with your ` +
+            `<b>@${DOMAIN}</b> Google account. Telegram is for sharing links, and for whose name goes on the article.`,
         );
         return;
       }
