@@ -302,37 +302,53 @@ export interface ClosingFacts {
   hasList: boolean;
 }
 
-/** First rule that fires wins, and each one has a reason worth reading. */
+/**
+ * Which of the five, and why.
+ *
+ * WRITTEN TWICE. The first version made `hasSteps` the second rule, and
+ * `hasSteps` is true of nearly every article — the "What we would do" section
+ * asks for steps and the model obliges. Three marketing pieces in a row came
+ * back "ends on question", which is the original bug one level down: five jobs
+ * collapsed to one, and I had swapped a habit for a habit.
+ *
+ * So `hasSteps` no longer SELECTS a job. It removes one — you cannot end on
+ * "do this one thing" when the things to do are already set out as steps
+ * immediately above — and the choice is made among what is left, by facts
+ * that genuinely differ between articles of the same shelf and template.
+ */
 export function pickClosing(f: ClosingFacts): { job: ClosingJob; because: string } {
   /* Nothing we sell. "What we would do" was thin, so do not end on doing. */
   if (f.services === 0) {
     return { job: "contrast", because: "no service matched — we cannot end on what we would do" };
   }
 
-  /* The actions are ALREADY on the page, as steps, immediately above this
-     paragraph. Asking for another action is asking for the duplication. This
-     is the rule that would have caught the two closings that converged: both
-     carried a steps block and both were then asked for one more action. */
-  if (f.hasSteps) {
-    return { job: "question", because: "the actions are already set out as steps above" };
-  }
-
+  /* Something changed and a reader wants to know where it goes. */
   if (f.topic === "industry-trends") {
     return { job: "prediction", because: "shelved under Industry Trends" };
   }
-
   if (f.ageDays !== null && f.ageDays >= 0 && f.ageDays <= 45) {
-    return { job: "prediction", because: `the source is ${Math.round(f.ageDays)} days old — a reader wants to know where it goes` };
+    return { job: "prediction", because: `the source is ${Math.round(f.ageDays)} days old` };
   }
 
-  /* A list of failure modes is already up there; end on the sharpest one. */
-  if (f.hasList && f.template === "explainer") {
-    return { job: "caution", because: "it already lists what goes wrong — end on the worst of it" };
+  /* No steps above means nothing on the page has told the reader what to do,
+     so the close is the only place left for it. */
+  if (!f.hasSteps) {
+    return { job: "action", because: "nothing above tells the reader what to do" };
   }
 
-  if (f.template === "explainer") {
-    return { job: "question", because: "an explainer that answers everything is lying" };
+  /* From here the actions are already on the page and "action" is out. What
+     remains is decided by how crowded the subject turned out to be, which is
+     a real difference between two pieces on the same shelf.
+     `caution` is not offered to an explainer or a practice piece: both already
+     carry a section about how it goes wrong, and ending on the same thing
+     twice is the duplication we are trying to avoid. */
+  if (f.services >= 3) {
+    return { job: "contrast", because: "three services matched — a crowded subject, so end on what the good ones do" };
   }
 
-  return { job: "action", because: "nothing above tells the reader what to do" };
+  if (f.template === "commentary") {
+    return { job: "caution", because: "a news piece has no failure section of its own" };
+  }
+
+  return { job: "question", because: "the actions are already set out as steps above" };
 }
