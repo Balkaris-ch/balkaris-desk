@@ -7,6 +7,7 @@ import { firstUrl } from "./extract.ts";
 import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page } from "./console.ts";
+import { publish, type PublishAction } from "./publish.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -106,26 +107,74 @@ app.post("/draft/:id/reclose", async (c) => {
   return c.redirect(`/draft/${id}`, 303);
 });
 
-/* Publishing is the next piece of work. The button is left in place rather
-   than hidden, because a console that shows an article with no way to act on
-   it teaches somebody the wrong thing about what this is for — and because
-   saying "not yet" in a sentence is more honest than a button that is missing
-   without explanation. */
-app.post("/draft/:id/publish", (c) =>
-  c.html(
-    page(
-      "Not yet",
-      `<a class="back" href="/draft/${Number(c.req.param("id"))}">← back to the article</a>
-       <h1>Publishing is not wired up yet</h1>
-       <p class="sub">The article is written and waiting. The box has the deploy key and can reach the
-       repository — what is missing is the piece that writes the article into the site and pushes it,
-       and the site's own switch for "live at its url but not in the menus".</p>
-       <p class="sub">Nothing has been lost and nothing has gone out.</p>`,
-    ),
-  ),
-);
+/**
+ * Publish, list, unlist, take down.
+ *
+ * Every one of them is the same shape: write the file, commit, push, and only
+ * then move the draft's state. If git throws, the draft stays exactly where it
+ * was and the page says what went wrong — a failed push must never leave
+ * something marked published that is not, and the fix must never be to write
+ * the article again.
+ */
+async function act(c: { req: { param: (k: string) => string } }, action: PublishAction, nextState: string) {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT id, link_id, slug FROM drafts WHERE id = ?").get(id) as
+    | { id: number; link_id: number; slug: string }
+    | undefined;
+  if (!d) return { ok: false as const, id, html: null };
 
-app.post("/draft/:id/unlist", (c) => c.redirect(`/draft/${Number(c.req.param("id"))}`, 303));
+  try {
+    const out = await publish(id, action);
+    db.prepare("UPDATE drafts SET state = ?, published_sha = ? WHERE id = ?").run(nextState, out.sha, id);
+    db.prepare("UPDATE links SET state = ?, updated_at = datetime('now') WHERE id = ?").run(
+      nextState === "removed" ? "drafted" : nextState,
+      d.link_id,
+    );
+    log(`draft.${action}`, { sha: out.sha, slug: d.slug }, d.link_id);
+    return { ok: true as const, id, html: null };
+  } catch (e) {
+    const why = (e instanceof Error ? e.message : String(e)).split(/\r?\n/).slice(0, 3).join(" ").slice(0, 400);
+    log(`draft.${action}.failed`, why, d.link_id);
+    return {
+      ok: false as const,
+      id,
+      html: page(
+        "It did not go out",
+        `<a class="back" href="/draft/${id}">← back to the article</a>
+         <h1>The push did not go through</h1>
+         <p class="sub">Nothing changed. The article is exactly where it was and nothing reached the site.</p>
+         <p class="flag">${escHtml(why)}</p>
+         <form method="post" action="/draft/${id}/${action === "list" ? "list" : action}"><button class="go">Try again</button></form>`,
+      ),
+    };
+  }
+}
+
+const escHtml = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!);
+
+/* Live at its own url, in none of the menus. */
+app.post("/draft/:id/publish", async (c) => {
+  const r = await act(c, "publish", "unlisted");
+  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+});
+
+/* Into the menus, the shelves, the sitemap and search. */
+app.post("/draft/:id/list", async (c) => {
+  const r = await act(c, "list", "listed");
+  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+});
+
+/* Out of them again. The url keeps working; noindex comes back. */
+app.post("/draft/:id/unlist", async (c) => {
+  const r = await act(c, "unlist", "unlisted");
+  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+});
+
+/* Off the site entirely. The url 404s afterwards. */
+app.post("/draft/:id/takedown", async (c) => {
+  const r = await act(c, "remove", "draft");
+  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+});
 
 app.post("/draft/:id/remove", (c) => {
   const id = Number(c.req.param("id"));

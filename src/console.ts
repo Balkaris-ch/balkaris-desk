@@ -272,7 +272,12 @@ export function draftPage(id: number, siteBase: string): string | null {
     source: { url: string; site: string; title: string; author: string | null };
   };
 
-  const listed = d.state === "listed";
+  /* Three states, and the buttons offered are only the ones that make sense
+     from where it actually is. `state` is the desk's record of what the last
+     successful push did — never a guess, because a failed push leaves it
+     untouched. */
+  const onSite: "draft" | "unlisted" | "listed" =
+    d.state === "listed" ? "listed" : d.state === "unlisted" ? "unlisted" : "draft";
   const shelf = TOPICS.find((t) => t.id === l.topic)?.name ?? "";
   const kind = String(l.kind ?? "article");
 
@@ -317,20 +322,39 @@ export function draftPage(id: number, siteBase: string): string | null {
        ${renderArticle(post.body)}
      </article>
 
+     ${
+       onSite === "draft"
+         ? `<p class="caveat">Not on the site at all yet. Putting it there gives it a real url that
+            nobody can find: no menu, no shelf, no sitemap, and noindex so a crawler leaves it alone.</p>`
+         : onSite === "unlisted"
+           ? `<p class="caveat">Live at its own url and in none of the menus. It carries noindex, so it is
+              readable by anyone you send the link to and invisible to search.</p>`
+           : `<p class="caveat">Published: in the menu, on the shelves, in the sitemap and in search.</p>`
+     }
+
      <div class="acts">
        ${
-         listed
-           ? `<form method="post" action="/draft/${d.id}/unlist"><button class="off">Take it off the site</button></form>
-              <a class="btn" href="${esc(siteBase)}/insights/${esc(d.slug)}" rel="noreferrer noopener">See it live ↗</a>`
-           : `<form method="post" action="/draft/${d.id}/publish"><button class="go">Publish it</button></form>`
+         onSite === "draft"
+           ? `<form method="post" action="/draft/${d.id}/publish"><button class="go">Put it on the site, unlisted</button></form>`
+           : onSite === "unlisted"
+             ? `<form method="post" action="/draft/${d.id}/list"><button class="go">Publish it properly</button></form>
+                <a class="btn" href="${esc(siteBase)}/insights/${esc(d.slug)}" rel="noreferrer noopener">Read it on the site ↗</a>
+                <form method="post" action="/draft/${d.id}/takedown"><button class="off">Take it off the site</button></form>`
+             : `<a class="btn" href="${esc(siteBase)}/insights/${esc(d.slug)}" rel="noreferrer noopener">Read it on the site ↗</a>
+                <form method="post" action="/draft/${d.id}/unlist"><button class="off">Out of the menus</button></form>
+                <form method="post" action="/draft/${d.id}/takedown"><button class="del">Take it off the site</button></form>`
        }
        <form method="post" action="/draft/${d.id}/reclose">
          <select name="job">${jobs}</select>
          <button>Re-write the ending</button>
        </form>
-       <form method="post" action="/draft/${d.id}/remove" onsubmit="return confirm('Delete this draft? The link stays and can be written again.')">
-         <button class="del">Delete the draft</button>
-       </form>
+       ${
+         onSite === "draft"
+           ? `<form method="post" action="/draft/${d.id}/remove" onsubmit="return confirm('Delete this draft? The link stays and can be written again.')">
+                <button class="del">Delete the draft</button>
+              </form>`
+           : ""
+       }
      </div>`,
   );
 }
