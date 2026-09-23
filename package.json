@@ -1,7 +1,7 @@
 {
   "name": "balkaris-desk",
   "version": "0.1.0",
-  "description": "The website's workbench at desk.balkaris.ch \u2014 a Telegram link becomes a Balkaris article, written on this machine and committed to the site",
+  "description": "The website's workbench at desk.balkaris.ch — a Telegram link becomes a Balkaris article, written on this machine and committed to the site",
   "type": "module",
   "private": true,
   "scripts": {
@@ -16,6 +16,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@mozilla/readability": "^0.6.0",
+    "ffprobe-static": "^3.1.0",
     "hono": "^4.6.0",
     "jsdom": "^26.0.0",
     "tsx": "^4.19.0",
