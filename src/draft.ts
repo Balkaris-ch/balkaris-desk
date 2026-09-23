@@ -199,10 +199,15 @@ one short quoted phrase from the source, and put it in quotation marks if you do
     const hi = Math.round(beat.words * 1.4);
     const allow = beat.allow ?? [];
 
-    const so_far = body
-      .filter((b): b is string => typeof b === "string")
-      .slice(-2)
-      .join("\n\n");
+    /* A `blind` beat is written without the article's own words in front of
+       it — see the note on the last beat in templates.ts. Proximity is the
+       whole problem: what is in context is what gets echoed. */
+    const so_far = beat.blind
+      ? ""
+      : body
+          .filter((b): b is string => typeof b === "string")
+          .slice(-2)
+          .join("\n\n");
 
     const { value } = await askJson(
       `${context}
@@ -222,6 +227,9 @@ shape that is not in the list above.`,
         const got = toPostBlocks(v, allow);
         if (!got.blocks.length) throw new Error("nothing usable came back");
         if (typeof got.blocks[0] !== "string") throw new Error("a section opens on a paragraph, not on a list or a table");
+        if (beat.single && got.blocks.length !== 1) {
+          throw new Error(`this section is exactly one paragraph and you wrote ${got.blocks.length}`);
+        }
         const n = countWords(got.blocks);
         if (n < lo) throw new Error(`that is ${n} words and the section needs about ${beat.words}`);
         if (n > hi) throw new Error(`that is ${n} words, which is too long — the section needs about ${beat.words}`);
@@ -319,6 +327,22 @@ export function guard(post: DraftPost, input: DraftInput): void {
   }
 
   if (ours.split(/\s+/).length < 320) throw new Error("the draft came out too short to be worth publishing");
+
+  /* The same run check, turned inward: does the piece end by repeating how it
+     began? A BACKSTOP, not the fix — it catches literal repetition and not a
+     paraphrase, and the real answer was giving the last beat a job that has no
+     summary-shaped completion (templates.ts). Eight words rather than twelve,
+     because a writer echoing themselves reuses shorter phrases than a writer
+     lifting from a source. */
+  const paras = post.body.filter((b): b is string => typeof b === "string");
+  const first = (paras[0] ?? "").toLowerCase().replace(/\s+/g, " ");
+  const last = (paras.at(-1) ?? "").toLowerCase().replace(/\s+/g, " ").split(" ");
+  for (let i = 0; i + 8 <= last.length; i++) {
+    const run = last.slice(i, i + 8).join(" ");
+    if (run.length > 28 && first.includes(run)) {
+      throw new Error(`the last paragraph repeats the first: "${run}"`);
+    }
+  }
 
   /* The source has to be named. A piece that quietly uses somebody's reporting
      without saying so is the exact thing this pipeline must not produce.

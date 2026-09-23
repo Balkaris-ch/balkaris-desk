@@ -39,6 +39,20 @@ export interface Beat {
    * that each invented their own furniture.
    */
   allow?: BlockKind[];
+  /**
+   * Exactly one paragraph, and nothing else. A beat with no room to ramble
+   * cannot ramble.
+   */
+  single?: boolean;
+  /**
+   * Write this one WITHOUT the preceding paragraphs in the prompt.
+   *
+   * Proximity is the whole problem: if the opening is in context when the
+   * closing is generated, the model reaches for it, because that is what
+   * proximity does. A beat that must not echo the piece is given the argument
+   * and the source, not the piece's own words.
+   */
+  blind?: boolean;
 }
 
 export interface Template {
@@ -71,11 +85,26 @@ const CLOSE: Beat[] = [
     words: 130,
     allow: ["steps"],
   },
+  /*
+   * THE LAST BEAT IS NOT A CONCLUSION, AND THAT IS DELIBERATE.
+   *
+   * It used to be "close the piece", and it drifted into re-summarising the
+   * source every time — including in capitals, told not to. A capitalised
+   * prohibition always loses to a job whose most probable completion IS the
+   * thing prohibited. So the job changed rather than the emphasis: name the
+   * one thing to do differently this week, or the question the source left
+   * open. Neither has a summary-shaped answer to fall into.
+   *
+   * Forty words, one paragraph, and written WITHOUT the rest of the article in
+   * context, so there is nothing nearby to echo.
+   */
   {
     heading: null,
     brief:
-      "One closing paragraph, and it is OURS. The single sentence a reader should leave with, plus an honest note on what is still unknown or still to be proved. Do NOT mention the source here, do not summarise it again, do not restate what the article already said. Never a promise.",
-    words: 55,
+      "End on one of two things and nothing else: the single thing a reader should do differently this week, or the question the source leaves unanswered and that nobody has answered yet. Be specific enough to act on. Do not recap the article, do not mention the source, do not write a conclusion.",
+    words: 40,
+    single: true,
+    blind: true,
   },
 ];
 
