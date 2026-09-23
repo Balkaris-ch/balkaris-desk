@@ -4,6 +4,7 @@ import { db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
 import { takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
+import { isSocial } from "./social/shape.ts";
 import { esc, send } from "./telegram.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
@@ -257,13 +258,22 @@ app.get("/link/:id", (c) => {
    and a person should not have to re-share the link to try again. */
 app.post("/link/:id/retry", (c) => {
   const id = Number(c.req.param("id"));
-  const link = db.prepare("SELECT * FROM links WHERE id = ?").get(id) as { kind: string } | undefined;
+  const link = db.prepare("SELECT * FROM links WHERE id = ?").get(id) as { kind: string; url: string } | undefined;
   if (!link) return c.notFound();
 
   db.prepare("UPDATE jobs SET state='queued', attempts=0, error=NULL, runner=NULL, taken_at=NULL WHERE link_id=? AND state IN ('stuck','queued')").run(id);
+
+  /* Decide AGAIN what kind of link this is rather than trusting the stored
+     guess. A share link that was misread as an article is exactly the row
+     somebody presses Try again on, and re-queueing it as an article would
+     fail the same way forever. */
+  const social = isSocial(link.url);
+  if (social && link.kind === "article") {
+    db.prepare("UPDATE links SET kind='social' WHERE id=?").run(id);
+  }
   const open = db.prepare("SELECT COUNT(*) c FROM jobs WHERE link_id=? AND state='queued'").get(id) as { c: number };
   if (!open.c) {
-    db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, ?)").run(id, link.kind === "article" ? "write" : "ingest");
+    db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, ?)").run(id, social ? "ingest" : "write");
   }
   db.prepare("UPDATE links SET state='queued', error=NULL, updated_at=datetime('now') WHERE id=?").run(id);
   log("link.retried", null, id);

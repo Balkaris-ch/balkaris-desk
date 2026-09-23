@@ -3,7 +3,7 @@ import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { edit, esc, send } from "./telegram.ts";
-import { isSocial } from "./social/shape.ts";
+import { isSocial, platformOf } from "./social/shape.ts";
 
 /**
  * A link arrives.
@@ -110,10 +110,11 @@ export async function takeLink(
     db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'ingest')").run(id);
     log("link.social", { url }, id);
 
+    const where = platformOf(url) ?? "a social post";
     await say(
       workstationAwake()
-        ? "That is a video or a carousel — fetching and transcribing it now. I will say what it turned out to be."
-        : "That is a video or a carousel. Kept and queued — it needs the workstation, which is asleep, so it gets read when the machine next wakes.",
+        ? `That is ${esc(where)} — fetching it now. I will say what it turned out to be.`
+        : `That is ${esc(where)}. Kept and queued — it needs the workstation, which is asleep, so it gets read when the machine next wakes.`,
     );
     return { id, already: false };
   }
