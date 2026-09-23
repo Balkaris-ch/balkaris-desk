@@ -98,12 +98,64 @@ export async function ensureComfy(): Promise<boolean> {
   return waitFor("ComfyUI", `${COMFY_URL}/system_stats`, 180);
 }
 
-/** What a job needs before it can run. */
+/**
+ * Hand the card over.
+ *
+ * ONE CARD, ONE QUEUE was always the rule and starting both services made it
+ * bite: ComfyUI sits on about 19 GB once it has drawn something, and
+ * gemma4:26b then cannot load at all — "failed to initialize the context...
+ * this warning is normal during memory fitting", three attempts, job stuck.
+ * The desk had stopped colliding with itself in TIME and started colliding in
+ * MEMORY.
+ *
+ * So each engine is asked to let go before the other is used. Both are polite
+ * requests to free weights, not shutdowns: the process stays up and reloads in
+ * seconds, which is far cheaper than starting it again.
+ */
+async function freeComfy(): Promise<void> {
+  if (!(await answering(`${COMFY_URL}/system_stats`, 1500))) return;
+  try {
+    await fetch(`${COMFY_URL}/free`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ unload_models: true, free_memory: true }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    console.log("  asked ComfyUI for the card back");
+    /* Freeing is not instant and the next thing we do is load 19 GB. */
+    await sleep(3000);
+  } catch {
+    /* It did not answer; the load below will say so far more clearly. */
+  }
+}
+
+async function freeOllama(): Promise<void> {
+  if (!(await answering(`${OLLAMA_URL}/api/tags`, 1500))) return;
+  try {
+    /* keep_alive 0 unloads the model immediately. An empty prompt does no
+       work and costs nothing. */
+    const { WRITE_MODEL } = await import("./llm.ts");
+    await fetch(`${OLLAMA_URL}/api/generate`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ model: WRITE_MODEL, prompt: "", keep_alive: 0 }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    console.log("  asked Ollama for the card back");
+    await sleep(2000);
+  } catch {
+    /* same */
+  }
+}
+
+/** What a job needs before it can run, and what has to let go first. */
 export async function ensureFor(kind: string): Promise<{ ok: boolean; why?: string }> {
   if (kind === "cover") {
+    await freeOllama();
     return (await ensureComfy())
       ? { ok: true }
       : { ok: false, why: "ComfyUI would not start, so there is no cover yet" };
   }
+  await freeComfy();
   return (await ensureOllama()) ? { ok: true } : { ok: false, why: "Ollama would not start" };
 }
