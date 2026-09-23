@@ -16,12 +16,27 @@ import { db } from "./db.ts";
  *
  * Two measures, because they catch different things:
  *
- *   runs   eight consecutive words shared with an earlier closing. Catches
- *          literal reuse — the same sentence with the nouns swapped.
- *   shape  how much of the closing's vocabulary is vocabulary an earlier
- *          closing already used. Catches the real problem, which is not
- *          repetition but SAMENESS: "audit your last ten posts" and "review
- *          your recent output" share almost no runs and are the same advice.
+ *   runs     eight consecutive words shared with an earlier closing. Catches
+ *            literal reuse — the same sentence with the nouns swapped.
+ *   shape    how much of the closing's vocabulary an earlier closing already
+ *            used.
+ *   phrases  shared two-word phrases carrying a meaningful word, and whether
+ *            both open on the same imperative.
+ *
+ * The third one exists because the first two MISSED THE FIRST REAL CASE, on
+ * the day they were written. These two closings were written an hour apart:
+ *
+ *   "Stop producing content just to fill a calendar. Audit your last ten
+ *    posts and delete the ones that failed to drive a specific action."
+ *   "Stop your scheduled weekly newsletter for a moment. Instead, audit your
+ *    last three automated flows to ensure every single trigger relies on a
+ *    specific user action rather than a calendar date."
+ *
+ * No eight-word run, and 27% shared vocabulary — under the 40% threshold. Both
+ * measures said "none" about two paragraphs with the same skeleton: same
+ * imperative opener, "audit your last N", the same contrast against a
+ * calendar. What repeats when a journal develops a tell is the SHAPE, and the
+ * shape lives in short phrases, not in long runs or in a word count.
  */
 
 const LOOK_BACK = 20;
@@ -44,6 +59,24 @@ const words = (s: string): string[] =>
 
 const meaningful = (s: string): Set<string> => new Set(words(s).filter((w) => w.length > 3 && !DULL.has(w)));
 
+/**
+ * Two-word phrases where at least one word carries meaning.
+ *
+ * "audit your" and "your last" both qualify; "of the" does not. This is the
+ * measure that catches a journal developing a habit, because a habit is a
+ * phrase somebody reaches for, not a vocabulary and not a long run.
+ */
+function bigrams(w: string[]): Set<string> {
+  const out = new Set<string>();
+  for (let i = 0; i + 1 < w.length; i++) {
+    const a = w[i];
+    const b = w[i + 1];
+    const carries = (x: string) => x.length > 3 && !DULL.has(x);
+    if (carries(a) || carries(b)) out.add(`${a} ${b}`);
+  }
+  return out;
+}
+
 export interface EchoFlag {
   /** The draft whose closing this one resembles. */
   against: number;
@@ -52,6 +85,10 @@ export interface EchoFlag {
   run?: string;
   /** 0–1: how much of this closing's vocabulary that one already used. */
   shape: number;
+  /** Two-word phrases both closings use, e.g. "audit your", "your last". */
+  phrases: string[];
+  /** Both open on the same word — usually the same imperative. */
+  opener: string | null;
 }
 
 /**
@@ -68,6 +105,7 @@ export function closingEcho(linkId: number, closing: string): EchoFlag | null {
   const mine = words(closing);
   const myVocab = meaningful(closing);
   if (myVocab.size < 5) return null;
+  const myPhrases = bigrams(mine);
 
   let worst: EchoFlag | null = null;
 
@@ -99,9 +137,20 @@ export function closingEcho(linkId: number, closing: string): EchoFlag | null {
     for (const w of myVocab) if (theirVocab.has(w)) shared += 1;
     const shape = Number((shared / myVocab.size).toFixed(2));
 
-    if (run || shape >= 0.4) {
-      if (!worst || shape > worst.shape || (run && !worst.run)) {
-        worst = { against: row.id, slug: row.slug, shape, ...(run ? { run } : {}) };
+    /* Shape. The phrases and the opener — what actually repeats. */
+    const theirWords = words(theirs);
+    const theirPhrases = bigrams(theirWords);
+    const phrases = [...myPhrases].filter((p) => theirPhrases.has(p));
+    const opener = mine[0] && mine[0] === theirWords[0] ? mine[0] : null;
+
+    /* 0.3 rather than 0.4, and either two shared phrases or one alongside the
+       same opener. Tuned against the real pair above, which scored 0.27. */
+    const hit = !!run || shape >= 0.3 || phrases.length >= 2 || (!!opener && phrases.length >= 1);
+    if (hit) {
+      const weight = shape + phrases.length * 0.15 + (opener ? 0.1 : 0);
+      const worstWeight = worst ? worst.shape + worst.phrases.length * 0.15 + (worst.opener ? 0.1 : 0) : -1;
+      if (!worst || weight > worstWeight || (run && !worst.run)) {
+        worst = { against: row.id, slug: row.slug, shape, phrases, opener, ...(run ? { run } : {}) };
       }
     }
   }
@@ -114,6 +163,13 @@ export function echoWords(flag: EchoFlag): string {
   if (flag.run) {
     return `It ends with the same eight words as "${flag.slug}" — "${flag.run}". Worth rewriting before this goes out.`;
   }
-  const pct = Math.round(flag.shape * 100);
-  return `It ends on ${pct}% the same vocabulary as "${flag.slug}". Two pieces of advice can legitimately overlap, but if the closings are becoming interchangeable the journal will start to read that way.`;
+  const bits: string[] = [];
+  if (flag.opener) bits.push(`both open on "${flag.opener}"`);
+  if (flag.phrases.length) bits.push(`both use ${flag.phrases.map((p) => `"${p}"`).join(" and ")}`);
+  if (flag.shape >= 0.3) bits.push(`${Math.round(flag.shape * 100)}% the same vocabulary`);
+
+  return (
+    `It ends the same shape as "${flag.slug}" — ${bits.join(", ")}. ` +
+    `Two pieces of advice can legitimately overlap; a journal whose articles all END the same way reads like one machine wrote them.`
+  );
 }
