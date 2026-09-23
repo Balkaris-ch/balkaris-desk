@@ -66,16 +66,6 @@ export interface SocialMaterial {
   slides?: number;
 }
 
-/** Does this look like something we can take at all? */
-export function isSocial(url: string): boolean {
-  try {
-    classify(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 const metricsOf = (s: SourceRecord) => ({
   views: s.views,
   likes: s.likes,

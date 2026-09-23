@@ -3,7 +3,7 @@ import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { edit, esc, send } from "./telegram.ts";
-import { isSocial } from "./social/pipeline.ts";
+import { isSocial } from "./social/shape.ts";
 
 /**
  * A link arrives.
