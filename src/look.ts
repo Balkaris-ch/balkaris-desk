@@ -77,7 +77,10 @@ const MOTION_TERMS: Record<Motion, { strong: string[]; weak: string[] }> = {
   },
   blocked: {
     strong: ["bottleneck", "stuck", "blocked", "barrier", "friction", "constraint", "dead end", "wall", "held up"],
-    weak: ["slow", "delay", "wait", "struggle", "cannot", "limit", "obstacle", "backlog", "stall", "grind"],
+    /* "cannot" was in here and it is grammar, not meaning: three of the
+       first sixteen articles came out blocked on the strength of one
+       negation. A term has to name the obstacle, not deny something. */
+    weak: ["slow", "delay", "wait", "struggle", "limit", "obstacle", "backlog", "stall", "grind"],
   },
   connecting: {
     strong: ["integrate", "integration", "hand off", "handover", "pipeline", "end to end", "bridge", "connect", "wired together"],

@@ -45,8 +45,8 @@ const H = 800;
  *   · IT WAS GREY. Almost-greyscale with one green shape was a safe rule that
  *     produced thirty safe pictures. Now there are eight PALETTES of four
  *     colours each, and the article's register picks one — so a technical
- *     piece prints cool and a studio piece prints warm, and only about half
- *     the journal is green.
+ *     piece prints cool and a studio piece prints warm, and green is the
+ *     accent on about a third of the journal rather than all of it.
  *
  * Earlier attempts and what each taught, kept so nobody repeats them:
  *   1. "flat vector, generous negative space" -> a glossy op-art spiral
@@ -212,7 +212,7 @@ interface Palette {
 const PALETTES: Record<string, Palette> = {
   signal: { name: "signal", ground: "deep charcoal", a: "bone white", b: "warm mid grey", accent: "bright electric lime green" },
   steel: { name: "steel", ground: "pale cool grey", a: "steel blue", b: "deep navy", accent: "bright mustard yellow" },
-  tide: { name: "tide", ground: "deep teal", a: "pale sand", b: "muted slate blue", accent: "bright electric lime green" },
+  tide: { name: "tide", ground: "deep teal", a: "pale sand", b: "muted slate blue", accent: "bright marigold orange" },
   moss: { name: "moss", ground: "deep pine green", a: "cream", b: "warm clay brown", accent: "bright electric lime green" },
   bloom: { name: "bloom", ground: "bone white", a: "deep plum", b: "soft blush pink", accent: "bright electric lime green" },
   ember: { name: "ember", ground: "warm cream", a: "burnt terracotta", b: "deep charcoal", accent: "bright tangerine orange" },
@@ -220,11 +220,19 @@ const PALETTES: Record<string, Palette> = {
   dusk: { name: "dusk", ground: "deep indigo", a: "dusty rose", b: "pale blue grey", accent: "warm coral" },
 };
 
-/** Which palettes a register may draw from. Three each, overlapping on purpose. */
+/**
+ * Which palettes a register may draw from. Three each, overlapping on purpose.
+ *
+ * Balanced by hand so that EXACTLY ONE of every three is a green palette. The
+ * first arrangement grouped by feel alone and put all three greens in the
+ * growth set, which is thematically obvious and meant thirteen of the first
+ * sixteen covers came out green. A signature that appears every time is
+ * wallpaper; a signature that appears every third time is a signature.
+ */
 const BY_MOOD: Record<Mood, string[]> = {
   technical: ["signal", "steel", "tide"],
-  growth: ["moss", "bloom", "tide"],
-  human: ["ember", "clay", "dusk"],
+  growth: ["moss", "tide", "clay"],
+  human: ["bloom", "ember", "clay"],
   urgent: ["signal", "ember", "dusk"],
 };
 
