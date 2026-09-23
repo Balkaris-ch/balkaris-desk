@@ -64,11 +64,33 @@ const HOUSE =
   "flat solid colour fills, hard clean edges, no shading, no gradient, no perspective, no 3d, no texture, " +
   "no text, no letters, no logos, no people, not a photograph";
 
+/*
+ * THE AVOID LIST WAS BEING DRAWN, and it took a picture to see it.
+ *
+ * "spiral, optical illusion, concentric rings" sat in that list for four
+ * passes as a defence against the very first cover, which came out a glossy
+ * op-art spiral. Then a triangle came back with a perfect concentric spiral
+ * printed inside it — the one thing named twice.
+ *
+ * Of course it did. Z-Image Turbo runs at cfg 1.0 and the negative
+ * conditioning is zeroed (see `graph` below), so there IS no negative prompt:
+ * every word of an avoid-list is a word in the POSITIVE prompt. "Avoid:
+ * spiral" is the token `spiral`, weighted like any other.
+ *
+ * So the list keeps only the categorical refusals, which have held for thirty
+ * covers and name nothing a shape could become — no text, no people, not a
+ * photograph — and everything that named a PICTURE is replaced by the
+ * positive statement that rules it out: a shape with nothing inside it cannot
+ * be a spiral.
+ */
 const AVOID =
-  "text, letters, words, numbers, watermark, logo, signature, people, faces, " +
-  "photograph, photorealistic, 3d render, glossy, shiny, metallic, drop shadow, " +
-  "spiral, optical illusion, concentric rings, busy, cluttered, symmetrical, " +
-  "rainbow, neon glow, airbrush, more than four colours";
+  "no text, no letters, no numbers, no watermark, no signature, no people, " +
+  "and this is a printed poster, not a photograph";
+
+/** The line that does the work the avoid-list could not. */
+const PLAIN =
+  "Every shape is a single unbroken area of one flat colour with nothing drawn inside it — " +
+  "no pattern, no lines, no marks, no shading.";
 
 interface Composition {
   name: string;
@@ -156,7 +178,10 @@ const COMPOSITIONS: Record<Motion, Composition[]> = {
          in a grey field. A shape with no stated width is a shape a model can
          decide not to draw. */
       how: "one thick vertical bar as wide as a finger running the full height of the frame from top edge to bottom edge, standing just right of centre, with five small squares pressed against its left side and the space to its right completely empty",
-      accent: "the small square nearest the top",
+      /* The BAR wears the accent, not a square. Twice now the bar was simply
+         not drawn and five squares were left floating in an empty field; a
+         shape named again in the palette sentence is a shape that arrives. */
+      accent: "the tall vertical bar",
     },
     {
       name: "wedge",
@@ -394,7 +419,7 @@ export function compose(article: {
     `${composition.how}. ` +
     `Printed flat in four colours only: a ${palette.ground} ground, and every shape ${palette.a} or ${palette.b} — ` +
     `except ${composition.accent}, which alone is ${palette.accent}, and nothing else in the picture is ${palette.accent}. ` +
-    `${HOUSE}. Avoid: ${AVOID}.`;
+    `${PLAIN} ${HOUSE}. ${AVOID}.`;
 
   return { prompt, read, composition, palette };
 }
