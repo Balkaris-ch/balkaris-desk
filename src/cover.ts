@@ -151,7 +151,11 @@ const COMPOSITIONS: Record<Motion, Composition[]> = {
   blocked: [
     {
       name: "wall",
-      how: "one thick vertical bar standing just right of centre from the top edge to the bottom, five small squares pressed up against its left side, the space to its right completely empty",
+      /* The bar has to arrive first and arrive thick, or it does not arrive:
+         the first printing dropped it entirely and left five squares floating
+         in a grey field. A shape with no stated width is a shape a model can
+         decide not to draw. */
+      how: "one thick vertical bar as wide as a finger running the full height of the frame from top edge to bottom edge, standing just right of centre, with five small squares pressed against its left side and the space to its right completely empty",
       accent: "the small square nearest the top",
     },
     {
@@ -380,14 +384,16 @@ export function compose(article: {
   const palette = PALETTES[pick(BY_MOOD[read.mood], article.slug, "p")];
 
   /* The composition leads: the front of the prompt is what the model weights
-     most, and the picture is what makes two covers different. The palette
-     follows as one sentence naming four colours and pinning the accent to one
-     shape — "one shape in green" without saying WHICH reliably comes back
-     three times. */
+     most, and the picture is what makes two covers different. Then the palette,
+     in the one phrasing that holds: say what the OTHER shapes are.
+     "the accent is used for X and nowhere else" was the obvious wording and it
+     put orange on both the triangle AND the square, green on three bands out
+     of five. A model reads a colour it is given as a colour it may use. Naming
+     what everything else is leaves it nothing to spend the accent on. */
   const prompt =
     `${composition.how}. ` +
-    `Printed flat in exactly four colours: a ${palette.ground} ground, ${palette.a}, ${palette.b}, ` +
-    `and ${palette.accent} — the ${palette.accent} is used for ${composition.accent} and nowhere else in the picture. ` +
+    `Printed flat in four colours only: a ${palette.ground} ground, and every shape ${palette.a} or ${palette.b} — ` +
+    `except ${composition.accent}, which alone is ${palette.accent}, and nothing else in the picture is ${palette.accent}. ` +
     `${HOUSE}. Avoid: ${AVOID}.`;
 
   return { prompt, read, composition, palette };
