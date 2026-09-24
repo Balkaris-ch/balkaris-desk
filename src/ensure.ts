@@ -1,5 +1,6 @@
-import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { OLLAMA_URL } from "./llm.ts";
 
 /**
@@ -84,7 +85,54 @@ function launch(exe: string, args: string[], cwd?: string): number | null {
  * else is drawing with is worse than one that leaves 19 GB held. So the
  * runner only ever closes its own.
  */
-let ours: number | null = null;
+const OURS = process.env.DESK_COMFY_PID ?? "E:/Balkaris/Code/balkaris-desk/logs/comfy.pid";
+
+function remember(pid: number | null): void {
+  try {
+    if (pid === null) {
+      rmSync(OURS, { force: true });
+      return;
+    }
+    mkdirSync(dirname(OURS), { recursive: true });
+    writeFileSync(OURS, String(pid), "utf8");
+  } catch {
+    /* Cannot write it: we simply will not close that ComfyUI. Leaving one
+       running is the safe failure, and the noisy one — he will see it. */
+  }
+}
+
+function ourComfy(): number | null {
+  try {
+    const pid = Number(readFileSync(OURS, "utf8").trim());
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is that pid really the ComfyUI we started?
+ *
+ * Pids are reused, the note on disk outlives the process it names, and the
+ * next thing this function does is kill something. Windows has no cheap
+ * per-pid identity, so it asks wmic for the command line and insists on
+ * seeing main.py in it. Anything unexpected — no answer, a different
+ * program, wmic missing — means no.
+ */
+function isComfy(pid: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile(
+      "wmic",
+      ["process", "where", `processid=${pid}`, "get", "commandline", "/format:list"],
+      { timeout: 10_000, windowsHide: true },
+      /* Both separators. We spawn it with forward slashes, Windows reports
+         command lines with whichever it was given, and a character class that
+         lost its backslash would simply never match — which fails quietly as
+         "ComfyUI was never ours", i.e. never closed. */
+      (err, stdout) => resolve(!err && /comfyui[\\/]+main\.py/i.test(stdout)),
+    );
+  });
+}
 
 async function waitFor(label: string, url: string, seconds: number): Promise<boolean> {
   for (let i = 0; i < seconds; i++) {
@@ -126,7 +174,7 @@ export async function ensureComfy(): Promise<boolean> {
     return false;
   }
   console.log("  ComfyUI is not running — starting it");
-  ours = launch(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], COMFY_DIR);
+  remember(launch(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], COMFY_DIR));
   return waitFor("ComfyUI", `${COMFY_URL}/system_stats`, 180);
 }
 
@@ -223,15 +271,19 @@ export async function release(): Promise<string[]> {
     }
   }
 
-  if (ours !== null) {
+  const pid = ourComfy();
+  if (pid !== null && (await isComfy(pid))) {
     await freeComfy();
     try {
-      process.kill(ours);
+      process.kill(pid);
       freed.push("closed ComfyUI");
     } catch {
       /* Already gone, which is the outcome we wanted. */
     }
-    ours = null;
+    remember(null);
+  } else if (pid !== null) {
+    /* The note is stale: that pid is something else now, or nothing. */
+    remember(null);
   }
 
   return freed;
