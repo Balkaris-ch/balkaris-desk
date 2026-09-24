@@ -5,7 +5,7 @@ import { match } from "./match.ts";
 import { takeSocial } from "./social/pipeline.ts";
 import { proseOf } from "./blocks.ts";
 import { cover } from "./cover.ts";
-import { ensureFor, ensureOllama } from "./ensure.ts";
+import { ensureFor, ensureOllama, release } from "./ensure.ts";
 import type { TopicId } from "./catalogue.ts";
 
 /**
@@ -294,10 +294,39 @@ if (process.argv.includes("--once")) {
   process.exit(0);
 }
 
+/*
+ * Wake for a job, and go back to sleep after it.
+ *
+ * Fini, 24 September 2026: *"when I send a message it wakes up anything it
+ * needs and then when job finish it turn it off."*
+ *
+ * Not the instant the job ends — an article is a WRITE job and then a COVER
+ * job, and closing ComfyUI between the two would pay nine seconds to save
+ * twelve. It waits until the queue has actually been quiet, which is what
+ * "finished" means when the work arrives in pieces.
+ *
+ * QUIET_POLLS idle polls at IDLE_MS each, so about a minute after the last
+ * job. Then once, and not again until something new comes in.
+ */
+const QUIET_POLLS = 3;
+let quiet = 0;
+let asleep = false;
+
 for (;;) {
   try {
     const did = await once();
-    if (!did) await sleep(IDLE_MS);
+    if (did) {
+      quiet = 0;
+      asleep = false;
+      continue;
+    }
+
+    if (!asleep && ++quiet >= QUIET_POLLS) {
+      const freed = await release();
+      if (freed.length) console.log(`  queue is empty — ${freed.join(", ")}`);
+      asleep = true;
+    }
+    await sleep(IDLE_MS);
   } catch (e) {
     console.error(`desk unreachable: ${e instanceof Error ? e.message : e}`);
     await sleep(DOWN_MS);

@@ -41,11 +41,43 @@ const STATE_WORDS: Record<string, string> = {
   failed: "it did not work — the desk has the reason",
 };
 
-/** Is a runner awake? Decides whether we promise "shortly" or "when it wakes". */
-function workstationAwake(): boolean {
+/**
+ * Has a runner asked for work lately, and if not, for how long?
+ *
+ * Fini, 24 September 2026: *"The workstation is alive - it works."* He was
+ * right, and the bot had told him the workstation was asleep, because the
+ * only thing this can actually see is whether a RUNNER polled. His machine
+ * was on the whole time; the runner process on it had died, and "asleep" sent
+ * him looking at a computer that was plainly awake.
+ *
+ * So it reports the fact rather than an interpretation of it: how long since
+ * anything checked in. The difference matters because the two have different
+ * remedies. A closed laptop fixes itself when it opens. A dead runner on a
+ * running machine fixes itself never, and the message has to be the kind that
+ * makes somebody look.
+ */
+function lastPoll(): { awake: boolean; silentFor: string } {
   const row = db.prepare("SELECT MAX(at) a FROM events WHERE what = 'runner.poll'").get() as { a: string | null };
-  return !!row.a && Date.now() - Date.parse(`${row.a}Z`) < 5 * 60_000;
+  if (!row.a) return { awake: false, silentFor: "ever" };
+
+  const ms = Date.now() - Date.parse(`${row.a}Z`);
+  const mins = Math.round(ms / 60_000);
+  const hours = Math.round(mins / 60);
+  return {
+    awake: ms < 5 * 60_000,
+    silentFor: mins < 90 ? `${mins} minutes` : hours < 36 ? `${hours} hours` : `${Math.round(hours / 24)} days`,
+  };
 }
+
+/** What to say when nothing is listening. Names the fix, because there is one. */
+const COLD = (silentFor: string) =>
+  `Kept and queued — but nothing on the workstation has asked for work in ${silentFor}. ` +
+  /* Forward slashes on purpose. A Windows path in a template literal is a
+     minefield: the first draft of this line said scripts\\run_runner.cmd and
+     shipped a carriage return, because \\r is an escape before it is a folder
+     separator. cmd.exe takes either. */
+  `If that machine is on, its runner has stopped: <code>scripts/run_runner.cmd</code>. ` +
+  `Nothing is lost either way; this goes through the moment it is back.`
 
 function summarise(topic: string | null, services: string[]): string {
   const shelf = TOPICS.find((t) => t.id === topic)?.name;
@@ -111,10 +143,11 @@ export async function takeLink(
     log("link.social", { url }, id);
 
     const where = platformOf(url) ?? "a social post";
+    const seenAt = lastPoll();
     await say(
-      workstationAwake()
+      seenAt.awake
         ? `That is ${esc(where)} — fetching it now. I will say what it turned out to be.`
-        : `That is ${esc(where)}. Kept and queued — it needs the workstation, which is asleep, so it gets read when the machine next wakes.`,
+        : `That is ${esc(where)}. ${COLD(seenAt.silentFor)}`,
     );
     return { id, already: false };
   }
@@ -165,13 +198,14 @@ export async function takeLink(
   db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'write')").run(id);
   log("link.taken", { url, words: piece.words, topic: m.topic, services }, id);
 
-  const waiting = workstationAwake()
-    ? "Writing it now."
-    : "Queued — the workstation is asleep, so this gets written when it next wakes.";
+  const seenAt = lastPoll();
+  /* Our own words, with our own markup in them: not escaped, unlike every
+     line above it that came off somebody else's page. */
+  const waiting = seenAt.awake ? "Writing it now." : COLD(seenAt.silentFor);
 
   await say(
     `<b>${esc(piece.title)}</b>\n<i>${esc(piece.site)}${piece.author ? ` · ${esc(piece.author)}` : ""} · ${piece.words} words</i>\n\n` +
-      `${summarise(m.topic, services)}\n\n${esc(waiting)}`,
+      `${summarise(m.topic, services)}\n\n${waiting}`,
   );
 
   return { id, already: false };

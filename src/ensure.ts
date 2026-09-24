@@ -70,10 +70,21 @@ async function answering(url: string, ms = 2500): Promise<boolean> {
  * restarts, Ollama does not need to. stdio is ignored rather than piped
  * because nothing here reads it and a full pipe buffer would wedge the child.
  */
-function launch(exe: string, args: string[], cwd?: string): void {
+function launch(exe: string, args: string[], cwd?: string): number | null {
   const child = spawn(exe, args, { detached: true, stdio: "ignore", windowsHide: true, cwd });
   child.unref();
+  return child.pid ?? null;
 }
+
+/**
+ * The pid of the ComfyUI WE started, or null.
+ *
+ * It matters which one it is. Cinema Studio drives the same ComfyUI on the
+ * same card (sm-fixed), and a runner that shuts down a ComfyUI somebody
+ * else is drawing with is worse than one that leaves 19 GB held. So the
+ * runner only ever closes its own.
+ */
+let ours: number | null = null;
 
 async function waitFor(label: string, url: string, seconds: number): Promise<boolean> {
   for (let i = 0; i < seconds; i++) {
@@ -115,7 +126,7 @@ export async function ensureComfy(): Promise<boolean> {
     return false;
   }
   console.log("  ComfyUI is not running — starting it");
-  launch(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], COMFY_DIR);
+  ours = launch(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], COMFY_DIR);
   return waitFor("ComfyUI", `${COMFY_URL}/system_stats`, 180);
 }
 
@@ -167,6 +178,63 @@ async function freeOllama(): Promise<void> {
   } catch {
     /* same */
   }
+}
+
+
+/**
+ * GIVE THE MACHINE BACK.
+ *
+ * Fini, 24 September 2026: *"why can when I send a message it wakes up
+ * anything it needs and then when job finish it turn it off."*
+ *
+ * The runner learned to start things and never learned to stop them, so one
+ * shared TikTok left ComfyUI sitting on about 19 GB of the card for the rest
+ * of the day, on the machine he actually works on. Waking up for a job is
+ * only half of the behaviour; the other half is going back to sleep.
+ *
+ * What it does, in order of how much it frees:
+ *
+ *   · ComfyUI is CLOSED, not just asked to unload — it holds a couple of
+ *     gigabytes of system memory even with no model resident, and it costs
+ *     about nine seconds to start again. Nine seconds once per idle spell is
+ *     a fair price for a card that is free the rest of the time.
+ *     Only ever the one this runner started: see `ours`.
+ *   · Ollama keeps its server and drops its MODEL. The server idle is
+ *     nothing, other tools on this machine use it, and a cold start is
+ *     forty-five seconds — all cost, no saving.
+ */
+export async function release(): Promise<string[]> {
+  const freed: string[] = [];
+
+  if (await answering(`${OLLAMA_URL}/api/tags`, 1500)) {
+    try {
+      const { WRITE_MODEL } = await import("./llm.ts");
+      for (const model of new Set([WRITE_MODEL, process.env.QUICK_MODEL ?? "gemma4:12b-it-qat"])) {
+        await fetch(`${OLLAMA_URL}/api/generate`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ model, prompt: "", keep_alive: 0 }),
+          signal: AbortSignal.timeout(20_000),
+        });
+      }
+      freed.push("let the writing model go");
+    } catch {
+      /* Not answering is the same as not holding anything. */
+    }
+  }
+
+  if (ours !== null) {
+    await freeComfy();
+    try {
+      process.kill(ours);
+      freed.push("closed ComfyUI");
+    } catch {
+      /* Already gone, which is the outcome we wanted. */
+    }
+    ours = null;
+  }
+
+  return freed;
 }
 
 /** What a job needs before it can run, and what has to let go first. */
