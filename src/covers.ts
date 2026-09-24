@@ -54,10 +54,17 @@ const posterFile = (slug: string) => path.join(CLIPS, `${clean(slug)}.webp`);
    migration. */
 const factsFile = (slug: string) => path.join(CLIPS, `${clean(slug)}.json`);
 
-export function saveClip(slug: string, clip: Buffer, poster: Buffer, facts?: { seconds: number; whole: boolean }): void {
+const loopFile = (slug: string) => path.join(CLIPS, `${clean(slug)}-loop.mp4`);
+
+export function saveClip(
+  slug: string,
+  parts: { loop: Buffer; clip: Buffer; poster: Buffer },
+  facts?: { seconds: number; whole: boolean },
+): void {
   mkdirSync(CLIPS, { recursive: true });
-  writeFileSync(clipFile(slug), clip);
-  writeFileSync(posterFile(slug), poster);
+  writeFileSync(loopFile(slug), parts.loop);
+  writeFileSync(clipFile(slug), parts.clip);
+  writeFileSync(posterFile(slug), parts.poster);
   if (facts) writeFileSync(factsFile(slug), JSON.stringify(facts), "utf8");
 }
 
@@ -71,16 +78,19 @@ export function clipFacts(slug: string): { seconds: number; whole: boolean } | n
   }
 }
 
-export function clipPath(slug: string): { clip: Buffer; poster: Buffer } | null {
+export function clipPath(slug: string): { loop: Buffer; clip: Buffer; poster: Buffer } | null {
+  const l = loopFile(slug);
   const c = clipFile(slug);
   const p = posterFile(slug);
-  if (!existsSync(c) || !existsSync(p)) return null;
-  return { clip: readFileSync(c), poster: readFileSync(p) };
+  if (!existsSync(l) || !existsSync(c) || !existsSync(p)) return null;
+  return { loop: readFileSync(l), clip: readFileSync(c), poster: readFileSync(p) };
 }
 
 export const hasClip = (slug: string): boolean => existsSync(clipFile(slug));
 
 export function dropClip(slug: string): void {
+  rmSync(loopFile(slug), { force: true });
   rmSync(clipFile(slug), { force: true });
   rmSync(posterFile(slug), { force: true });
+  rmSync(factsFile(slug), { force: true });
 }

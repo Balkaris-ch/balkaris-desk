@@ -31,23 +31,26 @@ import { promisify } from "node:util";
  * it. Muted autoplay is allowed everywhere; unmuting on a click is a user
  * gesture, which is exactly what the browsers want.
  *
- * SO HOW LONG, AND HOW BIG? Measured on the BBC TikTok rather than guessed,
- * because the whole design started from *"we don't upload it on the server
- * because then we will have too many videos"*:
+ * TWO FILES, AND THAT IS THE WHOLE TRICK. Measured rather than guessed,
+ * because the design started from *"we don't upload it on the server because
+ * then we will have too many videos"*:
  *
- *     10s silent                131 KB
- *     10s with audio            215 KB
- *     30s with audio            622 KB
- *     the whole 31s, good audio 777 KB   <- and the original was 1.1 MB
+ *     10s silent, 720           131 KB     <- the BBC TikTok, 31s
+ *     the whole 31s with audio  777 KB
+ *     90s with audio          2 993 KB     <- the Neuralink one, 91s
  *
- * A ten-second excerpt made sense while it was silent and decorative. Once a
- * reader can hear it, cutting it off mid-sentence is worse than useless, and
- * the whole thing costs a third of a megabyte more than the fragment did —
- * less, in fact, than the file we already downloaded to transcribe. So: the
- * whole video, re-encoded smaller, up to `MAX_SECONDS`.
+ * One file cannot be both. A three-megabyte video downloading on every page
+ * view, for every reader, most of whom will scroll past it, is not something
+ * to do to people — and a ten-second silent fragment is not something a
+ * reader can listen to.
  *
- * Past that it is an excerpt again and the caption says so. Ninety seconds
- * covers essentially every TikTok, Reel and Short; a fifteen-minute YouTube
+ * So the LOOP is what the page costs: ten silent seconds, about 130 KB,
+ * playing the moment the article opens. The FULL clip — the whole video with
+ * its sound, up to `MAX_SECONDS` — is fetched only when somebody presses the
+ * sound button. Nobody pays for audio they did not ask to hear.
+ *
+ * Ninety seconds covers essentially every TikTok, Reel and Short. Past it the
+ * clip is an excerpt again and the caption says so; a fifteen-minute YouTube
  * explainer is a link, not an element on a page.
  */
 
@@ -67,11 +70,16 @@ const MAX_SECONDS = 90;
 const LONG = 720;
 
 export interface Preview {
-  /** mp4 with sound, ready to be written into the site. It starts muted. */
+  /**
+   * Ten silent seconds, looping. This is what the page loads and plays, and
+   * the only one most readers will ever fetch.
+   */
+  loop: Buffer;
+  /** The whole video with its sound, fetched when the sound button is pressed. */
   clip: Buffer;
-  /** The first frame, so the box is never empty while the clip loads. */
+  /** The first frame, so the box is never empty while the loop arrives. */
   poster: Buffer;
-  /** How much of the video is in it. */
+  /** How much of the video is in `clip`. */
   seconds: number;
   /** Is that all of it, or did the cap cut it short? The caption says which. */
   whole: boolean;
@@ -87,11 +95,38 @@ export interface Preview {
  */
 const FIT = `scale='if(gt(a,1),${LONG},-2)':'if(gt(a,1),-2,${LONG})'`;
 
+/** Ten seconds, no audio: the one that plays on arrival. */
+const LOOP_SECONDS = 10;
+
 export async function makePreview(file: string, dir: string, sourceSeconds?: number | null): Promise<Preview | null> {
   const clipPath = path.join(dir, "preview.mp4");
+  const loopPath = path.join(dir, "loop.mp4");
   const posterPath = path.join(dir, "poster.webp");
 
   try {
+    /* The loop first: it is the one the page cannot do without. */
+    await execFileP(
+      ffmpegPath,
+      [
+        "-y",
+        "-i", file,
+        "-t", String(LOOP_SECONDS),
+        /* No audio at all rather than a silent track: a stream of zeroes
+           still costs bytes and still makes a phone offer a mute control on
+           something that has nothing to mute. */
+        "-an",
+        "-vf", `${FIT},fps=24`,
+        "-c:v", "libx264",
+        "-profile:v", "main",
+        "-pix_fmt", "yuv420p",
+        "-crf", "31",
+        "-preset", "veryfast",
+        "-movflags", "+faststart",
+        loopPath,
+      ],
+      { timeout: 120_000, windowsHide: true },
+    );
+
     await execFileP(
       ffmpegPath,
       [
@@ -125,9 +160,10 @@ export async function makePreview(file: string, dir: string, sourceSeconds?: num
       { timeout: 60_000, windowsHide: true },
     );
 
-    const [clip, poster] = await Promise.all([readFile(clipPath), readFile(posterPath)]);
+    const [loop, clip, poster] = await Promise.all([readFile(loopPath), readFile(clipPath), readFile(posterPath)]);
     const whole = !sourceSeconds || sourceSeconds <= MAX_SECONDS;
     return {
+      loop,
       clip,
       poster,
       seconds: Math.round(whole && sourceSeconds ? sourceSeconds : MAX_SECONDS),
@@ -139,6 +175,7 @@ export async function makePreview(file: string, dir: string, sourceSeconds?: num
     return null;
   } finally {
     await rm(clipPath, { force: true }).catch(() => {});
+    await rm(loopPath, { force: true }).catch(() => {});
     await rm(posterPath, { force: true }).catch(() => {});
   }
 }

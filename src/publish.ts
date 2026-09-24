@@ -239,6 +239,7 @@ ${
           post.watch.seconds ? `
     seconds: ${post.watch.seconds},` : ""
         }${post.watch.clip ? `
+    loop: ${q(post.watch.loop ?? "")},
     clip: ${q(post.watch.clip)},` : ""}${post.watch.poster ? `
     poster: ${q(post.watch.poster)},` : ""}${post.watch.clipSeconds ? `
     clipSeconds: ${post.watch.clipSeconds},` : ""}${post.watch.whole === false ? `
@@ -402,11 +403,13 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
     const reel = post.watch ? clipPath(post.slug) : null;
     if (reel) {
       await mkdir(path.join(REPO, "public", "insights"), { recursive: true });
+      await writeFile(path.join(REPO, "public", "insights", `${post.slug}-loop.mp4`), reel.loop);
       await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.mp4`), reel.clip);
       await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.webp`), reel.poster);
     }
     if (post.watch) {
       const facts = reel ? clipFacts(post.slug) : null;
+      post.watch.loop = reel ? `/insights/${post.slug}-loop.mp4` : undefined;
       post.watch.clip = reel ? `/insights/${post.slug}-clip.mp4` : undefined;
       post.watch.poster = reel ? `/insights/${post.slug}-clip.webp` : undefined;
       /* How much of the video is in the file, so the caption can say "all of

@@ -128,7 +128,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
     `  ${got.shape} on ${got.platform}${got.author ? ` by ${got.author}` : ""} — ${got.words} words` +
       (got.slides ? `, ${got.slides} slides` : "") +
       (got.preview
-        ? `, ${Math.round(got.preview.clip.length / 1024)}KB clip (${got.preview.whole ? "all of it" : `first ${got.preview.seconds}s`})`
+        ? `, ${Math.round(got.preview.loop.length / 1024)}KB loop + ${Math.round(got.preview.clip.length / 1024)}KB with sound (${got.preview.whole ? "all of it" : `first ${got.preview.seconds}s`})`
         : "") +
       (got.spoke === "music" ? ", found only on the second Whisper pass (it is carried by a song)" : ""),
   );
@@ -193,6 +193,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
     ...(got.preview
       ? {
           preview: {
+            loop: got.preview.loop.toString("base64"),
             clip: got.preview.clip.toString("base64"),
             poster: got.preview.poster.toString("base64"),
             seconds: got.preview.seconds,
@@ -279,12 +280,14 @@ async function doClip(draft: { id: number; slug: string }, url: string): Promise
     if (!out) throw new Error("ffmpeg could not cut a clip from that file");
 
     console.log(
-      `  cut a ${out.seconds}s clip (${out.whole ? "all of it" : "capped"}) — ${Math.round(out.clip.length / 1024)}KB`,
+      `  cut ${Math.round(out.loop.length / 1024)}KB loop + ${Math.round(out.clip.length / 1024)}KB with sound ` +
+        `(${out.seconds}s, ${out.whole ? "all of it" : "capped"})`,
     );
     return {
       ok: true,
       slug: draft.slug,
       preview: {
+        loop: out.loop.toString("base64"),
         clip: out.clip.toString("base64"),
         poster: out.poster.toString("base64"),
         seconds: out.seconds,

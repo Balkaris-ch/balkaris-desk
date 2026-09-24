@@ -29,7 +29,9 @@ export interface Watch {
   url: string;
   handle?: string;
   seconds?: number;
-  /** Our own silent excerpt, written by publish when there is one. */
+  /** Ten silent seconds, looping. What the page loads and plays. */
+  loop?: string;
+  /** The whole video with sound, fetched only when the sound button is pressed. */
   clip?: string;
   /** Its first frame, so the box is never empty while the clip loads. */
   poster?: string;
