@@ -1,6 +1,5 @@
-import { execFile, spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import { spawn, type ChildProcess } from "node:child_process";
+import { existsSync } from "node:fs";
 import { OLLAMA_URL } from "./llm.ts";
 
 /**
@@ -31,27 +30,31 @@ const COMFY_URL = (process.env.COMFY_URL ?? "http://127.0.0.1:8189").replace(/\/
 const COMFY_PORT = new URL(COMFY_URL).port || "8189";
 const COMFY_DIR = process.env.COMFY_DIR ?? "D:/ComfyUI";
 /*
- * pythonw, not python, and it matters more than it looks.
+ * NO WINDOW, AND STILL OURS. Two requirements that fought each other for a day.
  *
  * Fini, 24 September 2026, with a screenshot of a black terminal sitting on
  * top of the site he was reviewing: *"THE FUCK YOU KEEP DOING WITH THIS??? it
- * distrpts my flow."*
+ * distrpts my flow."* And later the same day: *"when job finish it turn it
+ * off."* Invisible, and closeable.
  *
- * `launch` below passes `detached: true` so ComfyUI outlives the runner, and
- * on Windows a detached CONSOLE application gets its own console window —
- * `windowsHide` does not save you, because the window belongs to the new
- * console, not to the process. python.exe is a console application.
- * pythonw.exe is the same interpreter built as a GUI application: no console,
- * nothing to pop up, nothing to click away.
+ * The first answer was pythonw.exe with `detached: true`. It solved the window
+ * — a detached CONSOLE application gets its own console on Windows and
+ * `windowsHide` cannot help, because the window belongs to the new console
+ * rather than to the process. It also broke ComfyUI: pythonw is built as a GUI
+ * application and has NO stdout at all, and ComfyUI prints on almost every
+ * path. It came up, answered once, and died the moment anything made it write
+ * — which looked, from the outside, exactly like a successful start
+ * followed by a mysterious disappearance. `kill ESRCH` on a process that had
+ * been alive four seconds earlier is what finally gave it away.
  *
- * Something that starts itself has to start itself INVISIBLY. A background
- * service that steals focus is not a background service.
+ * So: python.exe, and NOT detached. Without `detached` no new console is
+ * created, `windowsHide` hides the one the child would otherwise show, and it
+ * is a genuine child process — which is the part that matters, because a
+ * child can be killed by the handle we already hold instead of by a pid
+ * written on a note. It dies with the runner, and that is the behaviour we
+ * wanted anyway: nothing of ours should outlive the thing that started it.
  */
-const COMFY_PY =
-  process.env.COMFY_PYTHON ??
-  (existsSync(`${COMFY_DIR}/venv/Scripts/pythonw.exe`)
-    ? `${COMFY_DIR}/venv/Scripts/pythonw.exe`
-    : `${COMFY_DIR}/venv/Scripts/python.exe`);
+const COMFY_PY = process.env.COMFY_PYTHON ?? `${COMFY_DIR}/venv/Scripts/python.exe`;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -71,68 +74,34 @@ async function answering(url: string, ms = 2500): Promise<boolean> {
  * restarts, Ollama does not need to. stdio is ignored rather than piped
  * because nothing here reads it and a full pipe buffer would wedge the child.
  */
-function launch(exe: string, args: string[], cwd?: string): number | null {
+function launch(exe: string, args: string[], cwd?: string): void {
   const child = spawn(exe, args, { detached: true, stdio: "ignore", windowsHide: true, cwd });
   child.unref();
-  return child.pid ?? null;
 }
 
 /**
- * The pid of the ComfyUI WE started, or null.
+ * The ComfyUI WE started, or null if it was already running when we arrived.
  *
- * It matters which one it is. Cinema Studio drives the same ComfyUI on the
- * same card (sm-fixed), and a runner that shuts down a ComfyUI somebody
- * else is drawing with is worse than one that leaves 19 GB held. So the
- * runner only ever closes its own.
- */
-const OURS = process.env.DESK_COMFY_PID ?? "E:/Balkaris/Code/balkaris-desk/logs/comfy.pid";
-
-function remember(pid: number | null): void {
-  try {
-    if (pid === null) {
-      rmSync(OURS, { force: true });
-      return;
-    }
-    mkdirSync(dirname(OURS), { recursive: true });
-    writeFileSync(OURS, String(pid), "utf8");
-  } catch {
-    /* Cannot write it: we simply will not close that ComfyUI. Leaving one
-       running is the safe failure, and the noisy one — he will see it. */
-  }
-}
-
-function ourComfy(): number | null {
-  try {
-    const pid = Number(readFileSync(OURS, "utf8").trim());
-    return Number.isInteger(pid) && pid > 0 ? pid : null;
-  } catch {
-    return null;
-  }
-}
-
-/**
- * Is that pid really the ComfyUI we started?
+ * A HANDLE, NOT A PID ON A NOTE. The version before this wrote the pid to a
+ * file so it would survive a runner restart, then had to prove the pid was
+ * still ComfyUI before killing it — pids get reused and the note outlives the
+ * process it names. That identity check asked `wmic`, `wmic` has been removed
+ * from Windows 11, and a missing program reads as "not ours": ComfyUI was
+ * never closed and nothing in the log said so. The replacement asked
+ * PowerShell and was still wrong, because the pid it was checking belonged to
+ * a pythonw that had already died.
  *
- * Pids are reused, the note on disk outlives the process it names, and the
- * next thing this function does is kill something. Windows has no cheap
- * per-pid identity, so it asks wmic for the command line and insists on
- * seeing main.py in it. Anything unexpected — no answer, a different
- * program, wmic missing — means no.
+ * All of that machinery existed to answer one question — is this ours? — that
+ * a child process answers by existing. ComfyUI is a child now. It dies with
+ * the runner, which is the behaviour we wanted anyway, and nothing of ours
+ * outlives the thing that started it.
+ *
+ * It matters that we only ever close our own: Cinema Studio drives the same
+ * ComfyUI on the same port 8189 (sm-fixed/.env) and its watchdog only reports
+ * on it rather than owning it. If the desk closed one it had not started,
+ * somebody's storyboard frames would sit undrawn until a person noticed.
  */
-function isComfy(pid: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile(
-      "wmic",
-      ["process", "where", `processid=${pid}`, "get", "commandline", "/format:list"],
-      { timeout: 10_000, windowsHide: true },
-      /* Both separators. We spawn it with forward slashes, Windows reports
-         command lines with whichever it was given, and a character class that
-         lost its backslash would simply never match — which fails quietly as
-         "ComfyUI was never ours", i.e. never closed. */
-      (err, stdout) => resolve(!err && /comfyui[\\/]+main\.py/i.test(stdout)),
-    );
-  });
-}
+let comfy: ChildProcess | null = null;
 
 async function waitFor(label: string, url: string, seconds: number): Promise<boolean> {
   for (let i = 0; i < seconds; i++) {
@@ -174,7 +143,18 @@ export async function ensureComfy(): Promise<boolean> {
     return false;
   }
   console.log("  ComfyUI is not running — starting it");
-  remember(launch(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], COMFY_DIR));
+  /* NOT detached, so no new console is made and `windowsHide` can hide the
+     one it would otherwise show; `unref` only frees the event loop and does
+     not sever the parent, so this is still a child we hold and can close. */
+  comfy = spawn(COMFY_PY, [`${COMFY_DIR}/main.py`, "--listen", "127.0.0.1", "--port", COMFY_PORT], {
+    stdio: "ignore",
+    windowsHide: true,
+    cwd: COMFY_DIR,
+  });
+  comfy.unref();
+  comfy.on("exit", () => {
+    comfy = null;
+  });
   return waitFor("ComfyUI", `${COMFY_URL}/system_stats`, 180);
 }
 
@@ -192,8 +172,43 @@ export async function ensureComfy(): Promise<boolean> {
  * requests to free weights, not shutdowns: the process stays up and reloads in
  * seconds, which is far cheaper than starting it again.
  */
+/**
+ * `/free` DOES NOT FREE ANYTHING. IT ENDS COMFYUI.
+ *
+ * Measured, because nothing about it looks like that from here: POST
+ * /free {unload_models, free_memory} answers **200**, and then the process
+ * exits with code 15, every time. This was written as a polite request to
+ * drop the weights and keep serving, and it is a shutdown with a success
+ * code on it.
+ *
+ * Two things follow, and the second is the serious one.
+ *
+ * It explains a line nobody questioned. Every cover job in the log begins
+ * "ComfyUI is not running — starting it", including jobs a minute apart. Of
+ * course it does: the write job before it had just killed ComfyUI, and seven
+ * seconds of startup was being paid on every single picture.
+ *
+ * And ComfyUI IS SHARED. Cinema Studio drives the same one on the same port
+ * 8189 (sm-fixed/.env), and its watchdog only reports on it — nothing owns
+ * its lifecycle. So for as long as this has existed, writing a Balkaris
+ * article has been terminating whatever storyboard ComfyUI was in the middle
+ * of, and the only trace on their side would be frames that quietly never
+ * drew. Nobody noticed because the desk's own logs called it "asked ComfyUI
+ * for the card back".
+ *
+ * So it only ever touches a ComfyUI THIS RUNNER STARTED. If one is up that we
+ * did not start, it belongs to somebody else and it is left alone, said out
+ * loud, and the job proceeds — a write that has to share the card is slower,
+ * and slower is not a reason to end someone else's work.
+ */
 async function freeComfy(): Promise<void> {
   if (!(await answering(`${COMFY_URL}/system_stats`, 1500))) return;
+
+  if (!comfy || comfy.exitCode !== null) {
+    console.log("  ComfyUI is running and it is not ours — leaving it alone");
+    return;
+  }
+
   try {
     await fetch(`${COMFY_URL}/free`, {
       method: "POST",
@@ -201,12 +216,14 @@ async function freeComfy(): Promise<void> {
       body: JSON.stringify({ unload_models: true, free_memory: true }),
       signal: AbortSignal.timeout(20_000),
     });
-    console.log("  asked ComfyUI for the card back");
-    /* Freeing is not instant and the next thing we do is load 19 GB. */
+    console.log("  closed ComfyUI");
+    /* It goes down in well under a second, but the next thing we do is load
+       19 GB and there is no prize for being early. */
     await sleep(3000);
   } catch {
     /* It did not answer; the load below will say so far more clearly. */
   }
+  comfy = null;
 }
 
 async function freeOllama(): Promise<void> {
@@ -271,19 +288,23 @@ export async function release(): Promise<string[]> {
     }
   }
 
-  const pid = ourComfy();
-  if (pid !== null && (await isComfy(pid))) {
+  /* `freeComfy` is the shutdown — see the note on it — and it already refuses
+     to touch a ComfyUI that is not ours. So closing on an empty queue is the
+     same call the write path makes, and there is nothing to kill afterwards. */
+  if (comfy && comfy.exitCode === null) {
     await freeComfy();
-    try {
-      process.kill(pid);
-      freed.push("closed ComfyUI");
-    } catch {
-      /* Already gone, which is the outcome we wanted. */
+
+    /* Give it a few seconds to actually go before believing either answer.
+       A single probe the instant after was wrong in both directions: it
+       reported "still answering" on a port that was dead four seconds later,
+       which would have logged a failure on a success. */
+    let gone = false;
+    for (let i = 0; i < 8 && !gone; i++) {
+      await sleep(1000);
+      gone = !(await answering(`${COMFY_URL}/system_stats`, 1500));
     }
-    remember(null);
-  } else if (pid !== null) {
-    /* The note is stale: that pid is something else now, or nothing. */
-    remember(null);
+    if (gone) freed.push("closed ComfyUI");
+    else console.error("  ComfyUI would not close — it is still answering on its port");
   }
 
   return freed;
