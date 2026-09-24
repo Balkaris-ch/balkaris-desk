@@ -1,4 +1,10 @@
 import { readFileSync } from "node:fs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { classify, expandUrl, resolve } from "./social/resolve.ts";
+import { download } from "./social/media.ts";
+import { makePreview } from "./social/preview.ts";
 import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
 import { match } from "./match.ts";
@@ -121,6 +127,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   console.log(
     `  ${got.shape} on ${got.platform}${got.author ? ` by ${got.author}` : ""} — ${got.words} words` +
       (got.slides ? `, ${got.slides} slides` : "") +
+      (got.preview ? `, ${Math.round(got.preview.clip.length / 1024)}KB silent preview` : "") +
       (got.spoke === "music" ? ", found only on the second Whisper pass (it is carried by a song)" : ""),
   );
 
@@ -177,6 +184,19 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
       slides: got.slides ?? null,
       spoke: got.spoke ?? null,
     },
+    /* The clip travels beside the source, base64 like the cover does. It is
+       about 130 KB, which is a fifth of a cover's worth of request and the
+       only copy that will ever exist — the media itself is deleted before
+       takeSocial returns. */
+    ...(got.preview
+      ? {
+          preview: {
+            clip: got.preview.clip.toString("base64"),
+            poster: got.preview.poster.toString("base64"),
+            seconds: got.preview.seconds,
+          },
+        }
+      : {}),
   };
 }
 
@@ -229,6 +249,46 @@ async function doCover(draft: { id: number; slug: string; post: string }, topic:
   };
 }
 
+/**
+ * Cut a preview for an article that already exists.
+ *
+ * The clip is normally made during ingest, while the media is still on disk
+ * — everything that needs the file happens in that one pass, because the
+ * file is deleted the moment it ends. This is the other route: an article
+ * written before previews existed, or one whose video ffmpeg choked on, and
+ * re-running the whole ingest would rewrite the article to get a picture.
+ *
+ * So it does the smallest thing that produces a clip: resolve, download,
+ * cut, throw the media away. It never touches the words.
+ */
+async function doClip(draft: { id: number; slug: string }, url: string): Promise<Record<string, unknown>> {
+  const dir = await mkdtemp(path.join(tmpdir(), "bk-clip-"));
+  try {
+    const expanded = await expandUrl(url);
+    const { videoId } = classify(expanded);
+    const { transient } = await resolve(expanded);
+
+    const file = path.join(dir, `${videoId}.mp4`);
+    await download(transient.mediaUrl, file, 120_000);
+
+    const out = await makePreview(file, dir);
+    if (!out) throw new Error("ffmpeg could not cut a preview from that file");
+
+    console.log(`  cut a ${out.seconds}s silent preview — ${Math.round(out.clip.length / 1024)}KB`);
+    return {
+      ok: true,
+      slug: draft.slug,
+      preview: {
+        clip: out.clip.toString("base64"),
+        poster: out.poster.toString("base64"),
+        seconds: out.seconds,
+      },
+    };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 async function once(): Promise<boolean> {
   /* One job at a time, in one sequential loop, ON PURPOSE. sm-fixed's worker
      already drives yt-dlp, Whisper and ComfyUI on this same 4090, and ComfyUI
@@ -237,7 +297,7 @@ async function once(): Promise<boolean> {
      cannot collide with ITSELF. */
   const got = await post<{ job: Job | null; link?: LinkRow; draft?: { id: number; slug: string; post: string } }>(
     "/next",
-    { name: NAME, kinds: ["ingest", "write", "cover"] },
+    { name: NAME, kinds: ["ingest", "write", "cover", "clip"] },
   );
   if (!got.job || !got.link) return false;
 
@@ -259,9 +319,13 @@ async function once(): Promise<boolean> {
         ? got.draft
           ? await doCover(got.draft, link.topic)
           : { ok: false, error: "the draft that cover belongs to is gone" }
-        : job.kind === "ingest"
-          ? await doIngest(link)
-          : await doWrite(link);
+        : job.kind === "clip"
+          ? got.draft
+            ? await doClip(got.draft, link.url)
+            : { ok: false, error: "the draft that clip belongs to is gone" }
+          : job.kind === "ingest"
+            ? await doIngest(link)
+            : await doWrite(link);
     await post(`/result/${job.id}`, result);
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);

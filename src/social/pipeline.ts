@@ -4,6 +4,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { canonicalUrl, classify, expandUrl, ResolveError, resolve } from "./resolve.ts";
 import { download, probe, rmWork, workDir } from "./media.ts";
+import { makePreview, type Preview } from "./preview.ts";
 import { transcribeVideo } from "./transcribe.ts";
 import type { Platform, SourceRecord } from "./types.ts";
 import { ask, QUICK_MODEL } from "../llm.ts";
@@ -64,6 +65,13 @@ export interface SocialMaterial {
   spoke?: "voice" | "music" | "silent";
   /** For a carousel: how many slides were read. */
   slides?: number;
+  /**
+   * A short silent excerpt of the video, ours to serve.
+   *
+   * Null for a carousel, and null when ffmpeg could not make one — a piece
+   * with no clip reads perfectly well as prose with the source credited.
+   */
+  preview?: Preview | null;
 }
 
 const metricsOf = (s: SourceRecord) => ({
@@ -262,6 +270,10 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
     await download(transient.mediaUrl, file, 120_000);
     const meta = await probe(file);
 
+    /* Cut it while the file is still here. Everything that needs the media
+       happens in this one pass, because the `finally` below deletes it. */
+    const preview = await makePreview(file, dir);
+
     const spoken = await transcribeVideo(file, dir);
     const text = (spoken.full_text ?? "").trim();
 
@@ -294,6 +306,7 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
       metrics: metricsOf(source),
       durationS: meta.durationS ?? source.durationS,
       spoke: spoken.model?.includes("no-vad") ? "music" : "voice",
+      preview,
     };
   } finally {
     /* The media never outlives the run. In a `finally` so a crash mid-

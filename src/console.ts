@@ -495,12 +495,18 @@ export function draftPage(
             distrust the page. */
          l.kind === "video"
            ? `<form method="post" action="/draft/${d.id}/attach" style="margin:0 0 22px">
-                <button class="off">${l.attach === 0 ? "Attach the video" : "Just the text, no player"}</button>
+                <button class="off">${l.attach === 0 ? "Attach the video" : "Just the text, no video"}</button>
                 <span class="caveat" style="margin-left:10px">${
                   l.attach === 0
                     ? "It reads as prose. The video is credited but not shown."
-                    : "The video plays in the article, from " + esc(String(l.platform ?? "its platform")) + ". Nothing is stored here."
+                    : "Ten silent seconds play in the article, cut by us. No " +
+                      esc(String(l.platform ?? "platform")) +
+                      " player, no recommendations, no cookies."
                 }</span>
+              </form>
+              <form method="post" action="/draft/${d.id}/clip" style="margin:0 0 22px">
+                <button class="off">Cut the silent clip again</button>
+                <span class="caveat" style="margin-left:10px">Ten seconds, no sound, about 130&nbsp;KB. It never touches the words.</span>
               </form>`
            : ""
        }

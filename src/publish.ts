@@ -6,7 +6,7 @@ import path from "node:path";
 import { db, log } from "./db.ts";
 import type { PostBlock } from "./blocks.ts";
 import type { Person } from "./people.ts";
-import { coverPath } from "./covers.ts";
+import { clipPath, coverPath } from "./covers.ts";
 import { watchFrom, type Watch } from "./watch.ts";
 
 /**
@@ -238,7 +238,9 @@ ${
     handle: ${q(post.watch.handle)},` : ""}${
           post.watch.seconds ? `
     seconds: ${post.watch.seconds},` : ""
-        }
+        }${post.watch.clip ? `
+    clip: ${q(post.watch.clip)},` : ""}${post.watch.poster ? `
+    poster: ${q(post.watch.poster)},` : ""}
   },
 `
       : ""
@@ -391,6 +393,18 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
       await mkdir(path.join(REPO, "public", "insights"), { recursive: true });
       await writeFile(path.join(REPO, "public", "insights", `${post.slug}.webp`), picture);
     }
+
+    /* The silent excerpt and its first frame, beside the cover. About 145 KB
+       for the pair — see src/social/preview.ts for why an excerpt of our own
+       rather than the platform's player. */
+    const reel = post.watch ? clipPath(post.slug) : null;
+    if (reel) {
+      await mkdir(path.join(REPO, "public", "insights"), { recursive: true });
+      await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.mp4`), reel.clip);
+      await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.webp`), reel.poster);
+    }
+    if (post.watch) post.watch.clip = reel ? `/insights/${post.slug}-clip.mp4` : undefined;
+    if (post.watch) post.watch.poster = reel ? `/insights/${post.slug}-clip.webp` : undefined;
     await writeFile(
       file,
       articleFile(post, listed, {

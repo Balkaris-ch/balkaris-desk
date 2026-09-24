@@ -29,6 +29,10 @@ export interface Watch {
   url: string;
   handle?: string;
   seconds?: number;
+  /** Our own silent excerpt, written by publish when there is one. */
+  clip?: string;
+  /** Its first frame, so the box is never empty while the clip loads. */
+  poster?: string;
 }
 
 export interface WatchableLink {

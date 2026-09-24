@@ -11,7 +11,7 @@ import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
 import { everyone, getPerson, link, remember, rememberGoogle, setAuthor, setEmail, setRevoked, type Person } from "./people.ts";
 import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
-import { coverPath, saveCover } from "./covers.ts";
+import { coverPath, saveClip, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, issue, whoIs } from "./session.ts";
 
@@ -443,6 +443,28 @@ app.post("/draft/:id/attach", async (c) => {
 });
 
 /**
+ * Cut the video's silent excerpt, or cut it again.
+ *
+ * For an article written before previews existed, and for one whose clip
+ * ffmpeg could not make the first time. It does NOT re-ingest: the words are
+ * already written and a picture is not worth rewriting them over.
+ */
+app.post("/draft/:id/clip", (c) => {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT link_id, slug FROM drafts WHERE id = ?").get(id) as
+    | { link_id: number; slug: string }
+    | undefined;
+  if (!d) return c.notFound();
+
+  db.prepare("INSERT INTO jobs (link_id, kind, payload) VALUES (?, 'clip', ?)").run(
+    d.link_id,
+    JSON.stringify({ draft: id }),
+  );
+  log("clip.queued", { draft: id, slug: d.slug }, d.link_id);
+  return c.redirect(`/draft/${id}`, 303);
+});
+
+/**
  * Draw another one.
  *
  * The cover system reads the article and then picks from a fixed set, so a
@@ -627,6 +649,8 @@ runner.post("/result/:id", async (c) => {
     closing?: string;
     /** A drawn cover, as base64 webp. */
     cover?: { draft: number; slug: string; webp: string; alt: string; caption: string };
+    /** A silent excerpt of the video and its first frame, both base64. */
+    preview?: { clip: string; poster: string; seconds: number };
     /* Only an 'ingest' sends this: everything the box could not know until
        the media was in hand on the workstation. */
     source?: {
@@ -732,6 +756,27 @@ runner.post("/result/:id", async (c) => {
     );
     log("link.ingested", { kind: s.kind, platform: s.platform, words: s.words, metrics: s.metrics }, job.link_id);
   }
+  /* The silent excerpt, kept under the SLUG so it is found the same way the
+     cover is. It arrives with the ingest result, before the draft row exists,
+     which is why this sits above the insert rather than beside `source`. */
+  if (body.preview && body.slug) {
+    saveClip(body.slug, Buffer.from(body.preview.clip, "base64"), Buffer.from(body.preview.poster, "base64"));
+    log(
+      "preview.kept",
+      { slug: body.slug, kb: Math.round(body.preview.clip.length / 1365), seconds: body.preview.seconds },
+      job.link_id,
+    );
+
+    /* A clip cut for an article that is already out has to be walked to the
+       site, exactly as a redrawn cover is. On an INGEST the draft does not
+       exist yet and publish happens on its own a minute later, so there is
+       nothing to push and `payload.draft` is empty. */
+    const payload = (db.prepare("SELECT payload FROM jobs WHERE id = ?").get(id) as { payload: string | null })
+      .payload;
+    const forDraft = payload ? (JSON.parse(payload) as { draft?: number }).draft : undefined;
+    if (forDraft) void pushCover(forDraft, job.link_id);
+  }
+
   if (body.post && body.slug) {
     /* Does it end the way the last twenty ended? A flag for whoever approves
        it — never a rejection. See src/echo.ts. */
