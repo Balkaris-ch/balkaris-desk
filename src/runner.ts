@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { classify, expandUrl, resolve } from "./social/resolve.ts";
-import { download } from "./social/media.ts";
+import { download, probe } from "./social/media.ts";
 import { makePreview } from "./social/preview.ts";
 import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
@@ -127,7 +127,9 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   console.log(
     `  ${got.shape} on ${got.platform}${got.author ? ` by ${got.author}` : ""} — ${got.words} words` +
       (got.slides ? `, ${got.slides} slides` : "") +
-      (got.preview ? `, ${Math.round(got.preview.clip.length / 1024)}KB silent preview` : "") +
+      (got.preview
+        ? `, ${Math.round(got.preview.clip.length / 1024)}KB clip (${got.preview.whole ? "all of it" : `first ${got.preview.seconds}s`})`
+        : "") +
       (got.spoke === "music" ? ", found only on the second Whisper pass (it is carried by a song)" : ""),
   );
 
@@ -194,6 +196,7 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
             clip: got.preview.clip.toString("base64"),
             poster: got.preview.poster.toString("base64"),
             seconds: got.preview.seconds,
+            whole: got.preview.whole,
           },
         }
       : {}),
@@ -270,11 +273,14 @@ async function doClip(draft: { id: number; slug: string }, url: string): Promise
 
     const file = path.join(dir, `${videoId}.mp4`);
     await download(transient.mediaUrl, file, 120_000);
+    const meta = await probe(file);
 
-    const out = await makePreview(file, dir);
-    if (!out) throw new Error("ffmpeg could not cut a preview from that file");
+    const out = await makePreview(file, dir, meta.durationS);
+    if (!out) throw new Error("ffmpeg could not cut a clip from that file");
 
-    console.log(`  cut a ${out.seconds}s silent preview — ${Math.round(out.clip.length / 1024)}KB`);
+    console.log(
+      `  cut a ${out.seconds}s clip (${out.whole ? "all of it" : "capped"}) — ${Math.round(out.clip.length / 1024)}KB`,
+    );
     return {
       ok: true,
       slug: draft.slug,
@@ -282,6 +288,7 @@ async function doClip(draft: { id: number; slug: string }, url: string): Promise
         clip: out.clip.toString("base64"),
         poster: out.poster.toString("base64"),
         seconds: out.seconds,
+        whole: out.whole,
       },
     };
   } finally {

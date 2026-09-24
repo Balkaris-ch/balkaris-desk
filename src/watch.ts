@@ -33,6 +33,10 @@ export interface Watch {
   clip?: string;
   /** Its first frame, so the box is never empty while the clip loads. */
   poster?: string;
+  /** How many seconds are in the clip. */
+  clipSeconds?: number;
+  /** False when the cap cut it short, so the caption can say so. */
+  whole?: boolean;
 }
 
 export interface WatchableLink {

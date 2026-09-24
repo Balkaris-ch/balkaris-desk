@@ -650,7 +650,7 @@ runner.post("/result/:id", async (c) => {
     /** A drawn cover, as base64 webp. */
     cover?: { draft: number; slug: string; webp: string; alt: string; caption: string };
     /** A silent excerpt of the video and its first frame, both base64. */
-    preview?: { clip: string; poster: string; seconds: number };
+    preview?: { clip: string; poster: string; seconds: number; whole: boolean };
     /* Only an 'ingest' sends this: everything the box could not know until
        the media was in hand on the workstation. */
     source?: {
@@ -760,7 +760,10 @@ runner.post("/result/:id", async (c) => {
      cover is. It arrives with the ingest result, before the draft row exists,
      which is why this sits above the insert rather than beside `source`. */
   if (body.preview && body.slug) {
-    saveClip(body.slug, Buffer.from(body.preview.clip, "base64"), Buffer.from(body.preview.poster, "base64"));
+    saveClip(body.slug, Buffer.from(body.preview.clip, "base64"), Buffer.from(body.preview.poster, "base64"), {
+      seconds: body.preview.seconds,
+      whole: body.preview.whole,
+    });
     log(
       "preview.kept",
       { slug: body.slug, kb: Math.round(body.preview.clip.length / 1365), seconds: body.preview.seconds },

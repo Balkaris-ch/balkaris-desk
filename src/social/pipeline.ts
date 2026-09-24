@@ -272,7 +272,7 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
 
     /* Cut it while the file is still here. Everything that needs the media
        happens in this one pass, because the `finally` below deletes it. */
-    const preview = await makePreview(file, dir);
+    const preview = await makePreview(file, dir, meta.durationS ?? source.durationS);
 
     const spoken = await transcribeVideo(file, dir);
     const text = (spoken.full_text ?? "").trim();

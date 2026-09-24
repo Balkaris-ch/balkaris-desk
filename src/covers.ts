@@ -48,10 +48,27 @@ const clean = (slug: string) => slug.replace(/[^a-z0-9-]/gi, "");
 const clipFile = (slug: string) => path.join(CLIPS, `${clean(slug)}.mp4`);
 const posterFile = (slug: string) => path.join(CLIPS, `${clean(slug)}.webp`);
 
-export function saveClip(slug: string, clip: Buffer, poster: Buffer): void {
+/* A third tiny file beside the two: how many seconds are in the clip and
+   whether that is all of the video. The caption on the site says which, and a
+   JSON file is the smallest thing that can carry two facts without a
+   migration. */
+const factsFile = (slug: string) => path.join(CLIPS, `${clean(slug)}.json`);
+
+export function saveClip(slug: string, clip: Buffer, poster: Buffer, facts?: { seconds: number; whole: boolean }): void {
   mkdirSync(CLIPS, { recursive: true });
   writeFileSync(clipFile(slug), clip);
   writeFileSync(posterFile(slug), poster);
+  if (facts) writeFileSync(factsFile(slug), JSON.stringify(facts), "utf8");
+}
+
+export function clipFacts(slug: string): { seconds: number; whole: boolean } | null {
+  const f = factsFile(slug);
+  if (!existsSync(f)) return null;
+  try {
+    return JSON.parse(readFileSync(f, "utf8")) as { seconds: number; whole: boolean };
+  } catch {
+    return null;
+  }
 }
 
 export function clipPath(slug: string): { clip: Buffer; poster: Buffer } | null {

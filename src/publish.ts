@@ -6,7 +6,7 @@ import path from "node:path";
 import { db, log } from "./db.ts";
 import type { PostBlock } from "./blocks.ts";
 import type { Person } from "./people.ts";
-import { clipPath, coverPath } from "./covers.ts";
+import { clipFacts, clipPath, coverPath } from "./covers.ts";
 import { watchFrom, type Watch } from "./watch.ts";
 
 /**
@@ -240,7 +240,9 @@ ${
     seconds: ${post.watch.seconds},` : ""
         }${post.watch.clip ? `
     clip: ${q(post.watch.clip)},` : ""}${post.watch.poster ? `
-    poster: ${q(post.watch.poster)},` : ""}
+    poster: ${q(post.watch.poster)},` : ""}${post.watch.clipSeconds ? `
+    clipSeconds: ${post.watch.clipSeconds},` : ""}${post.watch.whole === false ? `
+    whole: false,` : ""}
   },
 `
       : ""
@@ -403,8 +405,15 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
       await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.mp4`), reel.clip);
       await writeFile(path.join(REPO, "public", "insights", `${post.slug}-clip.webp`), reel.poster);
     }
-    if (post.watch) post.watch.clip = reel ? `/insights/${post.slug}-clip.mp4` : undefined;
-    if (post.watch) post.watch.poster = reel ? `/insights/${post.slug}-clip.webp` : undefined;
+    if (post.watch) {
+      const facts = reel ? clipFacts(post.slug) : null;
+      post.watch.clip = reel ? `/insights/${post.slug}-clip.mp4` : undefined;
+      post.watch.poster = reel ? `/insights/${post.slug}-clip.webp` : undefined;
+      /* How much of the video is in the file, so the caption can say "all of
+         it" or "the first 90 seconds" without the site guessing. */
+      post.watch.clipSeconds = facts?.seconds;
+      post.watch.whole = facts?.whole;
+    }
     await writeFile(
       file,
       articleFile(post, listed, {
