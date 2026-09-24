@@ -147,6 +147,11 @@ for (const column of [
   "duration_s REAL",
   "slides INTEGER",
   "spoke TEXT",
+  /* "Attach the video, or just the text" (Fini, 24 September 2026). On by
+     default, because a video shared to the bot is usually worth showing; a
+     link whose message says "text only" turns it off at intake, and the
+     draft page can change its mind afterwards without re-reading anything. */
+  "attach INTEGER NOT NULL DEFAULT 1",
 ]) {
   try {
     db.exec(`ALTER TABLE links ADD COLUMN ${column}`);

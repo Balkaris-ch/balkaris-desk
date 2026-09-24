@@ -402,6 +402,47 @@ async function pushCover(draftId: number, linkId: number): Promise<void> {
 }
 
 /**
+ * Attach the video, or just the text — after the fact.
+ *
+ * The word in the Telegram message decides it at the moment a link is shared,
+ * which is where the choice belongs on a phone. This is the other half: the
+ * piece is written, you are looking at it, and now you can see whether the
+ * video earns its place.
+ *
+ * It flips one flag and republishes. Nothing is re-read, re-transcribed or
+ * re-drawn — `watchFrom` derives the player from the link row every time
+ * publish runs, which is the whole reason it was not stored on the draft.
+ */
+app.post("/draft/:id/attach", async (c) => {
+  const id = Number(c.req.param("id"));
+  const d = db.prepare("SELECT link_id, state FROM drafts WHERE id = ?").get(id) as
+    | { link_id: number; state: string }
+    | undefined;
+  if (!d) return c.notFound();
+
+  const now = (db.prepare("SELECT attach FROM links WHERE id = ?").get(d.link_id) as { attach: number | null }).attach;
+  const next = now === 0 ? 1 : 0;
+  db.prepare("UPDATE links SET attach = ?, updated_at = datetime('now') WHERE id = ?").run(next, d.link_id);
+  log("watch.attach", { draft: id, attach: next }, d.link_id);
+
+  /* Already out? Then the change has to reach the site, or the toggle is a
+     button that agrees with you and does nothing. */
+  if (d.state === "published" || d.state === "listed") {
+    const by = me(c);
+    if (by?.canPublish) {
+      try {
+        const out = await publish(id, d.state === "listed" ? "list" : "publish", by);
+        db.prepare("UPDATE drafts SET published_sha = ? WHERE id = ?").run(out.sha, id);
+        log("watch.pushed", { draft: id, sha: out.sha, attach: next }, d.link_id);
+      } catch (e) {
+        log("watch.push.failed", (e instanceof Error ? e.message : String(e)).slice(0, 300), d.link_id);
+      }
+    }
+  }
+  return c.redirect(`/draft/${id}`, 303);
+});
+
+/**
  * Draw another one.
  *
  * The cover system reads the article and then picks from a fixed set, so a

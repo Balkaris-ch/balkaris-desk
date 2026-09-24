@@ -488,6 +488,22 @@ export function draftPage(
               </form>`
            : `<p class="caveat" style="margin:0 0 20px">No cover drawn yet \u2014 it is queued for the workstation.</p>`
        }
+       ${
+         /* Attach the video, or just the text. Only where there IS a video:
+            an article link and a carousel have nothing to play, and a button
+            offering to attach nothing is a button that teaches you to
+            distrust the page. */
+         l.kind === "video"
+           ? `<form method="post" action="/draft/${d.id}/attach" style="margin:0 0 22px">
+                <button class="off">${l.attach === 0 ? "Attach the video" : "Just the text, no player"}</button>
+                <span class="caveat" style="margin-left:10px">${
+                  l.attach === 0
+                    ? "It reads as prose. The video is credited but not shown."
+                    : "The video plays in the article, from " + esc(String(l.platform ?? "its platform")) + ". Nothing is stored here."
+                }</span>
+              </form>`
+           : ""
+       }
        <h1 class="t">${esc(post.title)}</h1>
        <p class="stand">${esc(post.standfirst)}</p>
        ${renderArticle(post.body)}

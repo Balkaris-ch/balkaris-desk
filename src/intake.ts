@@ -33,6 +33,25 @@ export interface LinkRow {
   created_at: string;
 }
 
+/**
+ * "Attach the video, or just the text."
+ *
+ * Fini, 24 September 2026: *"we have the choice also when we add a link. Say
+ * attach the video or just text."*
+ *
+ * A WORD IN THE MESSAGE, not a question the bot asks back. He shares these
+ * from a phone, out of TikTok's own share sheet, usually with the link and
+ * nothing else — and a bot that replies "attach the video? yes/no" to every
+ * share turns a one-second action into a conversation. So attaching is the
+ * default, because a video worth sharing is usually worth showing, and
+ * anybody who wants prose says so in the same breath.
+ *
+ * Whatever he types alongside the link is searched, so "text only" works as a
+ * caption, a reply or a line under the url. The desk's draft page can change
+ * its mind afterwards; nothing has to be read again either way.
+ */
+const TEXT_ONLY = /\b(text[ -]?only|no video|just (the )?text|without (the )?video)\b/i;
+
 const STATE_WORDS: Record<string, string> = {
   new: "waiting to be written",
   queued: "waiting to be written",
@@ -132,22 +151,26 @@ export async function takeLink(
      one pass. The shelf and the services therefore arrive LATER for a social
      link than for an article, which is the honest trade and the reply says so. */
   if (isSocial(url)) {
+    /* The whole message, not just the note: the word may be anywhere around
+       the link, and on a phone it is usually typed after it. */
+    const attach = TEXT_ONLY.test(`${raw} ${who.note ?? ""}`) ? 0 : 1;
     const info = db
       .prepare(
-        `INSERT INTO links (url, from_chat, from_user, from_name, note, kind, state)
-         VALUES (?,?,?,?,?,'social','queued')`,
+        `INSERT INTO links (url, from_chat, from_user, from_name, note, kind, state, attach)
+         VALUES (?,?,?,?,?,'social','queued',?)`,
       )
-      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null);
+      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null, attach);
     const id = Number(info.lastInsertRowid);
     db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'ingest')").run(id);
     log("link.social", { url }, id);
 
     const where = platformOf(url) ?? "a social post";
     const seenAt = lastPoll();
+    const how = attach ? "" : " Just the text, no player.";
     await say(
       seenAt.awake
-        ? `That is ${esc(where)} — fetching it now. I will say what it turned out to be.`
-        : `That is ${esc(where)}. ${COLD(seenAt.silentFor)}`,
+        ? `That is ${esc(where)} — fetching it now. I will say what it turned out to be.${how}`
+        : `That is ${esc(where)}. ${COLD(seenAt.silentFor)}${how}`,
     );
     return { id, already: false };
   }

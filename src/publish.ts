@@ -7,6 +7,7 @@ import { db, log } from "./db.ts";
 import type { PostBlock } from "./blocks.ts";
 import type { Person } from "./people.ts";
 import { coverPath } from "./covers.ts";
+import { watchFrom, type Watch } from "./watch.ts";
 
 /**
  * An approved article becomes a file in the website, and a push.
@@ -179,6 +180,8 @@ export interface StoredPost {
   takeaways: string[];
   faq?: { q: string; a: string }[];
   source: { url: string; site: string; title: string; author: string | null };
+  /* Filled in at publish from the link row, never written by the model. */
+  watch?: Watch;
 }
 
 /**
@@ -225,6 +228,21 @@ export const ${ident || "article"}: Post = {
   topics: [${post.topics.map(q).join(", ")}],
   services: [${post.services.map(q).join(", ")}],
 ${
+    post.watch
+      ? `  /* Shown, never hosted: an id and a platform, and ${post.watch.platform} serves
+     its own bytes when a reader presses play. */
+  watch: {
+    platform: ${q(post.watch.platform)},
+    id: ${q(post.watch.id)},
+    url: ${q(post.watch.url)},${post.watch.handle ? `
+    handle: ${q(post.watch.handle)},` : ""}${
+          post.watch.seconds ? `
+    seconds: ${post.watch.seconds},` : ""
+        }
+  },
+`
+      : ""
+  }${
     meta.cover
       ? `  cover: ${q(`/insights/${post.slug}.webp`)},
   coverAlt: ${q(meta.cover.alt)},
@@ -330,8 +348,14 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
     | undefined;
   if (!d) throw new Error("no such draft");
 
-  const link = db.prepare("SELECT kind, from_user, from_name FROM links WHERE id = ?").get(d.link_id) as {
+  const link = db
+    .prepare("SELECT kind, url, author, duration_s, attach, from_user, from_name FROM links WHERE id = ?")
+    .get(d.link_id) as {
     kind: string;
+    url: string;
+    author: string | null;
+    duration_s: number | null;
+    attach: number | null;
     from_user: number | null;
     from_name: string | null;
   };
@@ -345,6 +369,10 @@ async function doPublish(draftId: number, action: PublishAction, by: Person): Pr
   const byline = sharer?.author ?? "balkaris";
   const sharedBy = sharer?.name ?? link.from_name ?? "the studio";
   const post = JSON.parse(d.post) as StoredPost;
+  /* The video, if there is one and the sharer wanted it. Derived here rather
+     than stored on the draft, so "just the text" is one flag away and needs
+     nothing re-read. */
+  post.watch = watchFrom(link);
   const listed = action === "list";
 
   await ensureRepo();
