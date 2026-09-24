@@ -122,7 +122,17 @@ db.exec(`
     at          TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
+  /* One row per runner, overwritten. A heartbeat is not an event: see the
+     note on beat() below. No backticks in here -- this is inside a template
+     literal and one would end it. */
+  CREATE TABLE IF NOT EXISTS runners (
+    name      TEXT PRIMARY KEY,
+    last_seen TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS jobs_open ON jobs(state, kind, id);
+  /* what is read by every "has anything happened" query and was a scan. */
+  CREATE INDEX IF NOT EXISTS events_what ON events(what, id);
   CREATE INDEX IF NOT EXISTS links_state ON links(state, id);
 `);
 
@@ -178,6 +188,34 @@ for (const column of ["echo TEXT", "closing TEXT", "cover_alt TEXT", "cover_capt
   }
 }
 
+/**
+ * A HEARTBEAT IS NOT AN EVENT.
+ *
+ * The runner polls every twenty seconds and each poll used to append a row to
+ * `events`. One day of running left 3 392 poll rows out of 3 647 — 93% of the
+ * history was the runner saying "anything for me?" — and at that rate it is a
+ * million and a half rows a year, in a table with no index on `what`, which
+ * `lastPoll()` scans on every shared link.
+ *
+ * Three things were wrong with that at once: a write to SQLite every twenty
+ * seconds forever, a read that gets slower every day, and a record of what the
+ * desk did that you cannot read for the noise.
+ *
+ * So the heartbeat is ONE ROW that gets overwritten. `events` goes back to
+ * being what it is for: things that happened once and are worth reading later.
+ */
+export function beat(name: string): void {
+  db.prepare(
+    `INSERT INTO runners (name, last_seen) VALUES (?, datetime('now'))
+     ON CONFLICT(name) DO UPDATE SET last_seen = datetime('now')`,
+  ).run(name);
+}
+
+/** When did any runner last ask for work? Null if none ever has. */
+export function lastBeat(): string | null {
+  return (db.prepare("SELECT MAX(last_seen) a FROM runners").get() as { a: string | null }).a ?? null;
+}
+
 export function log(what: string, detail?: unknown, linkId?: number): void {
   db.prepare("INSERT INTO events (link_id, what, detail) VALUES (?, ?, ?)").run(
     linkId ?? null,
@@ -223,7 +261,6 @@ export function queueState(): QueueState {
     running: n("SELECT COUNT(*) c FROM jobs WHERE state = 'running'"),
     stuck: n("SELECT COUNT(*) c FROM jobs WHERE state = 'stuck'"),
     drafts: n("SELECT COUNT(*) c FROM drafts WHERE state = 'draft'"),
-    lastSeen:
-      (db.prepare("SELECT MAX(at) a FROM events WHERE what = 'runner.poll'").get() as { a: string | null }).a ?? null,
+    lastSeen: lastBeat(),
   };
 }

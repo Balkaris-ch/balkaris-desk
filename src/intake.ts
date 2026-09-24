@@ -1,4 +1,4 @@
-import { db, log } from "./db.ts";
+import { db, lastBeat, log } from "./db.ts";
 import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
@@ -76,10 +76,10 @@ const STATE_WORDS: Record<string, string> = {
  * makes somebody look.
  */
 function lastPoll(): { awake: boolean; silentFor: string } {
-  const row = db.prepare("SELECT MAX(at) a FROM events WHERE what = 'runner.poll'").get() as { a: string | null };
-  if (!row.a) return { awake: false, silentFor: "ever" };
+  const seen = lastBeat();
+  if (!seen) return { awake: false, silentFor: "ever" };
 
-  const ms = Date.now() - Date.parse(`${row.a}Z`);
+  const ms = Date.now() - Date.parse(`${seen}Z`);
   const mins = Math.round(ms / 60_000);
   const hours = Math.round(mins / 60);
   return {

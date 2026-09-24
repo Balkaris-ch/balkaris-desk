@@ -1,6 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { db, log, queueState, reclaim } from "./db.ts";
+import { beat, db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
 import { takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
@@ -599,7 +599,7 @@ runner.use("*", async (c, next) => {
 /** "Anything for me?" — and the answer is the whole job, so one round trip. */
 runner.post("/next", async (c) => {
   const { name, kinds } = (await c.req.json().catch(() => ({}))) as { name?: string; kinds?: string[] };
-  log("runner.poll", { name: name ?? "?", kinds });
+  beat(name ?? "?");
   reclaim();
 
   const want = kinds?.length ? kinds : ["write", "cover"];
