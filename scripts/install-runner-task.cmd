@@ -1,4 +1,20 @@
 @echo off
+rem YOU PROBABLY DO NOT NEED THIS ONE. See install-runner-startup.cmd.
+rem
+rem schtasks refuses /sc onlogon without Administrator, so this script was
+rem never actually run -- and on 24 September 2026 a link sat in the queue for
+rem twelve hours because the runner had only ever been started by hand. A fix
+rem that needs an elevated prompt is a fix that does not get applied.
+rem
+rem What keeps the runner up now, none of it needing Administrator:
+rem   install-runner-startup.cmd   HKCU Run key, so it returns at every logon
+rem   runner-guard.cmd             a task every 10 minutes that starts one if
+rem                                none is there  (/sc minute IS allowed)
+rem   run_runner.cmd               its own restart loop, ~10s after a crash
+rem
+rem This remains the tidier arrangement if you happen to have an elevated
+rem prompt open, and it is harmless beside the others.
+rem
 rem ONE LINE FOR FINI. Registers the runner as a logon task, the same way
 rem sm-fixed's console and worker are registered, so it survives a reboot and
 rem comes back without anybody remembering it.
