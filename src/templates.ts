@@ -20,7 +20,32 @@ import type { TopicId } from "./catalogue.ts";
  * that stops without saying what to do is a summary of somebody else's work.
  */
 
-export type TemplateId = "commentary" | "explainer" | "practice";
+/*
+ * SIX SHAPES NOW, IN TWO FAMILIES.
+ *
+ * Fini, 2 October 2026, looking at ten published pieces: *"Like the format of
+ * the blogs - right now is the same - it has kinda the same structure. Like 4
+ * sections and a faq at the end. But maybe we want another section where is
+ * longer and another one that explains the tech side. Maybe even another one
+ * that is focused to be readable by a 5 yo and shorter."*
+ *
+ * He is right about the first three: they differ in what their sections are
+ * called and are the same length, the same depth and the same register, so
+ * on the page they read as one. The three below them differ in the things a
+ * reader actually notices — how long it is, who it is written for, how hard
+ * the words are:
+ *
+ *   deep        about twice the length, with the mechanism and the failures
+ *   technical   how it works underneath, for whoever has to build or run it
+ *   simple      short, and plain enough for a child to follow
+ *
+ * THE RULE STILL PICKS AMONG THE FIRST THREE AND ONLY THEM. The second family
+ * is ASKED FOR — in Telegram, by a button or a word beside the link
+ * (`FORMATS`, `formatIn`) — because whether a piece should be long, technical
+ * or plain is a decision about its reader, and the person who shared the link
+ * is the one who knows who that is. Nothing here guesses it.
+ */
+export type TemplateId = "commentary" | "explainer" | "practice" | "deep" | "technical" | "simple";
 
 export interface Beat {
   /** The `##` in the finished article. `null` means it runs on from the last. */
@@ -62,6 +87,20 @@ export interface Template {
   note: string;
   /** How the standfirst under the title should read. */
   standfirst: string;
+  /**
+   * Who it is written for, where that is not the journal's usual reader.
+   * Added to the house voice for every call the piece makes — the sections,
+   * the title, the questions — so a plain piece is not given a clever title.
+   */
+  register?: string;
+  /** How many questions it answers under the piece. Three unless it says. */
+  questions?: number;
+  /**
+   * The fewest words a finished piece of this shape may have before the
+   * guard throws it away as too thin. 320 unless it says: the short shape is
+   * short on purpose and the long one must not pass at half its length.
+   */
+  floor?: number;
   beats: Beat[];
 }
 
@@ -76,6 +115,16 @@ export interface SourceFacts {
   /** Did the matcher find anything we sell? A piece about nothing we do is a trend piece. */
   services: string[];
 }
+
+/** The paragraph every piece ends on. Its job is chosen later: `pickClosing`. */
+const last = (words: number): Beat => ({
+  heading: null,
+  brief:
+    "End on one of two things and nothing else: the single thing a reader should do differently this week, or the question the source leaves unanswered and that nobody has answered yet. Be specific enough to act on. Do not recap the article, do not mention the source, do not write a conclusion.",
+  words,
+  single: true,
+  blind: true,
+});
 
 const CLOSE: Beat[] = [
   {
@@ -98,14 +147,7 @@ const CLOSE: Beat[] = [
    * Forty words, one paragraph, and written WITHOUT the rest of the article in
    * context, so there is nothing nearby to echo.
    */
-  {
-    heading: null,
-    brief:
-      "End on one of two things and nothing else: the single thing a reader should do differently this week, or the question the source leaves unanswered and that nobody has answered yet. Be specific enough to act on. Do not recap the article, do not mention the source, do not write a conclusion.",
-    words: 40,
-    single: true,
-    blind: true,
-  },
+  last(40),
 ];
 
 const TEMPLATES: Record<TemplateId, Template> = {
@@ -201,6 +243,173 @@ const TEMPLATES: Record<TemplateId, Template> = {
       ...CLOSE,
     ],
   },
+
+  /* ---- asked for, never picked: see the note above TemplateId ------------- */
+
+  /* The long one. Seven sections where the others have four, about a thousand
+     words where they have five hundred. It is long by having more to say —
+     the mechanism, the failures, who it is for — never by saying the same
+     four things at length, which is why every added section has its own job
+     and none of the old ones grew. */
+  deep: {
+    id: "deep",
+    name: "The long read",
+    note: "Asked for: about twice the length, with how it works and where it goes wrong",
+    standfirst: "One sentence that states the whole argument of the piece as a claim. Never 'you will learn', never 'this article'.",
+    questions: 4,
+    floor: 560,
+    beats: [
+      {
+        heading: null,
+        brief:
+          "Open with what happened or what is being claimed, in three or four sentences, attributed to the source by name and linked. This is the ONLY place the source is summarised. Facts only — dates, numbers, names as the source gives them. End the paragraph on the position this article takes about it, in one sentence.",
+        words: 95,
+      },
+      {
+        heading: "Why it matters",
+        brief:
+          "Balkaris's own reading: why this is worth a business owner's attention, or why the coverage is overstating it. Take a position and argue it. Do not repeat the source.",
+        words: 150,
+        allow: ["quote"],
+      },
+      {
+        heading: "How it actually works",
+        brief:
+          "The mechanism behind it, for a reader who is not a specialist: what the moving parts are and what each one does, in the order they happen. A paragraph, then the parts as steps. Reference the source by name where a fact comes from it. If the source does not say how a part works, say that rather than filling it in.",
+        words: 180,
+        allow: ["steps"],
+      },
+      {
+        heading: "What it changes in practice",
+        brief:
+          "The concrete consequences for a company like the ones we work for — small and mid-sized, mostly Swiss. What is different on Monday. A paragraph, then the consequences as a list. If the honest answer for most of them is 'nothing yet', say that, and say for whom it is not nothing.",
+        words: 150,
+        allow: ["list"],
+      },
+      {
+        heading: "Where it goes wrong",
+        brief:
+          "The failure modes — what people get wrong about this, and what it costs them. This is the section that proves the piece was written by someone who has done it. A paragraph, then the mistakes themselves as a list.",
+        words: 140,
+        allow: ["list"],
+      },
+      {
+        heading: "Who should act, and who should wait",
+        brief:
+          "Which companies this is for now, and which should leave it alone for the moment — described by their situation, not by their size. Be direct, and never hedge it into 'it depends' without saying on what. One aside is allowed if there is a caveat worth setting apart.",
+        words: 120,
+        allow: ["note"],
+      },
+      ...CLOSE,
+    ],
+  },
+
+  /* The same subject for the person who has to build it or keep it running.
+     What makes it technical is the register and the questions it answers —
+     what goes in, what each part does, what it needs, where it breaks — not
+     jargon sprinkled on the standard piece. The register is strict about
+     invention because this is the shape where a made-up limit or a made-up
+     library name is most plausible and does the most damage. */
+  technical: {
+    id: "technical",
+    name: "The technical side",
+    note: "Asked for: how it works underneath, for whoever has to build or run it",
+    standfirst: "One sentence naming what it is and the one technical fact about it that matters most.",
+    register: `THIS PIECE IS FOR A TECHNICAL READER — a developer, an engineer, a CTO.
+- Name the parts: the components, the data that moves between them, the formats and protocols, in the words a practitioner uses. Do not explain a term an engineer already knows.
+- Say HOW, in order. Never an analogy in place of the mechanism.
+- Only what the source states, or what is general engineering knowledge. No invented version numbers, limits, benchmarks, model names or library names. Where the source does not say how a part works, write that it does not say.
+- No code samples.`,
+    floor: 400,
+    beats: [
+      {
+        heading: null,
+        brief:
+          "Say what the thing is, and what is technically new or different about it, in two or three sentences, attributed to the source by name and linked. This is the ONLY place the source is summarised.",
+        words: 80,
+      },
+      {
+        heading: "How it works",
+        brief:
+          "The mechanism, part by part, in the order the parts act: what goes in, what each component does with it, what comes out. A paragraph, then the parts as steps — each step a named component or stage, and one sentence on what it does. Reference the source by name where a fact comes from it.",
+        words: 190,
+        allow: ["steps"],
+      },
+      {
+        heading: "What it takes to run",
+        brief:
+          "What has to exist around it before it works in a real company: the systems it must connect to, the data it needs and in what state, who has to maintain it. A paragraph, then the requirements as a list. Only what follows from the source or from ordinary engineering practice.",
+        words: 140,
+        allow: ["list"],
+      },
+      {
+        heading: "Where it breaks",
+        brief:
+          "The technical limits and failure modes: what it cannot do, what goes wrong at the edges, what fails without saying so. Be direct — this is the section an engineer trusts the piece for. A paragraph, then the failure modes as a list. One aside is allowed if there is a caveat worth setting apart.",
+        words: 140,
+        allow: ["list", "note"],
+      },
+      {
+        heading: "How we would build it",
+        brief:
+          "How Balkaris would approach this in a client's own systems. Lead with one paragraph, then the engineering decisions as steps: a named decision and one sentence on why it is made that way. Name the decision, not the service. No sales language.",
+        words: 130,
+        allow: ["steps"],
+      },
+      last(40),
+    ],
+  },
+
+  /* Short, and plain. "Readable by a five-year-old" is the brief as he gave
+     it; what the register asks for is the thing that phrase means in a
+     business journal — sentences a child could follow, about something that
+     is still exactly true. It is the shape for a reader who will give a piece
+     one minute, and for a subject whose usual coverage is unreadable.
+     Half the length of the standard piece, two questions under it, and the
+     same rule about the source as every other shape. */
+  simple: {
+    id: "simple",
+    name: "In plain words",
+    note: "Asked for: short, and plain enough for a child to follow",
+    standfirst: "One short sentence that a child could repeat to somebody else.",
+    register: `THIS PIECE IS WRITTEN SO THAT A CHILD COULD FOLLOW IT.
+- Short sentences: twelve words or fewer, one idea in each.
+- Everyday words only. A word a ten-year-old would not know is replaced by what it means, or explained once with a comparison from ordinary life — a shop, a kitchen, a school, a road.
+- No abbreviations unless they are spelled out the first time. No jargon at all.
+- Simple is not vague. The names, and what actually happened, stay exactly as they are.
+- The title, the line under it and the questions are written the same way.`,
+    questions: 2,
+    floor: 160,
+    beats: [
+      {
+        heading: null,
+        brief:
+          "Say what happened in three or four short sentences, attributed to the source by name. This is the ONLY place the source is summarised.",
+        words: 55,
+      },
+      {
+        heading: "What it means",
+        brief:
+          "Explain the idea with ONE comparison from everyday life, and stay with that one comparison. Then say, in one sentence, what is really going on.",
+        words: 75,
+      },
+      {
+        heading: "Why it matters to you",
+        brief:
+          "Why somebody who runs a small business should care. One short paragraph, then two or three plain consequences as a list.",
+        words: 65,
+        allow: ["list"],
+      },
+      {
+        heading: "What to do",
+        brief:
+          "What Balkaris would do about it, in the plainest words there are. One short paragraph, then two or three things to do as steps: the thing to do, and one short sentence on why.",
+        words: 65,
+        allow: ["steps"],
+      },
+      last(28),
+    ],
+  },
 };
 
 export const template = (id: TemplateId): Template => TEMPLATES[id];
@@ -240,6 +449,51 @@ export function pick(s: SourceFacts): { id: TemplateId; because: string } {
 
   /* 5. Everything else answers a question. */
   return { id: "explainer", because: "no stronger signal — treated as a question to answer" };
+}
+
+/* ---------- how it was asked to be written ---------------------------------
+
+   Fini, 2 October 2026: *"I need the Telegram to give me options on how to
+   write the articles."* These are the options. `standard` is the rule above,
+   unchanged; each of the others is one of the three asked-for shapes.
+
+   THE WORDS ARE CHOSEN TO BE TYPED BESIDE A LINK ON A PHONE, the way "text
+   only" already is (intake.ts): one of them anywhere in the message is the
+   answer, and the bot does not ask. Without one it offers the four as buttons
+   and waits a minute and a half before writing the standard way, so a link
+   shared and forgotten is still written. */
+
+export type Format = "standard" | "deep" | "technical" | "simple";
+
+export const FORMATS: Record<Format, { button: string; as: string; word: RegExp | null }> = {
+  standard: { button: "Standard", as: "the standard way", word: /\b(standard|normal|usual)\b/i },
+  deep: { button: "Long read", as: "as a long read", word: /\b(long|longer|long[ -]?read|in[ -]depth|deep(er)?( dive)?|detailed)\b/i },
+  technical: { button: "Technical", as: "from the technical side", word: /\b(tech|technical|for (devs|developers|engineers))\b/i },
+  simple: { button: "In plain words", as: "short and in plain words", word: /\b(simple|simpler|plain|short|shorter|eli5|for (a )?(kid|child|5[ -]?(yo|year[ -]old)))\b/i },
+};
+
+export const isFormat = (v: unknown): v is Format => typeof v === "string" && v in FORMATS;
+
+/**
+ * Did the message say how to write it?
+ *
+ * Only what the person typed is read, never the link: a url with "simple" or
+ * "long" in its path is somebody else's word. The first format whose word is
+ * there wins, in an order that puts the rarer intentions first — "a short
+ * technical piece" is a technical piece.
+ */
+export function formatIn(typed: string): Format | null {
+  const words = typed.replace(/https?:\/\/\S+/gi, " ");
+  for (const f of ["technical", "simple", "deep", "standard"] as const) {
+    if (FORMATS[f].word?.test(words)) return f;
+  }
+  return null;
+}
+
+/** The shape a piece is written in: the one asked for, or the rule's. */
+export function shapeFor(format: Format | null | undefined, s: SourceFacts): { id: TemplateId; because: string } {
+  if (format && format !== "standard") return { id: format, because: "asked for when the link was shared" };
+  return pick(s);
 }
 
 /* ---------- how a piece ends -------------------------------------------------
@@ -346,8 +600,11 @@ export function pickClosing(f: ClosingFacts): { job: ClosingJob; because: string
     return { job: "contrast", because: "three services matched — a crowded subject, so end on what the good ones do" };
   }
 
-  if (f.template === "commentary") {
-    return { job: "caution", because: "a news piece has no failure section of its own" };
+  if (f.template === "commentary" || f.template === "simple") {
+    return {
+      job: "caution",
+      because: f.template === "simple" ? "the plain piece has no failure section of its own" : "a news piece has no failure section of its own",
+    };
   }
 
   return { job: "question", because: "the actions are already set out as steps above" };

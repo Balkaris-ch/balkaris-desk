@@ -28,9 +28,19 @@ that picks services invents a plausible one about twice a week and nobody
 notices until a client does. A table is wrong in a way you can read, fix and
 test — `npm run match -- "<some text>"` shows its working.
 
-**The design is not generated.** Three fixed templates in `src/templates.ts`
-and a rule that picks one. An article that lays itself out differently every
-time is not a journal, it is a demo.
+**The design is not generated.** Six fixed shapes in `src/templates.ts`, in two
+families. A rule picks among the first three (what happened, the question
+answered, what we would do), which are the standard piece. The other three are
+ASKED FOR by whoever shares the link — a long read, the technical side, short
+and in plain words — with a word beside the link ("long", "tech", "simple") or
+a button under the bot's reply; with neither, the piece is written the
+standard way a minute and a half later. An article that lays itself out
+differently every time is not a journal, it is a demo.
+
+`npm run draft` prints every shape with its sections and budgets;
+`npm run draft -- <url> deep` writes one on this machine and prints it, touching
+nothing else. `npm run check:telegram` proves the question and its buttons
+against the real server with Telegram replaced by a recorder.
 
 **The source is always cited.** A post generated from somebody else's article
 links it, names it, and carries Balkaris's own argument — never a reworded
@@ -55,7 +65,7 @@ the source is rejected before a human ever sees it.
 | `src/llm.ts` | The one door to Ollama. Refuses anything not local. |
 | `src/catalogue.ts` | The site's 30 services and 6 shelves, as data. |
 | `src/match.ts` | **The hard-coded matcher.** Terms → shelf + services. |
-| `src/templates.ts` | Three article shapes and the rule that picks one. |
+| `src/templates.ts` | Six article shapes: three a rule picks among, three that are asked for. |
 | `src/draft.ts` | Extract + match + template → a `Post`. |
 | `src/publish.ts` | Post → a file in the site repo, committed and pushed. |
 | `src/console.ts` | The small web console behind the tunnel. |

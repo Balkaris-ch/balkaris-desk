@@ -162,6 +162,18 @@ for (const column of [
      link whose message says "text only" turns it off at intake, and the
      draft page can change its mind afterwards without re-reading anything. */
   "attach INTEGER NOT NULL DEFAULT 1",
+  /* How it was asked to be written: 'standard' | 'deep' | 'technical' |
+     'simple' (templates.ts `Format`). NULL until somebody has said, by a word
+     beside the link or by a button under the bot's reply; a link that is
+     written while it is still NULL is written the standard way. */
+  "format TEXT",
+  /* The bot's one reply to the share, so it can be rewritten later by
+     something that is not the request that sent it: the button that chose a
+     format, and the runner taking the job. `tg_text` is the part of that
+     reply that never changes (what the link turned out to be), kept because
+     Telegram does not hand a bot its own messages back. */
+  "tg_msg INTEGER",
+  "tg_text TEXT",
 ]) {
   try {
     db.exec(`ALTER TABLE links ADD COLUMN ${column}`);
@@ -176,6 +188,17 @@ for (const column of [
    re-close, and as which of the five jobs. */
 try {
   db.exec("ALTER TABLE jobs ADD COLUMN payload TEXT");
+} catch {
+  /* already there */
+}
+
+/* `not_before` holds a job back while the bot's question is still open: a
+   link shared without saying how to write it waits a minute and a half for a
+   button before it is written the standard way (intake.ts `HOLD_SECONDS`).
+   NULL, which is every job that existed before this and every job that asks
+   nothing, means now. */
+try {
+  db.exec("ALTER TABLE jobs ADD COLUMN not_before TEXT");
 } catch {
   /* already there */
 }

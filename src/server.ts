@@ -2,10 +2,11 @@ import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { beat, db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
-import { takeLink } from "./intake.ts";
+import { settle, takeLink } from "./intake.ts";
 import { firstUrl } from "./extract.ts";
 import { isSocial } from "./social/shape.ts";
-import { esc, send } from "./telegram.ts";
+import { answer, esc, send } from "./telegram.ts";
+import { FORMATS, isFormat } from "./templates.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
@@ -604,8 +605,15 @@ runner.post("/next", async (c) => {
 
   const want = kinds?.length ? kinds : ["write", "cover"];
   const marks = want.map(() => "?").join(",");
+  /* A job that is being held is not there yet: the bot has asked how the
+     piece should be written and is still inside the minute and a half it
+     gives for an answer (intake.ts). A later job that is not held goes first,
+     which is right — nothing waits behind somebody else's open question. */
   const job = db
-    .prepare(`SELECT * FROM jobs WHERE state = 'queued' AND kind IN (${marks}) ORDER BY id LIMIT 1`)
+    .prepare(
+      `SELECT * FROM jobs WHERE state = 'queued' AND kind IN (${marks})
+         AND (not_before IS NULL OR not_before <= datetime('now')) ORDER BY id LIMIT 1`,
+    )
     .get(...want) as
     | { id: number; link_id: number; kind: string; attempts: number; payload: string | null }
     | undefined;
@@ -616,6 +624,18 @@ runner.post("/next", async (c) => {
     name ?? "runner",
     job.id,
   );
+
+  /* The hold ran out and nobody pressed a button: it is written the standard
+     way, and the bot's reply stops asking. Settled HERE, on the box, so the
+     runner is handed a link that already says how it is to be written and
+     never has to know there was a question. */
+  if (job.kind === "write" || job.kind === "ingest") {
+    const open = db.prepare("SELECT format FROM links WHERE id = ?").get(job.link_id) as { format: string | null } | undefined;
+    if (open && !open.format) {
+      db.prepare("UPDATE links SET format = 'standard' WHERE id = ?").run(job.link_id);
+      void settle(job.link_id, "standard");
+    }
+  }
 
   const link = db.prepare("SELECT * FROM links WHERE id = ?").get(job.link_id);
 
@@ -873,12 +893,77 @@ function mayUse(chatId: number): { ok: boolean; claimed?: boolean } {
   return { ok: !!allowed };
 }
 
+/** A button under one of the bot's own messages, pressed. */
+interface TgCallback {
+  id: string;
+  from: { id: number; first_name?: string; username?: string };
+  message?: { message_id: number; chat: { id: number } };
+  data?: string;
+}
+
+/**
+ * "How should I write it?" — answered.
+ *
+ * The button carries the link's id and one word, and nothing it says is
+ * trusted: the link has to exist, to have been shared in the chat the press
+ * came from, and to be still waiting. Then the choice is written on the link,
+ * the hold on its job is lifted so the runner takes it on its next poll, and
+ * the bot's reply stops asking and says what is happening instead.
+ *
+ * TOO LATE IS AN ANSWER, NOT AN ERROR. Once the runner has the job the piece
+ * is being written the way it was handed out, and a press after that changes
+ * nothing and says so. Every press is answered, whatever happens, because an
+ * unanswered one leaves a spinner on the button.
+ */
+async function chooseFormat(q: TgCallback): Promise<void> {
+  try {
+    const chat = q.message?.chat.id;
+    const m = /^f:(\d+):([a-z]+)$/.exec(q.data ?? "");
+    if (!chat || !m || !isFormat(m[2]) || !mayUse(chat).ok) return void (await answer(q.id));
+
+    const id = Number(m[1]);
+    const format = m[2];
+    const l = db.prepare("SELECT from_chat, format FROM links WHERE id = ?").get(id) as
+      | { from_chat: number | null; format: string | null }
+      | undefined;
+    if (!l || l.from_chat !== chat) return void (await answer(q.id, "That link is not in this chat."));
+
+    const job = db
+      .prepare("SELECT id FROM jobs WHERE link_id = ? AND kind IN ('write','ingest') AND state = 'queued' ORDER BY id DESC LIMIT 1")
+      .get(id) as { id: number } | undefined;
+    if (!job) {
+      const was = isFormat(l.format) ? ` ${FORMATS[l.format].as}` : "";
+      return void (await answer(q.id, `Too late for this one: it is already written, or being written${was}.`));
+    }
+
+    db.prepare("UPDATE links SET format = ?, updated_at = datetime('now') WHERE id = ?").run(format, id);
+    db.prepare("UPDATE jobs SET not_before = NULL WHERE id = ?").run(job.id);
+    log("link.format", { format, by: q.from.first_name ?? q.from.username ?? q.from.id }, id);
+
+    await answer(q.id, `${FORMATS[format].button} it is.`);
+    await settle(id, format);
+  } catch (e) {
+    log("telegram.callback.failed", e instanceof Error ? e.message : String(e));
+    await answer(q.id);
+  }
+}
+
 app.post("/tg/:secret", async (c) => {
   const path = c.req.param("secret");
   const header = c.req.header("x-telegram-bot-api-secret-token") ?? "";
   if (!sameSecret(path, TG_SECRET) || !sameSecret(header, TG_SECRET)) return c.json({ ok: true });
 
-  const update = (await c.req.json().catch(() => null)) as { message?: TgMessage; edited_message?: TgMessage } | null;
+  const update = (await c.req.json().catch(() => null)) as
+    | { message?: TgMessage; edited_message?: TgMessage; callback_query?: TgCallback }
+    | null;
+
+  /* After the response, like everything else here: Telegram retries whatever
+     is not a 200, and a press must not become a redelivery loop. */
+  if (update?.callback_query) {
+    void chooseFormat(update.callback_query);
+    return c.json({ ok: true });
+  }
+
   const msg = update?.message ?? update?.edited_message;
   if (!msg) return c.json({ ok: true });
 
@@ -921,6 +1006,8 @@ app.post("/tg/:secret", async (c) => {
           chat,
           `<b>Balkaris desk</b>\n\nSend me a link to an article. I read it, work out which of our services it is about, ` +
             `and write it up as a piece for the journal. You approve it before anything is published.\n\n` +
+            `I ask how to write it: the standard way, as a long read, from the technical side, or short and in plain words. ` +
+            `A word beside the link answers before I ask: <i>long</i>, <i>tech</i>, <i>simple</i>.\n\n` +
             `The desk is at ${esc(process.env.DESK_URL ?? "https://desk.balkaris.ch")}.`,
         );
         return;

@@ -6,10 +6,12 @@
   "private": true,
   "scripts": {
     "match": "tsx --env-file-if-exists=.env scripts/match.ts",
+    "draft": "tsx --env-file-if-exists=.env scripts/draft.ts",
     "check:catalogue": "tsx scripts/check-catalogue.ts",
     "check:preview": "tsx --env-file-if-exists=.env scripts/check-preview.ts",
     "check:release": "tsx --env-file-if-exists=.env scripts/check-release.ts",
     "check:covers": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-covers.ts",
+    "check:telegram": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-telegram.ts",
     "typecheck": "tsc --noEmit",
     "server": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
     "start": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",

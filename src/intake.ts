@@ -2,8 +2,9 @@ import { db, lastBeat, log } from "./db.ts";
 import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
-import { edit, esc, send } from "./telegram.ts";
+import { edit, esc, send, type Keyboard } from "./telegram.ts";
 import { isSocial, platformOf } from "./social/shape.ts";
+import { FORMATS, formatIn, type Format } from "./templates.ts";
 
 /**
  * A link arrives.
@@ -52,6 +53,44 @@ export interface LinkRow {
  */
 const TEXT_ONLY = /\b(text[ -]?only|no video|just (the )?text|without (the )?video)\b/i;
 
+/**
+ * "Give me options on how to write the articles."
+ *
+ * Fini, 2 October 2026 — and this time he asked for the question the note
+ * above decided against. The two are different decisions. Whether to attach a
+ * video has a right answer nearly every time, so a default and a word is
+ * enough. HOW A PIECE IS WRITTEN — the standard way, long, technical, or
+ * short and plain (templates.ts `FORMATS`) — is a decision about its reader,
+ * there is no default that is usually right, and he asked to be offered it.
+ *
+ * So both, and neither costs him the one-second share:
+ *
+ *   · a word beside the link ("long", "tech", "simple") is the answer, and
+ *     the bot asks nothing;
+ *   · without one, its reply carries four buttons. The job is held for
+ *     `HOLD_SECONDS`, so a press decides before anything is written, and a
+ *     link shared and forgotten is written the standard way when the hold
+ *     runs out. The question never becomes a reason a link sits unwritten.
+ *
+ * A press after the writing has started changes nothing and says so. Writing
+ * a published piece again in another format is a different job (a second
+ * article at a second address, or a replaced one) and is not offered here.
+ */
+export const HOLD_SECONDS = 90;
+
+export const formatKeys = (linkId: number): Keyboard => [
+  [
+    { text: FORMATS.standard.button, data: `f:${linkId}:standard` },
+    { text: FORMATS.deep.button, data: `f:${linkId}:deep` },
+  ],
+  [
+    { text: FORMATS.technical.button, data: `f:${linkId}:technical` },
+    { text: FORMATS.simple.button, data: `f:${linkId}:simple` },
+  ],
+];
+
+const ASK = "How should I write it? <i>No answer in a minute and a half and I write it the standard way.</i>";
+
 const STATE_WORDS: Record<string, string> = {
   new: "waiting to be written",
   queued: "waiting to be written",
@@ -98,6 +137,30 @@ const COLD = (silentFor: string) =>
   `If that machine is on, its runner has stopped: <code>scripts/run_runner.cmd</code>. ` +
   `Nothing is lost either way; this goes through the moment it is back.`
 
+/**
+ * The line under what the link turned out to be, once how to write it is
+ * settled — by a word, by a button, or by the hold running out.
+ */
+export function settledLine(format: Format, social: boolean): string {
+  const seenAt = lastPoll();
+  const as = FORMATS[format].as;
+  if (!seenAt.awake) return `${COLD(seenAt.silentFor)} It will be written ${as}.`;
+  return social ? `Fetching it now, to be written ${as}. I will say what it turned out to be.` : `Writing it now, ${as}.`;
+}
+
+/**
+ * Rewrite the bot's reply for a link whose format is now known, and take the
+ * buttons away. Called from the two places that settle it after the share:
+ * the button (server.ts) and the runner taking a job nobody answered.
+ */
+export async function settle(linkId: number, format: Format): Promise<void> {
+  const l = db.prepare("SELECT from_chat, tg_msg, tg_text, kind FROM links WHERE id = ?").get(linkId) as
+    | { from_chat: number | null; tg_msg: number | null; tg_text: string | null; kind: string }
+    | undefined;
+  if (!l?.from_chat || !l.tg_msg) return;
+  await edit(l.from_chat, l.tg_msg, `${l.tg_text ?? ""}\n\n${settledLine(format, l.kind === "social")}`.trim());
+}
+
 function summarise(topic: string | null, services: string[]): string {
   const shelf = TOPICS.find((t) => t.id === topic)?.name;
   const names = services.map(serviceName);
@@ -122,10 +185,25 @@ export async function takeLink(
 
   const chat = who.chat;
   let msg: number | null = null;
-  const say = async (text: string) => {
+  const say = async (text: string, keys?: Keyboard) => {
     if (!chat) return;
-    if (msg === null) msg = await send(chat, text, who.replyTo);
-    else await edit(chat, msg, text);
+    if (msg === null) msg = await send(chat, text, who.replyTo, keys);
+    else await edit(chat, msg, text, keys);
+  };
+
+  /* How to write it, if the message said. Only a person in a chat can be
+     asked, so a link fed in by hand (scripts/intake.ts) is never held: it is
+     written the way its words say, or the standard way. */
+  const asked = formatIn(`${raw} ${who.note ?? ""}`);
+  const ask = Boolean(chat) && !asked;
+  const hold = ask ? `+${HOLD_SECONDS} seconds` : null;
+
+  /* The reply ends on the question with its buttons, or on what is happening.
+     Either way the part above that line is kept on the row, with the
+     message's id, so the button and the runner can rewrite it later. */
+  const reply = async (id: number, head: string, social: boolean) => {
+    await say(`${head}\n\n${ask ? ASK : settledLine(asked ?? "standard", social)}`, ask ? formatKeys(id) : undefined);
+    if (msg !== null) db.prepare("UPDATE links SET tg_msg = ?, tg_text = ? WHERE id = ?").run(msg, head, id);
   };
 
   /* Already have it? Say what became of it and stop — no second row, no
@@ -156,22 +234,17 @@ export async function takeLink(
     const attach = TEXT_ONLY.test(`${raw} ${who.note ?? ""}`) ? 0 : 1;
     const info = db
       .prepare(
-        `INSERT INTO links (url, from_chat, from_user, from_name, note, kind, state, attach)
-         VALUES (?,?,?,?,?,'social','queued',?)`,
+        `INSERT INTO links (url, from_chat, from_user, from_name, note, kind, state, attach, format)
+         VALUES (?,?,?,?,?,'social','queued',?,?)`,
       )
-      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null, attach);
+      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null, attach, asked);
     const id = Number(info.lastInsertRowid);
-    db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'ingest')").run(id);
-    log("link.social", { url }, id);
+    db.prepare("INSERT INTO jobs (link_id, kind, not_before) VALUES (?, 'ingest', datetime('now', ?))").run(id, hold);
+    log("link.social", { url, format: asked }, id);
 
     const where = platformOf(url) ?? "a social post";
-    const seenAt = lastPoll();
     const how = attach ? "" : " Just the text, no player.";
-    await say(
-      seenAt.awake
-        ? `That is ${esc(where)} — fetching it now. I will say what it turned out to be.${how}`
-        : `That is ${esc(where)}. ${COLD(seenAt.silentFor)}${how}`,
-    );
+    await reply(id, `That is ${esc(where)}.${how}`, true);
     return { id, already: false };
   }
 
@@ -198,8 +271,8 @@ export async function takeLink(
 
   const info = db
     .prepare(
-      `INSERT INTO links (url, from_chat, from_user, from_name, note, title, site, author, published, words, topic, services, body, state)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'queued')`,
+      `INSERT INTO links (url, from_chat, from_user, from_name, note, title, site, author, published, words, topic, services, body, state, format)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'queued',?)`,
     )
     .run(
       url,
@@ -215,20 +288,20 @@ export async function takeLink(
       m.topic,
       JSON.stringify(services),
       piece.text,
+      asked,
     );
 
   const id = Number(info.lastInsertRowid);
-  db.prepare("INSERT INTO jobs (link_id, kind) VALUES (?, 'write')").run(id);
-  log("link.taken", { url, words: piece.words, topic: m.topic, services }, id);
+  db.prepare("INSERT INTO jobs (link_id, kind, not_before) VALUES (?, 'write', datetime('now', ?))").run(id, hold);
+  log("link.taken", { url, words: piece.words, topic: m.topic, services, format: asked }, id);
 
-  const seenAt = lastPoll();
-  /* Our own words, with our own markup in them: not escaped, unlike every
-     line above it that came off somebody else's page. */
-  const waiting = seenAt.awake ? "Writing it now." : COLD(seenAt.silentFor);
-
-  await say(
+  /* The line it ends on is our own words, with our own markup in them: not
+     escaped, unlike every line above it that came off somebody else's page. */
+  await reply(
+    id,
     `<b>${esc(piece.title)}</b>\n<i>${esc(piece.site)}${piece.author ? ` · ${esc(piece.author)}` : ""} · ${piece.words} words</i>\n\n` +
-      `${summarise(m.topic, services)}\n\n${waiting}`,
+      summarise(m.topic, services),
+    false,
   );
 
   return { id, already: false };

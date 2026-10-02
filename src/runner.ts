@@ -13,6 +13,7 @@ import { proseOf } from "./blocks.ts";
 import { cover } from "./cover.ts";
 import { ensureFor, ensureOllama, release } from "./ensure.ts";
 import type { TopicId } from "./catalogue.ts";
+import { isFormat } from "./templates.ts";
 
 /**
  * The workstation's half. Run this on the machine with the 4090.
@@ -71,6 +72,10 @@ interface LinkRow {
   topic: string;
   services: string;
   body: string;
+  /* How it was asked to be written, settled on the box before the job is
+     handed out: by a word beside the link, a button under the bot's reply, or
+     nobody answering (which is 'standard'). An older box sends none. */
+  format?: string | null;
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
@@ -98,7 +103,7 @@ async function doWrite(link: LinkRow): Promise<Record<string, unknown>> {
     services: JSON.parse(link.services || "[]") as string[],
   };
 
-  const out = await draft(input);
+  const out = await draft(input, { format: isFormat(link.format) ? link.format : null });
   console.log(
     `  wrote "${out.post.title}" — ${out.template} (${out.because}), ends on ${out.closing.job} (${out.closing.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,
   );
@@ -142,19 +147,22 @@ async function doIngest(link: LinkRow): Promise<Record<string, unknown>> {
   const PLATFORM = { tiktok: "TikTok", instagram: "Instagram", youtube: "YouTube", file: "a file" } as const;
   const where = PLATFORM[got.platform];
 
-  const out = await draft({
-    url: got.url,
-    title: got.title,
-    site: got.author ? `${got.author} on ${got.platform}` : got.platform,
-    author: got.author,
-    published: got.postedAt,
-    words: got.words,
-    text: got.text,
-    topic: m.topic,
-    services,
-    publication: got.author ? `@${got.author} on ${where}` : where,
-    credit: got.author ?? where,
-  });
+  const out = await draft(
+    {
+      url: got.url,
+      title: got.title,
+      site: got.author ? `${got.author} on ${got.platform}` : got.platform,
+      author: got.author,
+      published: got.postedAt,
+      words: got.words,
+      text: got.text,
+      topic: m.topic,
+      services,
+      publication: got.author ? `@${got.author} on ${where}` : where,
+      credit: got.author ?? where,
+    },
+    { format: isFormat(link.format) ? link.format : null },
+  );
 
   console.log(
     `  wrote "${out.post.title}" — ${out.template} (${out.because}), ends on ${out.closing.job} (${out.closing.because}), ${out.post.readingTime} min, ${Math.round(out.ms / 1000)}s`,

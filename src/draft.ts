@@ -1,5 +1,5 @@
 import { askJson, WRITE_MODEL } from "./llm.ts";
-import { CLOSING_JOBS, pick, pickClosing, template, type ClosingJob, type SourceFacts, type TemplateId } from "./templates.ts";
+import { CLOSING_JOBS, pickClosing, shapeFor, template, type ClosingJob, type Format, type SourceFacts, type TemplateId } from "./templates.ts";
 import { serviceName, TOPICS, type TopicId } from "./catalogue.ts";
 import { countWords, howTo, proseOf, schemaFor, toPostBlocks, type PostBlock } from "./blocks.ts";
 
@@ -159,7 +159,7 @@ function window(text: string, words = 1200): string {
   return `${head}\n\n[…]\n\n${tail}`;
 }
 
-export async function draft(input: DraftInput, opts: { model?: string } = {}): Promise<DraftResult> {
+export async function draft(input: DraftInput, opts: { model?: string; format?: Format | null } = {}): Promise<DraftResult> {
   const started = Date.now();
   const model = opts.model ?? WRITE_MODEL;
 
@@ -170,8 +170,14 @@ export async function draft(input: DraftInput, opts: { model?: string } = {}): P
     published: input.published,
     services: input.services,
   };
-  const chosen = pick(facts);
+  /* The shape somebody asked for when they shared the link, or the rule's. */
+  const chosen = shapeFor(opts.format, facts);
   const tpl = template(chosen.id);
+
+  /* WHO IT IS FOR travels with every call, not only the sections: the thesis,
+     the title and the questions are written in the same register, or a plain
+     piece arrives under a clever headline. */
+  const voice = tpl.register ? `${VOICE}\n\n${tpl.register}` : VOICE;
 
   const shelf = TOPICS.find((t) => t.id === input.topic)?.name ?? input.topic;
   const sold = input.services.map(serviceName);
@@ -264,7 +270,7 @@ In ONE sentence, what does it argue? The claim itself, not a description of the 
           if (!got) throw new Error("thesis is empty");
           return got;
         },
-        { model, system: VOICE, temperature: 0.3 },
+        { model, system: voice, temperature: 0.3 },
       );
       thesis = value;
     }
@@ -316,7 +322,7 @@ shape that is not in the list above.`,
         if (n > hi) throw new Error(`that is ${n} words, which is too long — the section needs about ${beat.words}`);
         return got;
       },
-      { model, system: VOICE, temperature: 0.55 },
+      { model, system: voice, temperature: 0.55 },
     );
 
     if (beat.heading) body.push({ h: beat.heading });
@@ -326,6 +332,10 @@ shape that is not in the list above.`,
 
   /* ---- the title, standfirst and excerpt, written from the finished piece ---- */
   const written = proseOf(body);
+  /* Three questions under a piece, unless its shape says otherwise: two under
+     the short one, four under the long one. */
+  const questions = tpl.questions ?? 3;
+  const COUNT = ["no", "one", "two", "three", "four", "five"][questions] ?? String(questions);
 
   const TOP = {
     type: "object",
@@ -357,7 +367,7 @@ title: under 70 characters. A statement, not a question, not a listicle. Not the
 standfirst: one sentence under the title. ${tpl.standfirst}
 excerpt: one sentence for a card in a list. Different words from the standfirst.
 takeaways: three short lines, each a thing the article actually argues.
-faq: three questions a reader still has AFTER reading this, each answered in one or two
+faq: ${COUNT} questions a reader still has AFTER reading this, each answered in one or two
      sentences. A real question somebody would ask us — never a heading turned into a
      question, and never one the article already answers in full.
 
@@ -379,16 +389,16 @@ Answer as JSON.`,
       const faq = (Array.isArray(o.faq) ? o.faq : [])
         .map((f) => ({ q: String(f?.q ?? "").trim(), a: String(f?.a ?? "").trim() }))
         .filter((f) => f.q && f.a);
-      if (faq.length < 3) throw new Error("faq must have three questions, each with an answer");
+      if (faq.length < questions) throw new Error(`faq must have ${COUNT} questions, each with an answer`);
       return {
         title: o.title.trim().replace(/^["']|["']$/g, ""),
         standfirst: o.standfirst.trim(),
         excerpt: o.excerpt.trim(),
         takeaways: o.takeaways.slice(0, 3).map((t) => String(t).trim()),
-        faq: faq.slice(0, 3),
+        faq: faq.slice(0, questions),
       };
     },
-    { model, system: VOICE, temperature: 0.4 },
+    { model, system: voice, temperature: 0.4 },
   );
 
   const post: DraftPost = {
@@ -398,14 +408,16 @@ Answer as JSON.`,
     excerpt: top.excerpt,
     topics: [input.topic],
     services: input.services,
-    readingTime: Math.max(2, Math.round(countWords(body) / 200)),
+    /* A minute at the least: the short shape is under three hundred words,
+       and "2 min read" on it would be the one untrue thing on the page. */
+    readingTime: Math.max(1, Math.round(countWords(body) / 200)),
     body,
     takeaways: top.takeaways,
     faq: top.faq,
     source: { url: input.url, site: input.site, title: input.title, author: input.author },
   };
 
-  guard(post, input);
+  guard(post, input, tpl.floor);
   return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started, dropped, closing };
 }
 
@@ -417,7 +429,7 @@ Answer as JSON.`,
  * failure and both are worth catching here, because a person reviewing forty
  * drafts a month will wave one through.
  */
-export function guard(post: DraftPost, input: DraftInput): void {
+export function guard(post: DraftPost, input: DraftInput, floor = 320): void {
   const ours = proseOf(post.body).toLowerCase();
 
   /* Any run of 12 words shared with the source is a lift, whatever the intent. */
@@ -430,7 +442,11 @@ export function guard(post: DraftPost, input: DraftInput): void {
     }
   }
 
-  if (ours.split(/\s+/).length < 320) throw new Error("the draft came out too short to be worth publishing");
+  /* How short is too short depends on the shape it was asked to be: the
+     plain piece is meant to be under three hundred words, and the long read
+     at five hundred is half a piece (`floor` in templates.ts). */
+  const length = ours.split(/\s+/).length;
+  if (length < floor) throw new Error(`the draft came out at ${length} words, too short to be worth publishing (${floor} at the least)`);
 
   /* The same run check, turned inward: does the piece end by repeating how it
      began? A BACKSTOP, not the fix — it catches literal repetition and not a
@@ -481,7 +497,7 @@ export async function reclose(
   post: DraftPost,
   input: DraftInput,
   job: ClosingJob,
-  opts: { model?: string } = {},
+  opts: { model?: string; floor?: number } = {},
 ): Promise<{ post: DraftPost; model: string; ms: number }> {
   const started = Date.now();
   const model = opts.model ?? WRITE_MODEL;
@@ -542,6 +558,6 @@ ${howTo([])}`,
   );
 
   const next: DraftPost = { ...post, body: [...withoutClose, value] };
-  guard(next, input);
+  guard(next, input, opts.floor);
   return { post: next, model, ms: Date.now() - started };
 }

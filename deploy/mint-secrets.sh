@@ -58,7 +58,7 @@ sleep 3
 # and the handler checks both.
 RES=$(curl -s -X POST "https://api.telegram.org/bot$TG/setWebhook" \
   -H 'content-type: application/json' \
-  -d "{\"url\":\"$URL/tg/$HOOK\",\"secret_token\":\"$HOOK\",\"allowed_updates\":[\"message\",\"edited_message\"]}")
+  -d "{\"url\":\"$URL/tg/$HOOK\",\"secret_token\":\"$HOOK\",\"allowed_updates\":[\"message\",\"edited_message\",\"callback_query\"]}")
 
 python - "$RES" <<'PY'
 import json, sys

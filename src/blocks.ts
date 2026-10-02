@@ -196,7 +196,34 @@ export function toPostBlocks(
     }
   }
 
-  return { blocks, dropped };
+  return { blocks: mend(blocks), dropped };
+}
+
+/**
+ * A sentence cut in two is one paragraph.
+ *
+ * The first long read off this pipeline (2 October 2026) came back with
+ * "…When you prioritise volume over depth, you create" as one paragraph and
+ * "commodity content that AI models can easily bypass…" as the next: the
+ * model had closed a block in the middle of a sentence. The longer a section
+ * is allowed to be, the more often it happens, and nothing downstream could
+ * know — two strings are two paragraphs.
+ *
+ * So a paragraph that does not end the way a sentence ends is joined to the
+ * paragraph after it. A colon counts as an ending, because a paragraph that
+ * introduces the list below it is the one legitimate way to stop there.
+ */
+function mend(blocks: PostBlock[]): PostBlock[] {
+  const out: PostBlock[] = [];
+  for (const b of blocks) {
+    const before = out.at(-1);
+    if (typeof b === "string" && typeof before === "string" && !/[.!?:…"”’)\]]$/.test(before.trimEnd())) {
+      out[out.length - 1] = `${before.trimEnd()} ${b.trimStart()}`;
+    } else {
+      out.push(b);
+    }
+  }
+  return out;
 }
 
 /** The words in a run of blocks, for the budgets the beats are held to. */
