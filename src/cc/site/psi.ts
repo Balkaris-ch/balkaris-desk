@@ -488,6 +488,11 @@ const PAUSE_MS = 24 * 3_600_000;
 export function speedPausedUntil(): string | null {
   const q = speedQuota();
   if (!q) return null;
+  /* A refusal of the keyless quota says nothing about a key placed since:
+     with GOOGLE_API_KEY the desk asks against its own project's quota, so a
+     keyless 429 does not hold it back. (2 October 2026: the key arrived six
+     hours after the keyless refusal and the test sat out the rest of the day.) */
+  if (!q.keyed && process.env.GOOGLE_API_KEY) return null;
   const from = Date.parse(q.at ?? `${q.day}T00:00:00Z`);
   if (!Number.isFinite(from) || Date.now() >= from + PAUSE_MS) return null;
   return new Date(from + PAUSE_MS).toISOString();
