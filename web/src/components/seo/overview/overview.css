@@ -1,0 +1,1577 @@
+/*
+ * SEO › Overview (boards 116 and 110, with 104's keyword and Search Console
+ * panels). Every class starts dk-seo-overview-; every value is a token.
+ */
+
+/* Named, so the main block's rules ask the page's width even inside a panel that is a container itself. */
+.dk-seo-overview {
+  container-name: dk-seo-overview;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* Each panel answers to its own width (the Automations strip, Needs you's rows). */
+.dk-seo-overview-panel {
+  container-type: inline-size;
+}
+
+/* ---------- the boards' main block (116, 110) ----------
+   On the left, two rows: Priority Opportunities beside Content Gap Analysis,
+   then Top Performing Pages, Technical SEO and Backlinks. On the right, the
+   AI SEO Operator over Recent SEO actions, as tall as both rows together.
+   The proportions are the boards' (116 measured: left 985 to right 300; the
+   first row 588 to 385, the second 469, 257, 233). Whichever side is shorter
+   gives its last panel the rest of the height, so neither leaves a hole. */
+.dk-seo-overview-main {
+  display: grid;
+  grid-template-columns: minmax(0, 3.3fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-overview-left,
+.dk-seo-overview-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-overview-row {
+  display: grid;
+  align-items: stretch;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-overview-row > *,
+.dk-seo-overview-side > * {
+  min-width: 0;
+}
+
+.dk-seo-overview-row--work {
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+}
+
+/* Technical SEO a little wider than on the boards: its title and its checks' names are longer. */
+.dk-seo-overview-row--site {
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.1fr) minmax(0, 0.95fr);
+}
+
+.dk-seo-overview-side > :last-child {
+  flex: 1 1 auto;
+}
+
+/* Recent SEO actions takes what the operator leaves of the column and shows
+   the entries that fit whole there (Fill.tsx). Its own height never makes the
+   column taller than the rows beside it: it asks for room for two entries. */
+.dk-seo-overview-side > .dk-seo-overview-a-recent {
+  flex: 1 1 0;
+  min-height: calc(var(--x56) * 3 + var(--x32));
+}
+
+.dk-seo-overview-a-recent > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The rows' hover ground reaches eight past the text on each side: the clip leaves it room. */
+.dk-seo-overview-recent-fill {
+  flex: 1 1 0;
+  min-height: 0;
+  margin-inline: calc(var(--x8) * -1);
+  padding-inline: var(--x8);
+  overflow: hidden;
+}
+
+.dk-seo-overview-recent-fill li[hidden] {
+  display: none;
+}
+
+/* Too narrow for the right column beside the left (a 1280 screen): the left
+   whole, then the operator and the log side by side under it. */
+@container dk-seo-overview (max-width: 1180px) {
+  .dk-seo-overview-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-overview-side {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+}
+
+/* A tablet: one panel a row on top, Top Performing Pages over the two checks. */
+@container dk-seo-overview (max-width: 860px) {
+  .dk-seo-overview-row--work {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-overview-row--site {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-overview-row--site > :first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+/* A phone: one column, and the log as long as its first six entries. */
+@container dk-seo-overview (max-width: 700px) {
+  .dk-seo-overview-row--site,
+  .dk-seo-overview-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-overview-side {
+    display: flex;
+  }
+
+  .dk-seo-overview-side > .dk-seo-overview-a-recent,
+  .dk-seo-overview-recent-fill {
+    flex: none;
+    min-height: 0;
+  }
+
+  .dk-seo-overview-recent-fill .dk-timeline-item:nth-child(n + 7) {
+    display: none;
+  }
+}
+
+.dk-seo-overview-pad {
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+.dk-seo-overview-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-overview-bad {
+  color: var(--red);
+}
+
+.dk-seo-overview-link {
+  color: var(--green);
+  text-decoration: underline;
+  text-decoration-color: var(--green-4);
+  text-underline-offset: var(--x2);
+}
+
+.dk-seo-overview-link:hover {
+  text-decoration-color: var(--green);
+}
+
+.dk-seo-overview-sublabel {
+  margin-top: var(--x12);
+  margin-bottom: var(--x6);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-overview-sublabel:first-child {
+  margin-top: 0;
+}
+
+.dk-seo-overview-small-head {
+  margin-bottom: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-big {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-overview-stampline {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--x8) var(--pad) var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* What the desk said after a button was pressed. */
+.dk-seo-overview-said {
+  margin-top: var(--x8);
+  color: var(--green);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-overview-said--bad {
+  color: var(--red);
+}
+
+.dk-seo-overview-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  max-width: 100%;
+}
+
+/* Beside a row's button: one short line, the rest on hover. */
+.dk-seo-overview-said--row {
+  max-width: calc(var(--x56) * 4);
+  margin-top: var(--x4);
+  font-size: var(--t-label);
+  white-space: normal;
+}
+
+/* ---------- small marks ---------- */
+
+.dk-seo-overview-prio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--tone);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-prio-dot,
+.dk-seo-overview-opp-dot {
+  flex: none;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+.dk-seo-overview-opp-dot.dk-tone-quiet {
+  background: var(--ink-4);
+}
+
+.dk-seo-overview-lang {
+  flex: none;
+  padding: 0 var(--x4);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--x4);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-chip);
+  line-height: var(--x14);
+}
+
+.dk-seo-overview-lang--de {
+  border-color: var(--amber-edge);
+  color: var(--amber);
+}
+
+/* ---------- the tile row ---------- */
+
+.dk-seo-overview-tilerow {
+  min-width: 0;
+}
+
+.dk-seo-overview-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--x4) var(--x16);
+  margin-top: var(--x6);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-overview-stamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+}
+
+.dk-seo-overview-healthbar {
+  width: 100%;
+}
+
+/* The boards draw a spark in every tile that has a history. Seven tiles across
+   leave each about 150 to 190px inside: too narrow for the figure and a 96px
+   spark side by side, so tile.css would let the spark go. Here it goes under
+   the figure at the tile's whole width; a tile wide enough for both (four
+   over three on a 1280 screen) keeps it beside the figure, as on the boards. */
+.dk-seo-overview-tiles .dk-tile-row {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--x6);
+}
+
+.dk-seo-overview-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+  display: flex;
+  flex: none;
+  min-height: 0;
+  padding-bottom: 0;
+}
+
+.dk-seo-overview-tiles .dk-tile-chart > .dk-spark,
+.dk-seo-overview-tiles .dk-tile-chart > .dk-bars {
+  width: 100%;
+  height: var(--x32);
+}
+
+@container (min-width: 250px) {
+  .dk-seo-overview-tiles .dk-tile-row {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: var(--x12);
+  }
+
+  .dk-seo-overview-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    flex: 1;
+    min-height: var(--x40);
+    padding-bottom: var(--x4);
+  }
+
+  .dk-seo-overview-tiles .dk-tile-chart > .dk-spark,
+  .dk-seo-overview-tiles .dk-tile-chart > .dk-bars {
+    width: var(--spark-w);
+    height: var(--spark-h);
+  }
+}
+
+.dk-seo-overview-ai-under {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+}
+
+/* ---------- tables ---------- */
+
+.dk-seo-overview-scroll {
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+}
+
+.dk-seo-overview-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-table th,
+.dk-seo-overview-table td {
+  padding: 0 var(--x8);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-table th:first-child,
+.dk-seo-overview-table td:first-child {
+  padding-left: var(--pad);
+}
+
+.dk-seo-overview-table th:last-child,
+.dk-seo-overview-table td:last-child {
+  padding-right: var(--pad);
+}
+
+.dk-seo-overview-table thead th {
+  height: var(--x32);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-overview-table tbody tr {
+  border-top: var(--x1) solid var(--line);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-table tbody tr:hover {
+  background: var(--hover);
+}
+
+.dk-seo-overview-table tbody td {
+  height: calc(var(--table-row) + var(--x4));
+  padding-block: var(--x4);
+}
+
+.dk-seo-overview-table .dk-seo-overview-num {
+  text-align: right;
+}
+
+/* ---------- Priority Opportunities ---------- */
+
+.dk-seo-overview-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-overview-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-chip:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-overview-chip--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-overview-chip-n {
+  min-width: var(--x16);
+  padding: 0 var(--x4);
+  border-radius: var(--x4);
+  background: var(--card-3);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--x16);
+  text-align: center;
+}
+
+.dk-seo-overview-chip--on .dk-seo-overview-chip-n {
+  background: var(--green-4);
+  color: var(--green);
+}
+
+.dk-seo-overview-chip:focus-visible,
+.dk-seo-overview-op-do:focus-visible,
+.dk-seo-overview-need-title:focus-visible,
+.dk-seo-overview-more-btn:focus-visible,
+.dk-seo-overview-switch:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-seo-overview-pick {
+  width: var(--x24);
+}
+
+.dk-seo-overview-table td.dk-seo-overview-pick,
+.dk-seo-overview-table th.dk-seo-overview-pick {
+  padding-right: 0;
+}
+
+.dk-seo-overview-pick input {
+  width: var(--x14);
+  height: var(--x14);
+  accent-color: var(--green-2);
+  vertical-align: middle;
+}
+
+.dk-seo-overview-pick input:disabled {
+  opacity: 0.25;
+}
+
+.dk-seo-overview-opp {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+/* The opportunity's text takes what the other columns leave, cut with an ellipsis, never under three fifty-sixes. */
+.dk-seo-overview-prio-table td.dk-seo-overview-opp {
+  display: table-cell;
+  width: 100%;
+  max-width: 0;
+  min-width: calc(var(--x56) * 3);
+}
+
+/* On a wide panel the type has its own column; on a narrow one it leads the second line. */
+.dk-seo-overview-opp-typed {
+  display: none;
+}
+
+.dk-seo-overview-prio-table td.dk-seo-overview-opp .dk-seo-overview-opp-dot {
+  display: inline-block;
+  margin-right: var(--x10);
+  vertical-align: middle;
+}
+
+.dk-seo-overview-opp-text {
+  display: inline-flex;
+  flex-direction: column;
+  max-width: calc(100% - var(--x20));
+  min-width: 0;
+  vertical-align: middle;
+}
+
+.dk-seo-overview-opp-title {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+
+/* An opportunity's title is a sentence ("Add German, German-first service
+   pages …"): two lines of it rather than one cut at thirty characters. */
+.dk-seo-overview-prio-table .dk-seo-overview-opp-title {
+  display: -webkit-box;
+  line-height: var(--lh-snug);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dk-seo-overview-opp-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+}
+
+.dk-seo-overview-type {
+  white-space: nowrap;
+}
+
+.dk-seo-overview-gain {
+  color: var(--green);
+}
+
+.dk-seo-overview-wait {
+  color: var(--ink-4);
+}
+
+.dk-seo-overview-more {
+  width: var(--x24);
+}
+
+.dk-seo-overview-more-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-more-link:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-overview-prio-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+  padding: var(--x10) var(--pad) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-overview-prio-panel > .dk-seo-overview-said {
+  padding: 0 var(--pad);
+}
+
+.dk-seo-overview-footlink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-footlink:hover {
+  color: var(--green);
+}
+
+.dk-seo-overview-bulk-hint {
+  font-size: var(--t-label);
+}
+
+/* ---------- Content Gap Analysis, keywords ---------- */
+
+.dk-seo-overview-topic {
+  max-width: 0;
+  width: 100%;
+  min-width: calc(var(--x56) * 2 + var(--x16));
+}
+
+.dk-seo-overview-table td.dk-seo-overview-topic > * {
+  vertical-align: middle;
+}
+
+.dk-seo-overview-table td.dk-seo-overview-topic .dk-seo-overview-opp-dot {
+  display: inline-block;
+  margin-right: var(--x8);
+}
+
+.dk-seo-overview-topic-name {
+  display: inline-block;
+  max-width: calc(100% - var(--x56));
+  margin-right: var(--x6);
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+}
+
+.dk-seo-overview-gaptag {
+  display: block;
+  margin-left: var(--x16);
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+}
+
+.dk-seo-overview-cover {
+  width: calc(var(--x56) + var(--x40));
+}
+
+.dk-seo-overview-table td.dk-seo-overview-cover {
+  display: table-cell;
+}
+
+.dk-seo-overview-cover .dk-bar {
+  display: inline-block;
+  width: var(--x40);
+  margin-right: var(--x8);
+  vertical-align: middle;
+}
+
+.dk-seo-overview-cover-n {
+  display: inline-block;
+  min-width: var(--x32);
+  color: var(--ink-2);
+  text-align: right;
+  vertical-align: middle;
+}
+
+/* ---------- Top Performing Pages ---------- */
+
+.dk-seo-overview-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  max-width: 100%;
+  color: var(--ink);
+}
+
+.dk-seo-overview-page:hover {
+  color: var(--green);
+}
+
+.dk-seo-overview-pages-table td:first-child {
+  max-width: 0;
+  width: 100%;
+  min-width: calc(var(--x56) * 2);
+}
+
+.dk-seo-overview-thumb {
+  flex: none;
+}
+
+.dk-seo-overview-page-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-seo-overview-trend {
+  width: var(--spark-row-w);
+}
+
+/* ---------- Technical SEO ---------- */
+
+.dk-seo-overview-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--table-row) - var(--x2));
+  padding: var(--x2) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-check-label {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.dk-seo-overview-check-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-check-n {
+  color: var(--ink-2);
+  text-align: right;
+}
+
+.dk-seo-overview-check-n--bad {
+  color: var(--red);
+}
+
+.dk-seo-overview-check-n--warn {
+  color: var(--amber);
+}
+
+.dk-seo-overview-check-n--good {
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-check-of {
+  color: var(--ink-4);
+}
+
+.dk-seo-overview-check-act {
+  justify-self: end;
+}
+
+/* ---------- Backlinks ---------- */
+
+.dk-seo-overview-links {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-overview-links-head {
+  margin-bottom: var(--x4);
+}
+
+.dk-seo-overview-refs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-refs li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--x24);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-ref-host {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-profiles {
+  margin-bottom: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-overview-profiles b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-overview-profiles b.dk-seo-overview-bad {
+  color: var(--red);
+}
+
+/* ---------- AI search ---------- */
+
+.dk-seo-overview-ai {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-overview-ai-fig {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-overview-ai-fig.dk-seo-overview-bad {
+  color: var(--red);
+}
+
+.dk-seo-overview-ai-fig span {
+  color: var(--ink-3);
+  font-size: var(--t-title);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-overview-ai-line {
+  margin-top: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-overview-ai-line b {
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-overview-ai-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x12);
+  margin-top: var(--x12);
+}
+
+.dk-seo-overview-ai-window {
+  margin-top: var(--x10);
+  font-size: var(--t-label);
+}
+
+/* ---------- Search Console ---------- */
+
+.dk-seo-overview-sc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  height: 100%;
+  min-width: 0;
+}
+
+.dk-seo-overview-figs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--x12);
+}
+
+.dk-seo-overview-fig .dk-seo-overview-sublabel {
+  margin-bottom: var(--x4);
+}
+
+.dk-seo-overview-fig-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x2) var(--x8);
+}
+
+.dk-seo-overview-fig-value {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-overview-sc-plot {
+  flex: 1;
+  min-height: var(--chart-h);
+  max-height: calc(var(--chart-h) * 2);
+}
+
+.dk-seo-overview-sc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+}
+
+/* ---------- What the SEO tools do ---------- */
+
+.dk-seo-overview-parts {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-part {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x8) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-2);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-part:hover {
+  background: var(--hover);
+}
+
+.dk-seo-overview-part-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--green);
+}
+
+.dk-seo-overview-part-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-overview-part-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-seo-overview-part-line {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-overview-part-go {
+  color: var(--ink-4);
+}
+
+.dk-seo-overview-part:hover .dk-seo-overview-part-go {
+  color: var(--green);
+}
+
+/* ---------- AI SEO Operator ---------- */
+
+.dk-seo-overview-op {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-overview-op-runner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x8);
+  margin-bottom: var(--x10);
+}
+
+.dk-seo-overview-op-ask {
+  position: relative;
+  margin-bottom: var(--x4);
+}
+
+.dk-seo-overview-op-ask textarea {
+  display: block;
+  width: 100%;
+  min-height: calc(var(--x56) + var(--x32));
+  padding: var(--x10) calc(var(--ctl) + var(--x16)) var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  resize: vertical;
+}
+
+.dk-seo-overview-op-ask textarea::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-overview-op-ask textarea:focus-visible {
+  border-color: var(--green-4);
+  outline: var(--x2) solid var(--focus);
+  outline-offset: 0;
+}
+
+.dk-seo-overview-op-send {
+  position: absolute;
+  right: var(--x8);
+  bottom: var(--x8);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border-radius: var(--r-ctl);
+  background: var(--green-2);
+  color: var(--ink-on-green);
+  cursor: pointer;
+}
+
+.dk-seo-overview-op-send:hover {
+  background: var(--green);
+}
+
+.dk-seo-overview-op-send:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.dk-seo-overview-op-send:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-seo-overview-op .dk-seo-overview-sublabel {
+  margin-top: var(--x14);
+}
+
+.dk-seo-overview-op-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-overview-op-do {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  width: 100%;
+  min-height: var(--ctl-sm);
+  padding: var(--x4) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-op-do .dk-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-op-do:hover {
+  border-color: var(--line-2);
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-overview-op-do:hover .dk-icon {
+  color: var(--green);
+}
+
+.dk-seo-overview-op-do:disabled {
+  cursor: progress;
+}
+
+.dk-seo-overview-op-do--busy {
+  border-color: var(--green-4);
+}
+
+.dk-seo-overview-op-note {
+  margin-top: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- Needs you ---------- */
+
+.dk-seo-overview-needs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-need {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-overview-need:first-child {
+  border-top: 0;
+}
+
+.dk-seo-overview-need-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x12);
+  min-height: calc(var(--table-row) + var(--x6));
+  padding-block: var(--x4);
+}
+
+.dk-seo-overview-need-title {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+}
+
+.dk-seo-overview-need-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-need-title:hover {
+  color: var(--green);
+}
+
+.dk-seo-overview-need-chev {
+  flex: none;
+  color: var(--ink-3);
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-seo-overview-need--open .dk-seo-overview-need-chev {
+  transform: rotate(90deg);
+}
+
+.dk-seo-overview-need--open .dk-seo-overview-need-title span {
+  white-space: normal;
+}
+
+.dk-seo-overview-need-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  white-space: nowrap;
+}
+
+.dk-seo-overview-need-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: 0 0 var(--x12) var(--x20);
+}
+
+.dk-seo-overview-need-step {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-overview-need-why {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-overview-more-btn {
+  margin-top: var(--x8);
+  color: var(--green);
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.dk-seo-overview-more-btn:hover {
+  text-decoration: underline;
+}
+
+.dk-seo-overview-needs-done {
+  margin-top: var(--x10);
+  font-size: var(--t-label);
+}
+
+/* ---------- Running now ---------- */
+
+.dk-seo-overview-run {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-overview-run-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-overview-run-item--wait {
+  border-style: dashed;
+}
+
+.dk-seo-overview-run-item--lost .dk-seo-overview-run-title .dk-icon {
+  color: var(--amber);
+}
+
+.dk-seo-overview-run-task:hover {
+  border-color: var(--line-2);
+  background: var(--card-3);
+}
+
+.dk-seo-overview-run-title {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-run-title .dk-icon {
+  flex: none;
+  color: var(--green);
+}
+
+.dk-seo-overview-run-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-run-idle {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-seo-overview-run-runner {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-overview-run .dk-seo-overview-sublabel {
+  margin: var(--x4) 0 0;
+}
+
+.dk-seo-overview-next {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-next li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--x24);
+  border-top: var(--x1) solid var(--line);
+  padding-top: var(--x4);
+}
+
+.dk-seo-overview-next li:first-child {
+  border-top: 0;
+}
+
+.dk-seo-overview-next-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-next time {
+  flex: none;
+}
+
+.dk-seo-overview-spin {
+  animation-name: dk-seo-overview-turn;
+  animation-duration: 1.2s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-seo-overview-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-seo-overview-spin {
+    animation-name: none;
+  }
+}
+
+/* ---------- the Automations strip ---------- */
+
+.dk-seo-overview-autos {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--x12);
+}
+
+.dk-seo-overview-auto {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  min-width: 0;
+  min-height: var(--x56);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-overview-auto-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-auto .dk-tip-anchor {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-overview-auto-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-overview-auto-title {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dk-seo-overview-auto-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-switch-form {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dk-seo-overview-switch {
+  position: relative;
+  flex: none;
+  width: calc(var(--x32) + var(--x2));
+  height: var(--x20);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-switch-knob {
+  position: absolute;
+  top: var(--x2);
+  left: var(--x2);
+  width: var(--x14);
+  height: var(--x14);
+  border-radius: var(--r-pill);
+  background: var(--ink-3);
+  transition:
+    transform var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-switch--on {
+  border-color: var(--green-4);
+  background: var(--green-2);
+}
+
+.dk-seo-overview-switch--on .dk-seo-overview-switch-knob {
+  background: var(--ink-on-green);
+  transform: translateX(var(--x14));
+}
+
+.dk-seo-overview-switch:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.dk-seo-overview-switch-said {
+  max-width: calc(var(--x56) * 3);
+  margin-top: var(--x4);
+  font-size: var(--t-label);
+  text-align: right;
+}
+
+/* ---------- narrower screens ---------- */
+
+@container (max-width: 1100px) {
+  .dk-seo-overview-autos {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 520px) {
+  .dk-seo-overview-autos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-overview-need-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dk-seo-overview-need-meta {
+    grid-column: 1;
+    grid-row: 2;
+    padding-left: var(--x20);
+  }
+
+  .dk-seo-overview-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-overview-said--row {
+    max-width: calc(var(--x56) * 3);
+  }
+}
+
+/* Recent SEO actions: two lines of each entry rather than one cut short. */
+.dk-seo-overview-timeline .dk-timeline-text {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* ---------- What the SEO tools do: four across, then two, then one ---------- */
+
+.dk-seo-overview-a-engine .dk-seo-overview-parts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x12);
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+.dk-seo-overview-a-engine .dk-seo-overview-part {
+  height: 100%;
+  align-items: start;
+  padding: var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-overview-a-engine .dk-seo-overview-part:hover {
+  border-color: var(--line-2);
+  background: var(--card-3);
+}
+
+@container (max-width: 1000px) {
+  .dk-seo-overview-a-engine .dk-seo-overview-parts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 520px) {
+  .dk-seo-overview-a-engine .dk-seo-overview-parts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- a panel narrower than its table ---------- */
+
+@container (max-width: 560px) {
+  .dk-seo-overview-col-type {
+    display: none;
+  }
+
+  .dk-seo-overview-opp-typed {
+    display: inline;
+  }
+}
+
+/* Top Performing Pages keeps its pictures and trend down to a phone's panel. */
+@container (max-width: 400px) {
+  .dk-seo-overview-pages-table .dk-seo-overview-trend,
+  .dk-seo-overview-pages-table .dk-seo-overview-thumb {
+    display: none;
+  }
+}
+
+@container (max-width: 420px) {
+  .dk-seo-overview-col-aim,
+  .dk-seo-overview-prio-table .dk-seo-overview-more,
+  .dk-seo-overview-prio-table .dk-seo-overview-pick,
+  .dk-seo-overview-bulk-hint {
+    display: none;
+  }
+
+  .dk-seo-overview-prio-table td.dk-seo-overview-opp {
+    min-width: calc(var(--x56) * 2 + var(--x24));
+  }
+
+  /* A topic's name on two lines rather than cut at twelve characters; the
+     coverage keeps its percentage and lets the bar go. */
+  .dk-seo-overview-topic-name {
+    display: -webkit-inline-box;
+    max-width: calc(100% - var(--x40));
+    line-height: var(--lh-snug);
+    white-space: normal;
+    vertical-align: middle;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  .dk-seo-overview-cover {
+    width: auto;
+  }
+
+  .dk-seo-overview-cover .dk-bar {
+    display: none;
+  }
+}

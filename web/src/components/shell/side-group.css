@@ -5,35 +5,61 @@
  * boards light a sidebar row, with a green mark on the guide line.
  *
  * On the section's own pages the rows close up, a pixel at a time, to keep
- * the foot in sight beside the submenu (the same rule as shell.css, with the
- * submenu's rows taken off the window first); a window too short even then
- * scrolls the sidebar, as it always has. SideNav.tsx sets --side-rows and
- * --side-subs (0 outside the section, where nothing moves when the submenu
- * is opened).
+ * the foot in sight beside the submenu (the same rule as shell.css): first
+ * the submenu's rows, from 28 down to 22, so the sections' rows keep the
+ * boards' 42 on Fini's 1155-high window; then the sections' rows, down to
+ * shell.css's 30. The boards' 941 then fits to the pixel. A window too short
+ * even then scrolls the sidebar, as it always has. A submenu row closed up to
+ * 20 high is below a finger's 24, which is why none of this happens in the
+ * phone's drawer, and on a desk the tab strip under the head offers the same
+ * pages at 40 high. SideNav.tsx sets --side-rows and --side-subs (0 outside
+ * the section, where nothing moves when the submenu is opened).
  */
 :root {
-  --dk-side-sub-row: 26px;  /* a page's row in a section's submenu */
-  --dk-side-sub-step: 28px; /* from one submenu row's top to the next */
-  --dk-side-sub-in: 23px;   /* the guide line, under the centre of the section's icon (row padding 14 + half of 18) */
-  --dk-side-sub-pad: 4px;   /* the room above and below the submenu's rows */
+  --dk-side-sub-row: 26px;        /* a page's row in a section's submenu, at most */
+  --dk-side-sub-step: 28px;       /* from one submenu row's top to the next, at most */
+  --dk-side-sub-step-least: 22px; /* the closest the submenu's rows may come */
+  --dk-side-sub-in: 23px;         /* the guide line, under the centre of the section's icon (row padding 14 + half of 18) */
+  --dk-side-sub-pad: 4px;         /* the room above and below the submenu's rows */
 }
 
-.dk-nav--grown {
-  --side-step: clamp(
-    var(--row-step-least),
-    calc((100dvh - var(--side-rest) - var(--side-subs) * var(--dk-side-sub-step) - 2 * var(--dk-side-sub-pad)) / var(--side-rows)),
-    var(--row-step)
-  );
-  --side-row: min(var(--row), calc(var(--side-step) - var(--row-gap-least)));
+/* The submenu's rows as they are drawn now: at their most, unless closed up below. */
+.dk-nav {
+  --side-sub-step: var(--dk-side-sub-step);
+  --side-sub-row: var(--dk-side-sub-row);
 }
 
-@supports (width: round(down, 1.5px, 1px)) {
+@media (min-width: 1024px) {
   .dk-nav--grown {
+    /* The window less what is not rows: what the sections' and the submenu's rows share. */
+    --side-room: calc(100dvh - var(--side-rest) - 2 * var(--dk-side-sub-pad));
+    --side-sub-step: clamp(
+      var(--dk-side-sub-step-least),
+      calc((var(--side-room) - var(--side-rows) * var(--row-step)) / var(--side-subs)),
+      var(--dk-side-sub-step)
+    );
     --side-step: clamp(
       var(--row-step-least),
-      round(down, (100dvh - var(--side-rest) - var(--side-subs) * var(--dk-side-sub-step) - 2 * var(--dk-side-sub-pad)) / var(--side-rows), var(--x1)),
+      calc((var(--side-room) - var(--side-subs) * var(--side-sub-step)) / var(--side-rows)),
       var(--row-step)
     );
+    --side-row: min(var(--row), calc(var(--side-step) - var(--row-gap-least)));
+    --side-sub-row: min(var(--dk-side-sub-row), calc(var(--side-sub-step) - var(--row-gap-least)));
+  }
+
+  @supports (width: round(down, 1.5px, 1px)) {
+    .dk-nav--grown {
+      --side-sub-step: clamp(
+        var(--dk-side-sub-step-least),
+        round(down, (var(--side-room) - var(--side-rows) * var(--row-step)) / var(--side-subs), var(--x1)),
+        var(--dk-side-sub-step)
+      );
+      --side-step: clamp(
+        var(--row-step-least),
+        round(down, (var(--side-room) - var(--side-subs) * var(--side-sub-step)) / var(--side-rows), var(--x1)),
+        var(--row-step)
+      );
+    }
   }
 }
 
@@ -77,7 +103,7 @@
 
 /* ---------- the submenu ---------- */
 .dk-nav .dk-nav-sub {
-  gap: calc(var(--dk-side-sub-step) - var(--dk-side-sub-row));
+  gap: calc(var(--side-sub-step) - var(--side-sub-row));
   margin: var(--dk-side-sub-pad) 0 var(--dk-side-sub-pad) var(--dk-side-sub-in);
   padding-left: var(--x8);
   border-left: var(--x1) solid var(--line-2);
@@ -88,7 +114,7 @@
   display: flex;
   align-items: center;
   gap: var(--x10);
-  height: var(--dk-side-sub-row);
+  height: var(--side-sub-row);
   padding: 0 var(--x10);
   border: var(--x1) solid transparent;
   border-radius: var(--r-chip);

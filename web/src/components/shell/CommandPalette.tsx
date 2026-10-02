@@ -128,12 +128,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     /* A section's own pages (SEO's eleven, nav.ts) once something is typed: by
        name ("keywords"), or by section and name ("seo key"); the section's
        name alone lists only the section. */
-    if (needle) {
+    const asked = needle.trim().replace(/\s+/g, " ");
+    if (asked) {
       for (const s of SECTIONS) {
         const own = s.label.toLowerCase();
         for (const c of s.children ?? []) {
           const name = c.label.toLowerCase();
-          if (name.includes(needle) || (needle.length > own.length && `${own} ${name}`.includes(needle))) {
+          if (name.includes(asked) || (asked.length > own.length && `${own} ${name}`.includes(asked))) {
             sections.push({ kind: "section", title: c.label, sub: `${s.label} · ${c.hint}`, href: c.href, icon: c.icon });
           }
         }

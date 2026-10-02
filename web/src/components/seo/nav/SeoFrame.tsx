@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
+import type { AuditRun } from "@/contract/seo/common";
 import { RANGES, rangeLabel } from "@/lib/format";
 import { Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/Select";
@@ -17,7 +18,9 @@ const PERIODS = RANGES.map((r) => ({ value: r, label: rangeLabel(r) }));
 export interface SeoFrameProps {
   /** Open opportunities for the tab's count, or null to draw none. */
   opportunities: number | null;
-  /** The audit's jobs already running when the page was drawn. */
+  /** The full audit the desk was running when the page was drawn (its own record), or null. */
+  audit: AuditRun | null;
+  /** On a desk with no record of the audit: the audit's jobs already running when the page was drawn. */
   running: RunningStep[];
   children: ReactNode;
 }
@@ -36,7 +39,7 @@ export interface SeoFrameProps {
  * are none of the eleven pages: they keep their own heads and get nothing
  * from here.
  */
-export function SeoFrame({ opportunities, running, children }: SeoFrameProps) {
+export function SeoFrame({ opportunities, audit, running, children }: SeoFrameProps) {
   const place = seoPlace(usePathname());
   if (!place) return <>{children}</>;
   const { head } = place;
@@ -65,7 +68,7 @@ export function SeoFrame({ opportunities, running, children }: SeoFrameProps) {
           <Suspense fallback={<span className="dk-seo-nav-range-space" />}>
             <Select param="range" fallback="30d" label="Period" options={PERIODS} size="md" className="dk-seo-nav-range" />
           </Suspense>
-          <AuditButton running={running} />
+          <AuditButton audit={audit} running={running} />
         </div>
       </header>
       <Suspense fallback={<div className="dk-seo-nav-tabs-space" />}>

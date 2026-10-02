@@ -1,0 +1,1371 @@
+/*
+ * SEO › Page Optimization. Measured on design/boards/seo/115.webp (1536 wide):
+ * the tile row, then three columns about 323, 665 and 292 wide, 10 to 12
+ * apart; in the middle a head with the page's address and its tabs, three
+ * panels side by side (status, performance, potential), quick actions, the
+ * search preview and the competitors; on the right the operator's column.
+ *
+ * Every value is a token (styles/tokens.css) or one of the few named below;
+ * the class names all begin dk-seo-optimize-. The shared primitives are
+ * tightened only under this screen's own classes.
+ */
+:root {
+  --dk-seo-optimize-list-w: 324px;   /* the pages list */
+  --dk-seo-optimize-ops-w: 312px;    /* the operator's column */
+  --dk-seo-optimize-rows-max: 1180px; /* the list's rows at most, before they scroll */
+  --dk-seo-optimize-rows-min: 300px; /* and at least */
+  --dk-seo-optimize-list-chrome: 230px; /* the list's head, search, chips and foot, beside the rows */
+  --dk-seo-optimize-ring: 104px;     /* the status ring */
+  --dk-seo-optimize-result-w: 600px; /* a Google result's width, where it cuts a title */
+  --dk-seo-optimize-phone-w: 360px;  /* a result on a phone */
+  --dk-seo-optimize-share-w: 440px;  /* a shared link's card */
+  --dk-seo-optimize-mark: 26px;      /* the round mark beside a result's site name */
+  --dk-seo-optimize-ops-mark: 40px;  /* the operator's mark */
+  --dk-seo-optimize-sug-icon: 30px;  /* a suggestion's icon square */
+  --dk-seo-optimize-scroll-h: 440px; /* a long table, before it scrolls inside its panel */
+}
+
+.dk-seo-optimize {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+/* Colour from the tone classes, for the bits of text that take one. */
+.dk-seo-optimize :where(.dk-tone-good, .dk-tone-warn, .dk-tone-bad, .dk-tone-info, .dk-tone-quiet, .dk-tone-violet) {
+  color: var(--tone);
+}
+
+.dk-seo-optimize .dk-tiles-grid {
+  gap: var(--x12) var(--x10);
+}
+
+.dk-seo-optimize-tilestamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x16);
+  margin-top: var(--x6);
+  padding-inline: var(--x4);
+}
+
+.dk-seo-optimize-tile-said {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- the three columns ---------- */
+.dk-seo-optimize-grid {
+  display: grid;
+  grid-template-columns: var(--dk-seo-optimize-list-w) minmax(0, 1fr) var(--dk-seo-optimize-ops-w);
+  grid-template-areas: "side main aside";
+  gap: var(--x12);
+  align-items: start;
+}
+
+.dk-seo-optimize-side {
+  grid-area: side;
+  position: sticky;
+  top: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-optimize-main {
+  grid-area: main;
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-optimize-aside {
+  grid-area: aside;
+  min-width: 0;
+}
+
+/* The operator under the page once three columns no longer fit. */
+@container (max-width: 1240px) {
+  .dk-seo-optimize-grid {
+    grid-template-columns: var(--dk-seo-optimize-list-w) minmax(0, 1fr);
+    grid-template-areas:
+      "side main"
+      "side aside";
+  }
+}
+
+/* One column: the list first, short, then the page, then the operator. */
+@container (max-width: 860px) {
+  .dk-seo-optimize-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "side"
+      "main"
+      "aside";
+  }
+
+  .dk-seo-optimize-side {
+    position: static;
+  }
+
+  .dk-seo-optimize-side .dk-seo-optimize-rows {
+    max-height: var(--dk-seo-optimize-rows-min);
+  }
+}
+
+/* ---------- the pages list ---------- */
+.dk-seo-optimize-list {
+  min-width: 0;
+}
+
+.dk-seo-optimize-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding: var(--x14) var(--x14) var(--x10) var(--pad);
+}
+
+.dk-seo-optimize-sort select {
+  max-width: 100%;
+}
+
+.dk-seo-optimize-list-tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  padding: 0 var(--x14) var(--x10);
+}
+
+.dk-seo-optimize-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dk-seo-optimize-search .dk-icon {
+  position: absolute;
+  left: var(--x10);
+  color: var(--ink-4);
+  pointer-events: none;
+}
+
+.dk-seo-optimize-search .dk-input {
+  appearance: none;
+  height: var(--ctl-sm);
+  min-height: 0;
+  padding-left: var(--x32);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-optimize-chip .dk-num {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-chip:hover {
+  background: var(--card-3);
+}
+
+.dk-seo-optimize-chip--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-optimize-chip--on.dk-seo-optimize-chip--high {
+  border-color: var(--red-edge);
+  background: var(--red-ground);
+  color: var(--red);
+}
+
+.dk-seo-optimize-chip--on.dk-seo-optimize-chip--medium {
+  border-color: var(--amber-edge);
+  background: var(--amber-ground);
+  color: var(--amber);
+}
+
+.dk-seo-optimize-rows {
+  /* The rows' screen-reader words are placed inside the scrolling list, not on the page below it. */
+  position: relative;
+  max-height: max(var(--dk-seo-optimize-rows-min), min(var(--dk-seo-optimize-rows-max), calc(100vh - var(--top) - var(--dk-seo-optimize-list-chrome))));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-optimize-rows > li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-optimize-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x8) var(--x12) var(--x8) var(--x10);
+  border: var(--x1) solid transparent;
+  color: var(--ink-2);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-optimize-row:hover {
+  background: var(--hover);
+}
+
+.dk-seo-optimize-row--on {
+  border-color: var(--green-4);
+  border-radius: var(--r-row);
+  background: var(--row-on);
+}
+
+.dk-seo-optimize-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-optimize-row-path {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-optimize-row-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-optimize-row-end {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-row-score {
+  min-width: var(--x20);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+  text-align: right;
+}
+
+.dk-seo-optimize-row-none {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-optimize-rows-empty {
+  padding: var(--x16) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-list-foot {
+  padding: var(--x10) var(--pad) var(--x12);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* The board's outlined priority chip. */
+.dk-seo-optimize-prio {
+  display: inline-flex;
+  align-items: center;
+  height: var(--x24);
+  padding: 0 var(--x8);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-chip);
+  color: var(--tone);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+
+/* ---------- the page's head ---------- */
+.dk-seo-optimize-head {
+  padding: var(--x14) var(--pad) 0;
+}
+
+.dk-seo-optimize-head-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+}
+
+.dk-seo-optimize-head-top--alone {
+  padding-bottom: var(--x14);
+}
+
+.dk-seo-optimize-head-text {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.dk-seo-optimize-head-path {
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-optimize-head-out {
+  display: inline-flex;
+  margin-left: var(--x8);
+  color: var(--ink-3);
+  vertical-align: middle;
+}
+
+.dk-seo-optimize-head-out:hover {
+  color: var(--ink);
+}
+
+.dk-seo-optimize-head-title {
+  margin-top: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+/*
+ * One line of facts, a dot between them that never starts a line: every fact
+ * carries its dot in front, in a strip as wide as the gap, and is pulled back
+ * over the gap. A fact that opens a line has its dot outside the box, where
+ * the clip hides it.
+ */
+.dk-seo-optimize-head-facts {
+  --dk-seo-optimize-sep: var(--x14);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--dk-seo-optimize-sep);
+  overflow: hidden;
+  margin-top: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-head-facts > span {
+  min-width: 0;
+  margin-left: calc(-1 * var(--dk-seo-optimize-sep));
+}
+
+.dk-seo-optimize-head-facts > span::before {
+  content: "·";
+  display: inline-block;
+  width: var(--dk-seo-optimize-sep);
+  color: var(--ink-4);
+  text-align: center;
+}
+
+.dk-seo-optimize-head-quiet {
+  color: var(--ink-4);
+}
+
+.dk-seo-optimize-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-tabs {
+  margin-top: var(--x12);
+}
+
+.dk-seo-optimize-tabs .dk-tab {
+  padding-inline: var(--x10);
+}
+
+/* ---------- the three panels ---------- */
+.dk-seo-optimize-trio {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: var(--x12);
+  align-items: stretch;
+}
+
+/* Wide, as on the board: the status panel widest, its ring beside six named lines; the potential narrowest. */
+@container (min-width: 960px) {
+  .dk-seo-optimize-trio {
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 680px) {
+  .dk-seo-optimize-trio {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dk-seo-optimize-trio > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 560px) {
+  .dk-seo-optimize-trio {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-optimize-panel > .dk-card-head {
+  min-height: 0;
+  padding: var(--x12) var(--pad) var(--x6);
+}
+
+.dk-seo-optimize-panel > .dk-card-head .dk-card-heading {
+  padding-top: 0;
+}
+
+.dk-seo-optimize-panel:not(.dk-card--flush) > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  padding: var(--x4) var(--pad) var(--x14);
+}
+
+.dk-seo-optimize-note {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-optimize-note b {
+  color: var(--ink-2);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-optimize-quiet {
+  color: var(--ink-3);
+}
+
+.dk-seo-optimize-pad {
+  padding: var(--x10) var(--pad) 0;
+}
+
+.dk-seo-optimize-pad:last-child {
+  padding-bottom: var(--x12);
+}
+
+.dk-seo-optimize-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-optimize-dot {
+  flex: none;
+  display: inline-block;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone, var(--ink-4));
+}
+
+.dk-seo-optimize-link {
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-link:hover {
+  text-decoration: underline;
+}
+
+.dk-seo-optimize-headlink {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-headlink:hover {
+  color: var(--ink);
+}
+
+/* Current status: the ring beside its areas, above them in a narrow panel. */
+.dk-seo-optimize-panel:has(.dk-seo-optimize-status) > .dk-card-body {
+  container-type: inline-size;
+}
+
+.dk-seo-optimize-status {
+  --ring-panel: var(--dk-seo-optimize-ring);
+  display: flex;
+  align-items: center;
+  gap: var(--x14);
+}
+
+/* Beside each other while the names fit one line; the ring above them below that. */
+@container (max-width: 300px) {
+  .dk-seo-optimize-status {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dk-seo-optimize-status > .dk-ring {
+    align-self: center;
+  }
+}
+
+.dk-seo-optimize-areas {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-optimize-area {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  padding: var(--x3) var(--x4);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-area:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* A name never loses its end: in a tight panel it takes a second line. */
+.dk-seo-optimize-area-name {
+  min-width: 0;
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-area-score {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-area-score span {
+  color: var(--ink-4);
+  font-weight: var(--w-regular);
+}
+
+/* SEO Performance: four rows, then the chart. */
+.dk-seo-optimize-perf {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-perf-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-perf-row dt {
+  color: var(--ink-2);
+}
+
+.dk-seo-optimize-perf-row dd {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-perf-row b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-optimize-perf-said {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-optimize-perf-chart {
+  min-width: 0;
+}
+
+/* Traffic potential. */
+.dk-seo-optimize-pot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-seo-optimize-pot-figure {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-optimize-pot-said {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-pot-bars {
+  margin-block: var(--x6);
+}
+
+.dk-seo-optimize-pot-head {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-optimize-pot-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-pot-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-pot-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-optimize-more {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin-top: auto;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-more:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ---------- quick actions ---------- */
+/* One row of five from about 670 wide, as on the board (icons on the first and last only); they wrap below that. */
+.dk-seo-optimize-quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-quick-row > .dk-seo-optimize-quick-btn {
+  padding-inline: var(--x10);
+}
+
+.dk-seo-optimize-said {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-optimize-said--bad {
+  color: var(--red);
+}
+
+/* ---------- the search preview ---------- */
+.dk-seo-optimize-serp-head {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.dk-seo-optimize-serp-edit {
+  margin-left: auto;
+}
+
+.dk-seo-optimize-seg {
+  display: inline-flex;
+  gap: var(--x2);
+  padding: var(--x2);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+}
+
+.dk-seo-optimize-seg--wide {
+  display: flex;
+  margin: 0 var(--x14) var(--x10);
+}
+
+.dk-seo-optimize-seg--wide .dk-seo-optimize-seg-btn {
+  flex: 1;
+}
+
+.dk-seo-optimize-seg-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x6);
+  height: var(--ctl-xs);
+  padding: 0 var(--x12);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.dk-seo-optimize-seg-btn:hover {
+  color: var(--ink);
+}
+
+.dk-seo-optimize-seg-btn--on {
+  border-color: var(--green-4);
+  background: var(--tab-on);
+  color: var(--ink);
+}
+
+.dk-seo-optimize-panel > .dk-card-body.dk-seo-optimize-serp-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--x14);
+  align-items: start;
+}
+
+@container (max-width: 640px) {
+  .dk-seo-optimize-panel > .dk-card-body.dk-seo-optimize-serp-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-optimize-serp-stage {
+  min-width: 0;
+}
+
+.dk-seo-optimize-serp-stage--phone .dk-seo-optimize-result {
+  max-width: var(--dk-seo-optimize-phone-w);
+}
+
+/* A result as Google draws one: on white, the site above the blue title. */
+.dk-seo-optimize-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  max-width: var(--dk-seo-optimize-result-w);
+  padding: var(--x14) var(--x16);
+  border-radius: var(--r-field);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.dk-seo-optimize-result-site {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-optimize-result-site > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-optimize-result-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-optimize-mark);
+  height: var(--dk-seo-optimize-mark);
+  border-radius: var(--r-pill);
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-bold);
+}
+
+.dk-seo-optimize-result-host {
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-result-url {
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The title is cut at the result's width, as Google cuts it. */
+.dk-seo-optimize-result-title {
+  margin-top: var(--x4);
+  overflow: hidden;
+  color: var(--blue-edge);
+  font-size: var(--t-figure-3);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-optimize-result-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--card-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dk-seo-optimize-serp-checks {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-content: start;
+  gap: var(--x8) var(--x24);
+  min-width: 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-serp-checks dt {
+  color: var(--ink-3);
+}
+
+.dk-seo-optimize-serp-checks dd {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--ink);
+  text-align: right;
+}
+
+.dk-seo-optimize-serp-checks-head {
+  color: var(--ink) !important;
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-serp-verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-serp-foot {
+  padding: 0 var(--pad) var(--x14);
+}
+
+/* A shared link's card. */
+.dk-seo-optimize-share {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  max-width: var(--dk-seo-optimize-share-w);
+  overflow: hidden;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  padding-bottom: var(--x12);
+}
+
+.dk-seo-optimize-share-pic {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  background: var(--card-3);
+}
+
+.dk-seo-optimize-share-pic--none {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-share > span:not(.dk-seo-optimize-share-pic) {
+  padding-inline: var(--x12);
+}
+
+.dk-seo-optimize-share-host {
+  margin-top: var(--x6);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+.dk-seo-optimize-share-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-optimize-share-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dk-seo-optimize-share-note {
+  color: var(--amber);
+  font-size: var(--t-label);
+}
+
+/* ---------- competitors ---------- */
+.dk-seo-optimize-wrap {
+  white-space: normal;
+}
+
+/* Words that take several lines in a table row keep a margin above and below. */
+.dk-seo-optimize .dk-table td .dk-seo-optimize-wrap {
+  display: inline-block;
+  padding-block: var(--x6);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-comp-site {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-comp-site:hover {
+  text-decoration: underline;
+}
+
+/* ---------- the operator's column ---------- */
+.dk-seo-optimize-ops {
+  padding-bottom: var(--x14);
+}
+
+.dk-seo-optimize-ops-head {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x14) var(--pad) var(--x12);
+}
+
+.dk-seo-optimize-ops-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-optimize-ops-mark);
+  height: var(--dk-seo-optimize-ops-mark);
+  border: var(--x2) solid var(--green-2);
+  border-radius: var(--r-pill);
+  background: var(--green-3);
+  color: var(--green);
+  box-shadow: 0 0 0 var(--x4) var(--green-glow);
+}
+
+.dk-seo-optimize-ops-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+/* The dot sits on the first line when the words wrap. */
+.dk-seo-optimize-ops-state {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-ops-state > .dk-seo-optimize-dot {
+  margin-top: calc((var(--t-small) * var(--lh-snug) - var(--x8)) / 2);
+}
+
+.dk-seo-optimize-ops-intro {
+  margin: 0 var(--x14) var(--x10);
+  padding: var(--x10) var(--x12);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-optimize-sugs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-optimize-sug {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--x10);
+  padding: var(--x10) var(--x14);
+}
+
+.dk-seo-optimize-sug + .dk-seo-optimize-sug {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-optimize-sug-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-optimize-sug-icon);
+  height: var(--dk-seo-optimize-sug-icon);
+  border-radius: var(--r-ctl);
+  background: var(--ink);
+  color: var(--bg);
+}
+
+.dk-seo-optimize-sug-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  min-width: 0;
+}
+
+.dk-seo-optimize-sug-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-sug-prio {
+  height: var(--x20);
+  padding: 0 var(--x6);
+}
+
+.dk-seo-optimize-sug-why {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  -webkit-box-orient: vertical;
+  /* The whole reason is the line's hover title. */
+  -webkit-line-clamp: 4;
+}
+
+.dk-seo-optimize-sug-said {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-sug-btn {
+  min-width: calc(var(--x56) + var(--x6));
+}
+
+.dk-seo-optimize-bulk {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) var(--x14) 0;
+}
+
+.dk-seo-optimize-asked {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-optimize-asked li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  padding: var(--x10) var(--x14);
+}
+
+.dk-seo-optimize-asked li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-optimize-asked-title {
+  color: var(--ink);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-optimize-asked-sub,
+.dk-seo-optimize-asked-none {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-optimize-ops-waiting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: var(--x12) var(--x14) 0;
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-ops-waiting p {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-ask {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x12) var(--x14) 0;
+}
+
+.dk-seo-optimize-ask-box {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-ask-box .dk-input {
+  flex: 1;
+  min-width: 0;
+  height: var(--ctl-sm);
+  min-height: 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-ops-truth {
+  margin: var(--x10) var(--x14) 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* ---------- the other tabs ---------- */
+.dk-seo-optimize-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x20);
+  align-items: start;
+}
+
+@container (max-width: 760px) {
+  .dk-seo-optimize-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-optimize-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-optimize-editor-form .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-seo-optimize-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-editor-preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-optimize-editor-label,
+.dk-seo-optimize-subhead {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-props {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-optimize-props li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding: var(--x10) 0;
+}
+
+.dk-seo-optimize-props li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-optimize-props-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-props-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-props-line b {
+  color: var(--ink-3);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-facts {
+  display: grid;
+  grid-template-columns: minmax(auto, 200px) minmax(0, 1fr);
+  gap: var(--x8) var(--x16);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-facts dt {
+  color: var(--ink-3);
+}
+
+.dk-seo-optimize-facts dd {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+@container (max-width: 520px) {
+  .dk-seo-optimize-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x2);
+  }
+
+  .dk-seo-optimize-facts dd {
+    margin-bottom: var(--x6);
+  }
+}
+
+.dk-seo-optimize-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+}
+
+.dk-seo-optimize-checks li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--x10);
+}
+
+.dk-seo-optimize-check--na {
+  opacity: 0.55;
+}
+
+.dk-seo-optimize-check-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x20);
+  height: var(--x20);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-pill);
+  background: var(--tone-ground);
+}
+
+.dk-seo-optimize-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-optimize-check-text b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-scroll {
+  max-height: var(--dk-seo-optimize-scroll-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dk-seo-optimize-tags,
+.dk-seo-optimize-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-tags li,
+.dk-seo-optimize-links li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x10);
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-links a {
+  color: var(--green);
+}
+
+.dk-seo-optimize-index {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-body);
+}

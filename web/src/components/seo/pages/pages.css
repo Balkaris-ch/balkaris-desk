@@ -1,0 +1,1268 @@
+/* SEO › Pages (board 106). Every value is a token; every class is
+   dk-seo-pages-…, so nothing here can style another screen. The breakpoints
+   are the screen's own width (a container), in px because a container query
+   cannot read a custom property. */
+
+.dk-seo-pages {
+  container: dk-seo-pages / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---------- the layout: filters | list | summary, the four panels under the list ---------- */
+.dk-seo-pages-grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "filters"
+    "list"
+    "side"
+    "below";
+  align-items: start;
+}
+
+.dk-seo-pages-grid > * {
+  min-width: 0;
+}
+
+.dk-seo-pages-filters {
+  grid-area: filters;
+}
+
+.dk-seo-pages-list {
+  grid-area: list;
+}
+
+.dk-seo-pages-side {
+  grid-area: side;
+}
+
+.dk-seo-pages-below {
+  grid-area: below;
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.dk-seo-pages-below > * {
+  min-width: 0;
+}
+
+/* While the filters lie across the screen, their groups sit two by two (four on a tablet), so the list is not pushed a screen down. */
+@container dk-seo-pages (min-width: 340px) {
+  .dk-seo-pages-filters .dk-seo-pages-fgroups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container dk-seo-pages (min-width: 720px) {
+  .dk-seo-pages-below {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-pages-filters .dk-seo-pages-fgroups {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container dk-seo-pages (min-width: 920px) {
+  .dk-seo-pages-grid {
+    grid-template-columns: calc(var(--x56) * 3.6) minmax(0, 1fr);
+    grid-template-areas:
+      "filters list"
+      "filters side"
+      "below below";
+  }
+
+  .dk-seo-pages-filters .dk-seo-pages-fgroups {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The board: the summary beside the list, as tall as it (the board's two
+   cards end on one line), the four panels under both. The room a short
+   summary leaves goes to its issues box, not to a hole under the card. */
+@container dk-seo-pages (min-width: 1320px) {
+  .dk-seo-pages-grid {
+    grid-template-columns: calc(var(--x56) * 3.6) minmax(0, 1fr) clamp(calc(var(--x40) * 9.5), 28%, calc(var(--x40) * 11.5));
+    grid-template-areas:
+      "filters list side"
+      "filters below below";
+  }
+
+  .dk-seo-pages-side {
+    align-self: stretch;
+  }
+
+  .dk-seo-pages-side > .dk-seo-pages-sw {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dk-seo-pages-side > .dk-seo-pages-sw > .dk-seo-pages-sw-pane {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dk-seo-pages-side .dk-seo-pages-ov {
+    flex: 1;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  .dk-seo-pages-side .dk-seo-pages-issues-box {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .dk-seo-pages-side .dk-seo-pages-noissue {
+    flex: 1;
+  }
+
+  .dk-seo-pages-below {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 0.85fr) minmax(0, 0.95fr) minmax(0, 1fr);
+  }
+}
+
+/* Under the list (narrower screens) a row's click brings the summary up; the top bar is sticky. */
+.dk-seo-pages-side {
+  scroll-margin-top: calc(var(--top) + var(--x12));
+}
+
+/* ---------- the tiles: one line under them when the search figures are not compared ---------- */
+.dk-seo-pages-tilerow {
+  display: grid;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-pages-tiles-note {
+  padding: 0 var(--x4);
+}
+
+.dk-seo-pages-tiles-note .dk-icon {
+  color: var(--ink-3);
+}
+
+.dk-seo-pages-pad {
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+.dk-seo-pages-small {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-pages-small .dk-icon {
+  vertical-align: -2px;
+  color: var(--green);
+}
+
+.dk-seo-pages-small a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-pages-small a:hover {
+  color: var(--green);
+}
+
+/* ---------- filters ---------- */
+.dk-seo-pages-reset {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-pages-reset:hover {
+  color: var(--green);
+}
+
+.dk-seo-pages-reset--off {
+  color: var(--ink-4);
+  text-decoration: none;
+}
+
+.dk-seo-pages-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--x14);
+}
+
+.dk-seo-pages-search-icon {
+  position: absolute;
+  left: var(--x10);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.dk-seo-pages-search-input {
+  width: 100%;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10) 0 var(--x32);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-search-input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-pages-search-input:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-seo-pages-fgroups {
+  display: grid;
+  gap: var(--x16) var(--x24);
+}
+
+.dk-seo-pages-fhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin-bottom: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-pages-fhead::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-pages-fhead-mark {
+  color: var(--ink-3);
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-seo-pages-fgroup:not([open]) .dk-seo-pages-fhead-mark {
+  transform: rotate(180deg);
+}
+
+.dk-seo-pages-flist {
+  display: grid;
+  gap: var(--x1);
+}
+
+.dk-seo-pages-fopt {
+  display: grid;
+  grid-template-columns: var(--x14) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x24) + var(--x2));
+  padding: 0 var(--x4);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-pages-fopt:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-pages-fbox {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x14);
+  height: var(--x14);
+  border: var(--x1) solid var(--ink-4);
+  border-radius: var(--x3);
+  color: var(--ink-on-green);
+}
+
+.dk-seo-pages-fopt--on {
+  color: var(--ink);
+}
+
+.dk-seo-pages-fopt--on .dk-seo-pages-fbox {
+  border-color: var(--green-2);
+  background: var(--green-2);
+}
+
+.dk-seo-pages-flabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-fcount {
+  color: var(--ink-3);
+}
+
+.dk-seo-pages-fnote {
+  margin-top: var(--x16);
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* ---------- the list ---------- */
+.dk-seo-pages-list-tools {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.dk-seo-pages-list .dk-card-head {
+  flex-wrap: wrap;
+}
+
+.dk-seo-pages-bulk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x12);
+  margin: 0 var(--pad) var(--x10);
+  padding: var(--x8) var(--x12);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-field);
+  background: var(--green-3);
+}
+
+.dk-seo-pages-bulk-n {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-pages-table th,
+.dk-seo-pages-table td {
+  padding: 0 var(--x6);
+}
+
+.dk-seo-pages-sort:not(.dk-table-sort--on) .dk-icon {
+  display: none;
+}
+
+.dk-seo-pages-table th:first-child,
+.dk-seo-pages-table td:first-child {
+  padding-left: var(--pad);
+}
+
+.dk-seo-pages-table th:last-child,
+.dk-seo-pages-table td:last-child {
+  padding-right: var(--pad);
+}
+
+.dk-seo-pages-table .dk-table-pick {
+  width: calc(var(--x24) + var(--pad));
+}
+
+.dk-seo-pages-table {
+  min-width: calc(var(--x56) * 12.5);
+}
+
+.dk-seo-pages-cell-page {
+  width: 32%;
+  max-width: calc(var(--x56) * 3.2);
+}
+
+.dk-seo-pages-cell-page .dk-table-go {
+  gap: var(--x10);
+  width: 100%;
+}
+
+.dk-seo-pages-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-table tbody tr:hover .dk-seo-pages-path {
+  color: var(--green);
+}
+
+.dk-seo-pages-table tbody tr.dk-seo-pages-row--on {
+  background: var(--hover);
+}
+
+.dk-seo-pages-table tbody tr.dk-seo-pages-row--on td:first-child {
+  box-shadow: inset var(--x2) 0 0 var(--green);
+}
+
+.dk-seo-pages-idx {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x20);
+  height: var(--x20);
+}
+
+.dk-seo-pages-idx--yes {
+  color: var(--green);
+}
+
+.dk-seo-pages-idx--no {
+  color: var(--red);
+}
+
+.dk-seo-pages-idx--none {
+  color: var(--ink-4);
+}
+
+.dk-seo-pages-issues {
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-pages-issues--bad {
+  color: var(--red);
+}
+
+.dk-seo-pages-issues--warn {
+  color: var(--amber);
+}
+
+.dk-seo-pages-issues--none {
+  color: var(--ink-4);
+}
+
+.dk-seo-pages-table .dk-ring {
+  vertical-align: middle;
+}
+
+.dk-seo-pages-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--x10) var(--x16);
+  padding: var(--x12) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-pages-showing {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-pages-pg {
+  display: inline-grid;
+  place-content: center;
+  min-width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  padding: 0 var(--x6);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+a.dk-seo-pages-pg:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-pages-pg--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-seo-pages-pg--off,
+.dk-seo-pages-pg--gap {
+  color: var(--ink-4);
+}
+
+.dk-seo-pages-perpage {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-perpage-space {
+  display: inline-block;
+  width: calc(var(--x56) + var(--x8));
+  height: var(--ctl-sm);
+}
+
+.dk-seo-pages-list-foot {
+  display: grid;
+  gap: var(--x4);
+  padding: var(--x10) var(--pad) var(--x14);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* ---------- the queue buttons: what pressing said ---------- */
+.dk-seo-pages-qb {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+  max-width: 100%;
+}
+
+.dk-seo-pages-qb .dk-seo-pages-queued {
+  max-width: calc(var(--x56) * 5);
+  text-align: right;
+}
+
+.dk-seo-pages-queued {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-pages-queued .dk-icon {
+  flex: none;
+  margin-top: var(--x1);
+}
+
+.dk-seo-pages-queued--ok .dk-icon {
+  color: var(--green);
+}
+
+.dk-seo-pages-queued--no {
+  color: var(--amber);
+}
+
+.dk-seo-pages-queued-link {
+  color: var(--green);
+  text-decoration: underline;
+  text-underline-offset: var(--x2);
+}
+
+/* ---------- the summary ---------- */
+.dk-seo-pages-side-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x14) var(--pad) var(--x10);
+}
+
+.dk-seo-pages-side-titles {
+  min-width: 0;
+}
+
+.dk-seo-pages-side-path {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-pages-side-path span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-side-path .dk-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.dk-seo-pages-side-path:hover,
+.dk-seo-pages-side-path:hover .dk-icon {
+  color: var(--green);
+}
+
+.dk-seo-pages-side-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-side-sub > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-side .dk-seo-pages-sw {
+  padding: 0 var(--pad) var(--pad);
+}
+
+/* The switch: the summary's tabs, the chart's measures, the preview's device. */
+.dk-seo-pages-sw-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-pages-sw-strip {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dk-seo-pages-sw-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font: inherit;
+  font-size: var(--t-small);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.dk-seo-pages-sw-tab:hover {
+  color: var(--ink);
+}
+
+.dk-seo-pages-sw-tab:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+  border-radius: var(--x4);
+}
+
+.dk-seo-pages-sw--tabs .dk-seo-pages-sw-bar {
+  margin-bottom: var(--x12);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-pages-sw--tabs .dk-seo-pages-sw-strip {
+  gap: var(--x16);
+}
+
+.dk-seo-pages-sw--tabs .dk-seo-pages-sw-tab {
+  height: var(--x32);
+  border-bottom: var(--x2) solid transparent;
+  margin-bottom: calc(var(--x1) * -1);
+}
+
+.dk-seo-pages-sw--tabs .dk-seo-pages-sw-tab--on {
+  border-bottom-color: var(--green);
+  color: var(--ink);
+}
+
+.dk-seo-pages-sw--dots .dk-seo-pages-sw-bar {
+  margin-bottom: var(--x10);
+}
+
+.dk-seo-pages-sw--dots .dk-seo-pages-sw-strip {
+  gap: var(--x14);
+}
+
+.dk-seo-pages-sw-dot {
+  display: inline-block;
+  width: var(--x10);
+  height: var(--x10);
+  border: var(--x1) solid var(--ink-4);
+  border-radius: var(--r-pill);
+}
+
+.dk-seo-pages-sw--dots .dk-seo-pages-sw-tab--on {
+  color: var(--ink);
+}
+
+.dk-seo-pages-sw--dots .dk-seo-pages-sw-tab--on .dk-seo-pages-sw-dot {
+  border: var(--x3) solid var(--green);
+}
+
+.dk-seo-pages-sw--seg .dk-seo-pages-sw-bar {
+  justify-content: flex-end;
+  margin-bottom: var(--x10);
+}
+
+.dk-seo-pages-sw--seg .dk-seo-pages-sw-strip {
+  gap: var(--x2);
+  padding: var(--x2);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-pages-sw--seg .dk-seo-pages-sw-tab {
+  height: calc(var(--x24) - var(--x2));
+  padding: 0 var(--x10);
+  border-radius: var(--r-chip);
+}
+
+.dk-seo-pages-sw--seg .dk-seo-pages-sw-tab--on {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-pages-sw-pane[hidden] {
+  display: none !important;
+}
+
+/* The summary's tabs scroll sideways on a phone: the strip's end fades so the cut-off tabs show there are more. */
+@container dk-seo-pages (max-width: 520px) {
+  .dk-seo-pages-sw--tabs .dk-seo-pages-sw-strip {
+    padding-inline-end: var(--x32);
+    mask-image: linear-gradient(to right, var(--ink) calc(100% - var(--x32)), transparent);
+  }
+}
+
+/* The summary's boxes */
+.dk-seo-pages-box {
+  padding: var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+}
+
+.dk-seo-pages-h {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  margin-bottom: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-pages-h-n {
+  color: var(--ink-3);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-pages-h-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+}
+
+.dk-seo-pages-more {
+  color: var(--green);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-pages-ov,
+.dk-seo-pages-pane {
+  display: grid;
+  gap: var(--x10);
+}
+
+.dk-seo-pages-ov-top {
+  display: grid;
+  grid-template-columns: minmax(0, 0.72fr) minmax(0, 1.28fr);
+  gap: var(--x10);
+}
+
+.dk-seo-pages-score {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-seo-pages-score .dk-seo-pages-h {
+  align-self: stretch;
+}
+
+.dk-seo-pages-score .dk-seo-pages-small {
+  text-align: center;
+}
+
+.dk-seo-pages-qa-list {
+  display: grid;
+  gap: var(--x4);
+}
+
+.dk-seo-pages-qa {
+  display: grid;
+  gap: var(--x4);
+}
+
+.dk-seo-pages-qa-btn {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  width: 100%;
+  min-height: calc(var(--ctl-xs) + var(--x2));
+  padding: 0 var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-pages-qa-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-pages-qa-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.dk-seo-pages-qa-icon {
+  color: var(--ink-3);
+}
+
+.dk-seo-pages-qa-label {
+  min-width: 0;
+  padding: var(--x4) 0;
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-pages-qa-go {
+  color: var(--ink-4);
+}
+
+.dk-seo-pages-issue-list {
+  display: grid;
+}
+
+.dk-seo-pages-issue {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--x32);
+  padding: var(--x4) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-pages-issue:first-child {
+  border-top: 0;
+}
+
+.dk-seo-pages-issue-mark {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x20);
+  height: var(--x20);
+  border-radius: var(--r-pill);
+  background: var(--tone-ground);
+  color: var(--tone);
+}
+
+.dk-seo-pages-issue-text {
+  display: grid;
+  min-width: 0;
+}
+
+.dk-seo-pages-issue-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-issue-detail {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-issue-act:empty {
+  display: none;
+}
+
+.dk-seo-pages-issue .dk-seo-pages-qb .dk-seo-pages-queued {
+  max-width: calc(var(--x56) * 3.5);
+}
+
+.dk-seo-pages-ov-foot {
+  padding: 0 var(--x2);
+}
+
+.dk-seo-pages-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  margin-bottom: var(--x8);
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-fix {
+  margin-top: var(--x6);
+  color: var(--ink-2);
+}
+
+.dk-seo-pages-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x10) var(--x14);
+  margin: var(--x8) 0;
+}
+
+.dk-seo-pages-facts.dk-seo-pages-box {
+  margin: 0;
+}
+
+.dk-seo-pages-facts--four {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dk-seo-pages-fact {
+  min-width: 0;
+}
+
+.dk-seo-pages-fact--wide {
+  grid-column: 1 / -1;
+}
+
+.dk-seo-pages-fact dt {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-pages-fact dd {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-pages-cost,
+.dk-seo-pages-linklist,
+.dk-seo-pages-opps {
+  display: grid;
+  gap: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-cost li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  color: var(--ink-2);
+}
+
+.dk-seo-pages-cost li .dk-num {
+  color: var(--amber);
+}
+
+.dk-seo-pages-linklist li,
+.dk-seo-pages-opps li {
+  display: grid;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-pages-linklist a,
+.dk-seo-pages-opps a {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-linklist a:hover,
+.dk-seo-pages-opps a:hover {
+  color: var(--green);
+}
+
+/* ---------- checklists: AI readiness in the summary, content under the list ---------- */
+.dk-seo-pages-checks,
+.dk-seo-pages-checklist {
+  display: grid;
+}
+
+.dk-seo-pages-checks li,
+.dk-seo-pages-checklist li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x24) + var(--x2));
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-checklist li {
+  min-height: var(--x40);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-pages-check-two {
+  display: grid;
+  min-width: 0;
+}
+
+/* A label longer than the column takes a second line rather than losing its end. */
+.dk-seo-pages-check-two > *,
+.dk-seo-pages-checklist .dk-seo-pages-check-label {
+  overflow: visible;
+  white-space: normal;
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-pages-checklist .dk-seo-pages-check-value {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-pages-checklist li:first-child {
+  border-top: 0;
+}
+
+.dk-seo-pages-check-mark {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x16);
+  height: var(--x16);
+  border-radius: var(--r-pill);
+  background: var(--tone-ground);
+  color: var(--tone);
+}
+
+.dk-seo-pages-check-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-check-value {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-seo-pages-check-chip {
+  justify-self: end;
+}
+
+.dk-seo-pages-content-act {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--x12);
+}
+
+.dk-seo-pages-content-act .dk-seo-pages-qb {
+  align-items: center;
+}
+
+.dk-seo-pages-content-act .dk-seo-pages-queued {
+  text-align: center;
+}
+
+/* ---------- keywords ---------- */
+.dk-seo-pages-kw-table {
+  table-layout: fixed;
+}
+
+.dk-seo-pages-kw-table th,
+.dk-seo-pages-kw-table td {
+  padding: 0 var(--x4);
+}
+
+.dk-seo-pages-kw-table th:first-child,
+.dk-seo-pages-kw-table td:first-child {
+  width: 46%;
+  padding-left: var(--x14);
+}
+
+.dk-seo-pages-kw-table th:last-child,
+.dk-seo-pages-kw-table td:last-child {
+  padding-right: var(--x14);
+}
+
+.dk-seo-pages-kw-q {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- the result preview: a light card, as a result page is ---------- */
+.dk-seo-pages-serp-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--x12);
+  margin-bottom: var(--x10);
+  padding: var(--x14);
+  border-radius: var(--r-field);
+  background: var(--ink);
+  color: var(--track);
+}
+
+.dk-seo-pages-serp-card--mobile {
+  max-width: calc(var(--x56) * 5.4);
+  margin-inline: auto;
+  padding: var(--x12);
+}
+
+.dk-seo-pages-serp-text {
+  min-width: 0;
+}
+
+.dk-seo-pages-serp-site {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-bottom: var(--x6);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-pages-serp-url {
+  overflow: hidden;
+  color: var(--chart-axis);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-serp-title {
+  margin-bottom: var(--x4);
+  color: var(--blue-edge);
+  font-size: var(--t-title);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-pages-serp-desc {
+  color: var(--track);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-pages-serp-pic {
+  width: var(--thumb-md-w);
+  height: var(--thumb-md-w);
+  border-radius: var(--r-chip);
+  object-fit: cover;
+}
+
+.dk-seo-pages-serp-card--mobile .dk-seo-pages-serp-title {
+  font-size: var(--t-body);
+}
+
+/* In the bottom row's narrow fourth column the share picture shrinks, so the result's words keep their room. */
+.dk-seo-pages-serp .dk-card-body {
+  container: dk-seo-pages-serp / inline-size;
+}
+
+@container dk-seo-pages-serp (max-width: 320px) {
+  .dk-seo-pages-serp-card {
+    gap: var(--x8);
+    padding: var(--x12);
+  }
+
+  .dk-seo-pages-serp-pic {
+    width: var(--x40);
+    height: var(--x40);
+  }
+}
+
+/* ---------- performance: the chart takes the height the row gives the card ---------- */
+.dk-seo-pages-perf .dk-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-pages-perf-sw {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.dk-seo-pages-perf-sw > .dk-seo-pages-sw-pane {
+  flex: 1;
+  display: grid;
+  grid-template-rows: minmax(var(--chart-h), 1fr);
+  grid-auto-rows: auto;
+  gap: var(--x6);
+  min-height: 0;
+}
+
+.dk-seo-pages-perf-pos {
+  display: grid;
+  grid-template-rows: minmax(var(--chart-h), 1fr) auto;
+  gap: var(--x6);
+  min-height: 0;
+}
+
+.dk-seo-pages-perf-note {
+  font-size: var(--t-label);
+}
+
+/* ---------- narrow ---------- */
+@container dk-seo-pages (max-width: 520px) {
+  .dk-seo-pages-ov-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-pages-side-head {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dk-seo-pages-side-view {
+    grid-column: 1 / -1;
+  }
+
+  .dk-seo-pages-facts--four {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-pages-pager {
+    justify-content: center;
+  }
+
+  .dk-seo-pages-list .dk-card-right {
+    width: 100%;
+  }
+
+  .dk-seo-pages-list-tools {
+    justify-content: flex-start;
+  }
+}

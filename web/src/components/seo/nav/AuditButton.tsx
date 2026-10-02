@@ -101,11 +101,14 @@ function WatchRun({ id, onSeen, onMissing }: { id: string; onSeen: (seen: StepVi
     const v = live.data as { audit?: AuditRun | null } | AuditRun | null;
     const run = v && typeof v === "object" ? ("audit" in v ? v.audit : "steps" in v ? v : null) : null;
     if (!run || run.id !== id || !Array.isArray(run.steps)) return;
-    const seen = run.steps.map((s): StepView => ({ title: s.title, where: s.state, note: s.note, progress: s.state === "running" ? s.progress : null, endedAt: s.endedAt }));
-    onSeen(seen, run.state !== "running");
+    onSeen(stepsOf(run), run.state !== "running");
   }, [live.data, live.status, id, onSeen, onMissing]);
   return null;
 }
+
+/** Where each step of the desk's own record of an audit has got. */
+const stepsOf = (run: AuditRun): StepView[] =>
+  run.steps.map((s) => ({ title: s.title, where: s.state, note: s.note, progress: s.state === "running" ? s.progress : null, endedAt: s.endedAt }));
 
 /** What the line under the button says while the audit runs, and how far the bar is. */
 function progressLine(seen: StepView[] | null, crawlOnly: boolean): { line: string; share: number | null } {
@@ -114,7 +117,10 @@ function progressLine(seen: StepView[] | null, crawlOnly: boolean): { line: stri
   const over = seen.filter((s) => ENDED.includes(s.where)).length;
   const now = seen.find((s) => s.where === "running");
   const many = seen.length > 1 ? `Step ${Math.min(over + 1, seen.length)} of ${seen.length}, ` : "";
-  if (!now) return { line: over ? `${many}waiting for the desk: it runs one job at a time.` : waiting, share: seen.length > 1 ? over / seen.length : null };
+  /* Between steps: the next one by name, so a step that never starts is seen to be that step. */
+  const next = seen.find((s) => s.where === "queued");
+  const between = next ? `${many}waiting for “${next.title}” to start: the desk runs one job at a time.` : `${many}waiting for the desk: it runs one job at a time.`;
+  if (!now) return { line: over ? between : waiting, share: seen.length > 1 ? over / seen.length : null };
   const p = now.progress;
   const part = p && p.of > 0 ? Math.min(1, p.done / p.of) : 0;
   const how = p && p.of > 0 ? `: ${p.done} of ${p.of}${p.what ? ` · ${p.what}` : ""}` : "…";
@@ -137,22 +143,30 @@ function endLine(seen: StepView[], crawlOnly: boolean): { line: string; tone: "g
     return { line: `Crawl finished at ${at}${note ? `: ${note}` : "."}`, tone: "good" };
   }
   const done = seen.filter((s) => s.where === "done").length;
-  const skipped = seen.length - done;
-  return { line: `Audit finished at ${at}: ${done} ${done === 1 ? "step" : "steps"} run${skipped ? `, ${skipped} skipped as fresh enough` : ""}. The pages show what it found.`, tone: "good" };
+  /* Skipped for the reason the desk gave (fresh enough, not connected, switched off): one is named, several counted. */
+  const skipped = seen.filter((s) => s.where === "skipped");
+  const one = skipped.length === 1 && skipped[0]!.note ? ` (${skipped[0]!.title}: ${skipped[0]!.note})` : "";
+  return { line: `Audit finished at ${at}: ${done} ${done === 1 ? "step" : "steps"} run${skipped.length ? `, ${skipped.length} skipped${one}` : ""}. The pages show what it found.`, tone: "good" };
 }
 
 /**
  * "Run full SEO audit" in the SEO head. Asks the desk for the audit (a server
  * action: actions.ts), follows it to its end with a line saying how far it
  * has got, then draws the page again with what it found. A page drawn while
- * the audit's jobs run starts out following them.
+ * an audit runs starts out following it: the desk's own record of it
+ * (`audit`), or on a desk without that record the audit's jobs (`running`).
  */
-export function AuditButton({ running }: { running: RunningStep[] }) {
+export function AuditButton({ audit, running }: { audit: AuditRun | null; running: RunningStep[] }) {
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(() =>
-    running.length ? { kind: "watching", source: { kind: "jobs", steps: running.map((r) => ({ name: r.name, title: r.title, run: r.start })) }, crawlOnly: false } : { kind: "idle" },
+    audit
+      ? { kind: "watching", source: { kind: "run", id: audit.id, steps: [] }, crawlOnly: false }
+      : running.length
+        ? { kind: "watching", source: { kind: "jobs", steps: running.map((r) => ({ name: r.name, title: r.title, run: r.start })) }, crawlOnly: false }
+        : { kind: "idle" },
   );
-  const [seen, setSeen] = useState<{ steps: StepView[]; over: boolean } | null>(null);
+  /* What the record said as the page was drawn, so the line under the button is right from the first frame. */
+  const [seen, setSeen] = useState<{ steps: StepView[]; over: boolean } | null>(() => (audit ? { steps: stepsOf(audit), over: false } : null));
   const [, start] = useTransition();
   const since = useRef(Date.now());
 

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icons";
 import { seoPlace } from "@/components/seo/nav/pages";
@@ -28,17 +28,27 @@ export function SideNav() {
   const group = SECTIONS.find((s) => s.children?.length);
   const inGroup = group !== undefined && active?.key === group.key;
   const [open, setOpen] = useState(inGroup);
+  const [at, setAt] = useState(pathname);
 
-  /* Into the section (or from one of its pages to another): open. Out of it: closed. */
-  useEffect(() => setOpen(inGroup), [inGroup, pathname]);
+  /*
+   * Into the section (or from one of its pages to another): open. Out of it:
+   * closed. Reset while drawing, not in an effect, so the screen a click led
+   * to never shows one frame of the submenu as it was on the screen before.
+   */
+  if (at !== pathname) {
+    setAt(pathname);
+    setOpen(inGroup);
+  }
 
   /*
    * How many rows the window has to fit (side-group.css): inside the section
-   * the rows close up to make room for its submenu, whether or not it is
-   * open, so opening or closing it there never moves the row under the
-   * pointer. Opened from elsewhere, the rows stay where they are and the
-   * sidebar scrolls if it must; they close up once a page of the section is
-   * open, which is a new screen anyway.
+   * the submenu's rows, then the sections' rows, close up to make room for
+   * it, whether or not it is open, so opening or closing it there never
+   * moves the row under the pointer. Opened from elsewhere, the rows stay
+   * where they are and the sidebar scrolls if it must; they close up once a
+   * page of the section is open, which is a new screen anyway. In the phone's
+   * drawer nothing closes up: it scrolls, and the rows keep their size for a
+   * finger.
    */
   const grown = inGroup && group?.children ? group.children.length : 0;
   const fit = { "--side-rows": SECTIONS.length, "--side-subs": grown } as CSSProperties;
@@ -82,6 +92,8 @@ function Group({ section, open, inside, pathname, onToggle }: { section: Section
         className={cx("dk-nav-row", "dk-nav-row--group", inside && (pageLit ? "dk-nav-row--within" : "dk-nav-row--on"))}
         aria-expanded={open}
         aria-controls={id}
+        /* Lit as the section's row (its pages hidden, or none of them is the screen): say so, as a lit link does. */
+        aria-current={inside && !pageLit ? "true" : undefined}
         onClick={onToggle}
       >
         <Icon name={section.icon} size={18} />

@@ -1639,6 +1639,34 @@ export function indexHistory(days = 90): { day: string; indexed: number; notInde
   return series("gsc.indexed", days).map((p) => ({ day: p.day, indexed: p.value, notIndexed: not.get(p.day) ?? 0 }));
 }
 
+/* ---------- for the SEO engine's own history (src/cc/seo/rank.ts) -------- */
+
+/**
+ * The newest day Google has finished counting (dataState final): the day
+ * every window of the screens ends on. Kept six hours, like the screens' own.
+ * Off with the step while Search Console cannot be read.
+ */
+export function newestFinalDay(): Promise<Reading<string>> {
+  return guarded(async (site) => ok(await lastFinalDay(site), "gsc", new Date().toISOString(), "The newest day Google has finished counting."));
+}
+
+/**
+ * One Search Analytics question asked now and NOT kept in cc_cache. The SEO
+ * engine keeps the answer in its own tables (one snapshot per day), so a
+ * cached copy would only be a second, older store of the same rows. Both
+ * dates must be given; the row limit pages as `query` does (at most 100,000).
+ */
+export function rawRows(q: {
+  start: string;
+  end: string;
+  dimensions: Dimension[];
+  filters?: Filter[];
+  dataState?: DataState;
+  limit?: number;
+}): Promise<Reading<{ rows: Row[]; complete: boolean; firstIncompleteDate: string | null }>> {
+  return guarded(async (site) => ok(await rows(site, { ...q, limit: q.limit ?? 25_000 }), "gsc", new Date().toISOString(), caveat(q)));
+}
+
 /* ---------- the scheduled work ------------------------------------------- */
 
 const WARM: Range[] = ["7d", "30d", "90d"];

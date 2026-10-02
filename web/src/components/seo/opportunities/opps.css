@@ -1,0 +1,1462 @@
+/*
+ * SEO › Opportunities. Measured on design/boards/seo/111.webp (1672×941):
+ * six tiles; the list (chips, filters, the table, the pager) on the left with
+ * three panels under it; the selected opportunity's details on the right, as
+ * tall as the two of them. Boards 109 and 114 lend the detail its position
+ * history, its suggestions and the result as Google draws it.
+ *
+ * Every value is a token; the measures this page needs are named here, the
+ * class names all begin dk-seo-opps-.
+ */
+:root {
+  --dk-seo-opps-icon: 24px;          /* a type's square in a row */
+  --dk-seo-opps-title-w: 26ch;       /* an opportunity's line in the table */
+  --dk-seo-opps-path-w: 20ch;        /* a page's address, a search or a topic in the table */
+  --dk-seo-opps-menu-w: 224px;       /* a row's menu, the bulk menu */
+  --dk-seo-opps-page: 28px;          /* a pager button */
+  --dk-seo-opps-said-w: 30ch;        /* a button's sentence */
+  --dk-seo-opps-bars-h: 96px;        /* ranking potential's two bars */
+  --dk-seo-opps-bar-w: 34px;
+  --dk-seo-opps-history-dt: 128px;   /* the History tab's labels */
+  --dk-seo-opps-pos-h: 150px;        /* the position chart, labels included */
+  --dk-seo-opps-mini-n: 56px;        /* a figure column of the cluster table */
+  --dk-seo-opps-head-min: 280px;     /* the list's title and line, before its controls go under them */
+}
+
+.dk-seo-opps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* The list and the detail (board 111): 2.3 to 1, the detail running down beside the list and the panels under it. */
+.dk-seo-opps-main {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.dk-seo-opps-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.3fr) minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  grid-template-areas:
+    "list detail"
+    "under detail";
+  gap: var(--gap);
+}
+
+.dk-seo-opps-area-list {
+  grid-area: list;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-opps-area-detail {
+  grid-area: detail;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-opps-area-detail > .dk-card {
+  flex: 1;
+}
+
+.dk-seo-opps-area-under {
+  grid-area: under;
+  min-width: 0;
+}
+
+.dk-seo-opps-area-under .dk-grid-row {
+  height: 100%;
+}
+
+@container (max-width: 1120px) {
+  .dk-seo-opps-main-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    grid-template-areas:
+      "list"
+      "detail"
+      "under";
+  }
+}
+
+.dk-seo-opps-listform {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-opps-listform > .dk-card {
+  flex: 1;
+}
+
+/* ---------- small things every part uses ---------- */
+.dk-seo-opps-quiet {
+  color: var(--ink-3);
+}
+
+.dk-seo-opps-none {
+  color: var(--ink-4);
+}
+
+.dk-seo-opps-gain-figure {
+  color: var(--green);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-opps-per {
+  margin-left: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-opps-note,
+.dk-seo-opps-lead {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
+}
+
+.dk-seo-opps-lead {
+  padding: var(--x4) 0 var(--x8);
+}
+
+.dk-seo-opps-link {
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-link:hover {
+  text-decoration: underline;
+}
+
+.dk-seo-opps-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-opps-icon);
+  height: var(--dk-seo-opps-icon);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-opps-title {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-type {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- the list ---------- */
+.dk-seo-opps-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-opps-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  padding: var(--x4) var(--pad) 0;
+}
+
+.dk-seo-opps-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x8) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-opps-chip:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-opps-chip--on,
+.dk-seo-opps-chip--on:hover {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-seo-opps-chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x20);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  background: var(--card-3);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-chip--on .dk-seo-opps-chip-n {
+  background: var(--green);
+  color: var(--bg);
+  font-weight: var(--w-semi);
+}
+
+/* The search and four selects on one line, as on the board; two lines, then one, as the list narrows. */
+.dk-seo-opps-list {
+  container-type: inline-size;
+}
+
+.dk-seo-opps-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr));
+  gap: var(--x8);
+  padding: var(--x12) var(--pad) var(--x14);
+}
+
+.dk-seo-opps-filters .dk-select {
+  min-width: 0;
+}
+
+.dk-seo-opps-filters .dk-select select {
+  width: 100%;
+}
+
+.dk-seo-opps-find {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-opps-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-opps-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-opps-find input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-opps-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+/* The table. The row in detail is lit, with the accent along its edge. */
+.dk-seo-opps-table {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-opps-table th,
+.dk-seo-opps-table td {
+  padding-inline: var(--x8);
+}
+
+.dk-seo-opps-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-opps-where .dk-seo-opps-kw {
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-head-select select {
+  min-width: 0;
+}
+
+/* The list's head: its title and line, then the state, the order and "Bulk actions"; on a narrow list those go under the title. */
+.dk-seo-opps-list > .dk-card-head {
+  flex-wrap: wrap;
+}
+
+.dk-seo-opps-list > .dk-card-head > .dk-card-heading {
+  flex: 1 1 var(--dk-seo-opps-head-min);
+}
+
+.dk-seo-opps-list > .dk-card-head > .dk-card-right {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 100%;
+}
+
+.dk-seo-opps-table tr:has([data-opp-on]) td {
+  background: var(--card-2);
+}
+
+.dk-seo-opps-table tr:has([data-opp-on]) td:first-child {
+  box-shadow: inset var(--x2) 0 0 var(--green);
+}
+
+.dk-seo-opps-what {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-opps-what-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  max-width: var(--dk-seo-opps-title-w);
+}
+
+.dk-seo-opps-table .dk-table-go:hover .dk-seo-opps-title {
+  color: var(--green);
+}
+
+.dk-seo-opps-path,
+.dk-seo-opps-kw {
+  display: inline-block;
+  max-width: var(--dk-seo-opps-path-w);
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-kw--topic {
+  color: var(--ink-3);
+}
+
+.dk-seo-opps-pos-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink);
+}
+
+.dk-seo-opps-head-info {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+/* A button and the server's sentence about it. */
+.dk-seo-opps-act {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-opps-act--under {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+}
+
+.dk-seo-opps-act--block {
+  display: flex;
+  width: 100%;
+}
+
+.dk-seo-opps-said {
+  max-width: var(--dk-seo-opps-said-w);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+.dk-seo-opps-said--bad {
+  color: var(--red);
+}
+
+.dk-seo-opps-go .dk-icon {
+  opacity: 0.8;
+}
+
+/* ---------- menus: a row's "⋯" and "Bulk actions" ---------- */
+.dk-seo-opps-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.dk-seo-opps-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.dk-seo-opps-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-opps-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-opps-menu-button:hover,
+.dk-seo-opps-menu[open] > .dk-seo-opps-menu-button {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-opps-menu-list {
+  position: absolute;
+  top: calc(100% + var(--x4));
+  right: 0;
+  z-index: var(--z-pop);
+  display: flex;
+  flex-direction: column;
+  min-width: var(--dk-seo-opps-menu-w);
+  padding: var(--x4);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+}
+
+/* A row's menu floats over the page (placed by Act.tsx), so the table's scroller cannot cut it. */
+.dk-seo-opps-menu-list--fixed {
+  position: fixed;
+  top: auto;
+  right: auto;
+}
+
+.dk-seo-opps-menu-list button {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  width: 100%;
+  padding: var(--x8) var(--x10);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-opps-menu-list button:hover:not(:disabled) {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-opps-menu-list button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dk-seo-opps-menu--wide .dk-seo-opps-menu-list {
+  min-width: calc(var(--dk-seo-opps-menu-w) + var(--x40));
+}
+
+.dk-seo-opps-bulk {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-seo-opps-bulk .dk-seo-opps-said {
+  text-align: right;
+}
+
+/* ---------- the pager ---------- */
+.dk-seo-opps-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10) var(--x16);
+  padding: var(--x10) var(--pad);
+}
+
+.dk-seo-opps-pager-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-pager-said a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-4);
+}
+
+.dk-seo-opps-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-opps-page-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-opps-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--dk-seo-opps-page);
+  height: var(--dk-seo-opps-page);
+  padding: 0 var(--x6);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-opps-page:hover {
+  background: var(--card-3);
+}
+
+.dk-seo-opps-page--on {
+  border-color: var(--line-2);
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-opps-gap {
+  color: var(--ink-4);
+}
+
+.dk-seo-opps-perpage {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- the detail ---------- */
+.dk-seo-opps-detail {
+  container-type: inline-size;
+}
+
+.dk-seo-opps-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding-bottom: var(--x14);
+}
+
+.dk-seo-opps-detail-title {
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-snug);
+  letter-spacing: var(--track-title);
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-detail-subject {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-detail-path {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-detail-path:hover {
+  color: var(--green);
+}
+
+.dk-seo-opps-detail .dk-seo-opps-kw {
+  max-width: 100%;
+}
+
+.dk-seo-opps-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x12);
+  padding: var(--x12) 0;
+  border-top: var(--x1) solid var(--line);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-opps-figs-absent {
+  grid-column: span 3;
+  min-width: 0;
+}
+
+/* The whole reason, in the row's own height: no panel's minimum or padding. */
+.dk-seo-opps-figs-absent .dk-absent--panel {
+  min-height: 0;
+  padding: 0;
+}
+
+.dk-seo-opps-fig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+  border-radius: var(--x4);
+}
+
+.dk-seo-opps-fig-label {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+  text-decoration: underline dotted var(--ink-4);
+  text-underline-offset: var(--x3);
+  cursor: help;
+}
+
+.dk-seo-opps-fig-value {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x2);
+}
+
+.dk-seo-opps-fig-value b {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-seo-opps-fig-value b.dk-seo-opps-gain-figure {
+  color: var(--green);
+}
+
+.dk-seo-opps-fig-word {
+  color: var(--ink-3);
+  font-size: var(--t-body);
+  line-height: var(--lh-figure);
+  padding-top: var(--x4);
+}
+
+.dk-seo-opps-fig-note {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-move {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-move--up {
+  color: var(--green);
+}
+
+.dk-seo-opps-move--down {
+  color: var(--red);
+}
+
+.dk-seo-opps-tabs {
+  margin-top: var(--x12);
+}
+
+.dk-seo-opps-tabbody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x20);
+  padding-top: var(--x16);
+}
+
+.dk-seo-opps-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10);
+  margin-bottom: var(--x8);
+}
+
+.dk-seo-opps-section h4 {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-opps-evidence > div {
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-opps-evidence > div:first-child {
+  padding-top: 0;
+}
+
+.dk-seo-opps-evidence dt {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-evidence dd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x2) var(--x10);
+  margin-top: var(--x2);
+}
+
+.dk-seo-opps-evidence-value {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-evidence-from {
+  flex: none;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-why {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin-top: var(--x10);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-why .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--amber);
+}
+
+.dk-seo-opps-why + .dk-seo-opps-note {
+  margin-top: var(--x6);
+}
+
+/* The position chart (PositionChart.tsx): 1 at the top. Room on the left for the positions, under the plot for the days. */
+.dk-seo-opps-pos {
+  position: relative;
+  height: var(--dk-seo-opps-pos-h);
+  padding: var(--x8) var(--x4) var(--x20) var(--x24);
+}
+
+.dk-seo-opps-pos-plot {
+  position: relative;
+  height: 100%;
+}
+
+.dk-seo-opps-pos-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dk-seo-opps-pos-grid {
+  stroke: var(--chart-grid);
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-seo-opps-pos-target {
+  stroke: var(--ink-3);
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-seo-opps-pos-line {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: var(--chart-line);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-seo-opps-pos-dot {
+  position: absolute;
+  width: var(--chart-dot);
+  height: var(--chart-dot);
+  border: var(--chart-line) solid var(--green);
+  border-radius: var(--r-pill);
+  background: var(--card);
+  transform: translate(-50%, -50%);
+}
+
+.dk-seo-opps-pos-y,
+.dk-seo-opps-pos-x,
+.dk-seo-opps-pos-target-text {
+  position: absolute;
+  color: var(--ink-4);
+  font-size: var(--t-tiny);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-pos-y {
+  right: calc(100% + var(--x8));
+  transform: translateY(-50%);
+}
+
+.dk-seo-opps-pos-x {
+  top: calc(100% + var(--x8));
+  transform: translateX(-50%);
+}
+
+.dk-seo-opps-pos-x[data-edge="start"] {
+  transform: none;
+}
+
+.dk-seo-opps-pos-x[data-edge="end"] {
+  transform: translateX(-100%);
+}
+
+.dk-seo-opps-pos-target-text {
+  right: 0;
+  color: var(--ink-3);
+  transform: translateY(calc(-100% - var(--x4)));
+}
+
+.dk-seo-opps-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-opps-legend-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border: var(--x2) solid var(--green);
+  border-radius: var(--r-pill);
+}
+
+.dk-seo-opps-legend-dash {
+  width: var(--x14);
+  border-top: var(--x2) dashed var(--ink-3);
+}
+
+.dk-seo-opps-legend-sq {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--x2);
+  background: var(--green);
+}
+
+.dk-seo-opps-legend-sq--now {
+  background: var(--ink-4);
+}
+
+.dk-seo-opps-rows li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x10);
+  padding: var(--x6) 0;
+  border-bottom: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-rows li > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-opps-rows .dk-seo-opps-path {
+  max-width: 100%;
+}
+
+.dk-seo-opps-rows + .dk-seo-opps-note {
+  margin-top: var(--x8);
+}
+
+/* AI suggestions */
+.dk-seo-opps-runner {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  padding: var(--x10) var(--x12);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-runner .dk-dot {
+  margin-top: var(--x6);
+}
+
+.dk-seo-opps-ops li {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x10) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-opps-ops li:first-child {
+  padding-top: 0;
+}
+
+.dk-seo-opps-ops b {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-opps-ops p {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-ops .dk-seo-opps-act {
+  flex: none;
+}
+
+.dk-seo-opps-proposals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-opps-proposals li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+}
+
+.dk-seo-opps-proposal-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-proposal-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-proposal-line--desc {
+  color: var(--ink-2);
+}
+
+.dk-seo-opps-len {
+  flex: none;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-len--over {
+  color: var(--amber);
+}
+
+/* The result as Google draws it. */
+.dk-seo-opps-serp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  margin: 0;
+}
+
+.dk-seo-opps-serp + .dk-seo-opps-serp {
+  margin-top: var(--x14);
+}
+
+.dk-seo-opps-serp figcaption {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-serp-card {
+  padding: var(--x12) var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-opps-serp--proposed .dk-seo-opps-serp-card {
+  border-color: var(--green-4);
+}
+
+.dk-seo-opps-serp-site {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-serp-site > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-opps-serp-site b {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-opps-serp-site b + span {
+  overflow: hidden;
+  color: var(--ink-4);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-serp-fav {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-opps-icon);
+  height: var(--dk-seo-opps-icon);
+  border-radius: var(--r-pill);
+  background: var(--card-3);
+  color: var(--ink-3);
+}
+
+.dk-seo-opps-serp-title {
+  margin-top: var(--x8);
+  color: var(--blue);
+  font-size: var(--t-title);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-serp-desc {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-serp-title i,
+.dk-seo-opps-serp-desc i {
+  color: var(--ink-4);
+  font-style: normal;
+}
+
+.dk-seo-opps-serp-meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x10) var(--x14);
+}
+
+.dk-seo-opps-meter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-opps-meter-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-meter-top b {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-opps-meter-track {
+  display: block;
+  height: var(--x4);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.dk-seo-opps-meter-track i {
+  display: block;
+  height: 100%;
+  border-radius: var(--r-pill);
+  background: var(--green);
+}
+
+.dk-seo-opps-meter-track i.dk-seo-opps-meter-over {
+  background: var(--amber);
+}
+
+.dk-seo-opps-serp-schema {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-opps-serp-schema b {
+  color: var(--ink-2);
+  font-weight: var(--w-regular);
+}
+
+/* Actions */
+.dk-seo-opps-kind {
+  margin-bottom: var(--x8);
+}
+
+.dk-seo-opps-step {
+  padding: var(--x10) var(--x12);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin-top: var(--x10);
+}
+
+.dk-seo-opps-note + .dk-seo-opps-buttons {
+  margin-top: var(--x8);
+}
+
+/* History */
+.dk-seo-opps-history li {
+  display: grid;
+  grid-template-columns: var(--dk-seo-opps-history-dt) minmax(0, 1fr);
+  gap: var(--x10);
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-history b {
+  color: var(--ink-3);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-opps-history span {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-opps-history em {
+  display: block;
+  color: var(--ink-3);
+  font-style: normal;
+}
+
+.dk-seo-opps-history a {
+  color: var(--green);
+}
+
+/* The foot: the page's own view, and the action. */
+/* Two buttons side by side while both labels fit, one over the other when they do not. */
+.dk-seo-opps-detail-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x14) var(--pad);
+}
+
+/* Each starts at its label's own width (a block button's 100% is not its basis), so both share the row while they fit (board 111). */
+.dk-seo-opps-detail-foot > * {
+  flex: 1 1 max-content;
+  min-width: 0;
+}
+
+.dk-seo-opps-detail-main {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+@container (max-width: 380px) {
+  .dk-seo-opps-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-opps-figs-absent {
+    grid-column: 1 / -1;
+  }
+
+  .dk-seo-opps-serp-meters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-opps-history li {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x2);
+  }
+}
+
+/* ---------- the three panels under the list ---------- */
+.dk-seo-opps-cluster-chip {
+  max-width: 100%;
+  margin-top: var(--x4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-mini {
+  width: 100%;
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-mini th {
+  padding-bottom: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+  text-align: left;
+}
+
+.dk-seo-opps-mini td {
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-2);
+}
+
+.dk-seo-opps-mini td:first-child {
+  max-width: 0;
+  width: 100%;
+}
+
+.dk-seo-opps-mini .dk-seo-opps-mini-n {
+  width: var(--dk-seo-opps-mini-n);
+  min-width: var(--dk-seo-opps-mini-n);
+  text-align: right;
+}
+
+.dk-seo-opps-mini-phrase {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-opps-mini-phrase > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-seo-opps-mini-phrase .dk-icon {
+  flex: none;
+  color: var(--ink-4);
+}
+
+.dk-seo-opps-mini + .dk-stamp {
+  margin-top: var(--x8);
+}
+
+.dk-seo-opps-potential {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--x14);
+}
+
+.dk-seo-opps-potential-text {
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-opps-potential-figure {
+  margin: var(--x6) 0 var(--x2);
+  color: var(--green);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-opps-potential-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--x12);
+  height: var(--dk-seo-opps-bars-h);
+  padding: 0 var(--x4);
+  border-bottom: var(--x1) solid var(--chart-axis);
+}
+
+.dk-seo-opps-potential-bar {
+  position: relative;
+  width: var(--dk-seo-opps-bar-w);
+  border-radius: var(--x4) var(--x4) 0 0;
+  background: linear-gradient(180deg, var(--green) 0%, var(--green-2) 100%);
+}
+
+.dk-seo-opps-potential-bar--now {
+  background: var(--ink-4);
+}
+
+.dk-seo-opps-potential-bar b {
+  position: absolute;
+  bottom: calc(100% + var(--x4));
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+
+.dk-seo-opps-legend--bars {
+  justify-content: flex-end;
+  margin-top: var(--x8);
+}
+
+.dk-seo-opps-basis {
+  margin-top: var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-opps-related li {
+  display: grid;
+  grid-template-columns: var(--dk-seo-opps-icon) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-opps-related li:first-child {
+  padding-top: 0;
+}
+
+.dk-seo-opps-related-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-opps-related-text:hover .dk-seo-opps-title {
+  color: var(--green);
+}
+
+@container (max-width: 820px) {
+  .dk-seo-opps-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-opps-find {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ---------- narrow ---------- */
+@media (max-width: 760px) {
+  .dk-seo-opps-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-bottom: var(--x2);
+  }
+
+  .dk-seo-opps-chips::-webkit-scrollbar {
+    display: none;
+  }
+
+  .dk-seo-opps-pager {
+    justify-content: flex-start;
+  }
+}

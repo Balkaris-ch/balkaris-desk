@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { JobListed } from "@/contract/common";
-import type { SeoNav } from "@/contract/seo/common";
+import type { AuditRun, SeoNav } from "@/contract/seo/common";
 import { ask, type Answer } from "@/lib/api";
 import { isAuditJob } from "@/components/seo/nav/pages";
 import { SeoFrame } from "@/components/seo/nav/SeoFrame";
@@ -14,15 +14,17 @@ import type { RunningStep } from "@/components/seo/nav/AuditButton";
  * It asks the desk two small things, together, and neither can take a page
  * down: how many opportunities are open (GET /api/v1/seo/nav, SeoNav in
  * contract/seo/common.ts: the count on the Opportunities tab, left out
- * quietly while the desk has no answer), and
- * which of the audit's jobs are running now (GET /api/v1/jobs), so a page
- * drawn in the middle of an audit shows it. Each page asks for its own data
- * itself, in parallel with this.
+ * quietly while the desk has no answer), and whether a full audit is running
+ * (GET /api/v1/seo/audit, the desk's own record of it), so a page drawn in
+ * the middle of one follows it. Only a desk without that record is asked
+ * which of the audit's jobs are running instead (GET /api/v1/jobs). Each page
+ * asks for its own data itself, in parallel with this.
  */
 export default async function SeoLayout({ children }: { children: ReactNode }) {
-  const [nav, jobs] = await Promise.all([ask<SeoNav>("/api/v1/seo/nav"), ask<JobListed[]>("/api/v1/jobs")]);
+  const [nav, audit] = await Promise.all([ask<SeoNav>("/api/v1/seo/nav"), ask<{ audit: AuditRun | null }>("/api/v1/seo/audit")]);
+  const running = !audit.ok && audit.kind === "missing" ? runningAudit(await ask<JobListed[]>("/api/v1/jobs")) : [];
   return (
-    <SeoFrame opportunities={openCount(nav)} running={runningAudit(jobs)}>
+    <SeoFrame opportunities={openCount(nav)} audit={auditRunning(audit)} running={running}>
       {children}
     </SeoFrame>
   );
@@ -44,7 +46,15 @@ function openCount(a: Answer<SeoNav>): number | null {
   return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
 }
 
-/** The audit's jobs that are running now, with the start of their run. */
+/** The audit the desk is running now, when it has the agreed shape; else null (none running, or no record). */
+function auditRunning(a: Answer<{ audit: AuditRun | null }>): AuditRun | null {
+  if (!a.ok || typeof a.value !== "object" || a.value === null) return null;
+  const run = a.value.audit;
+  if (!run || run.state !== "running" || typeof run.id !== "string" || !Array.isArray(run.steps)) return null;
+  return run;
+}
+
+/** The audit's jobs that are running now, with the start of their run: for a desk with no record of the audit itself. */
 function runningAudit(a: Answer<JobListed[]>): RunningStep[] {
   if (!a.ok || !Array.isArray(a.value)) return [];
   return a.value.filter((j) => j.running && j.lastStart && isAuditJob(j.name)).map((j) => ({ name: j.name, title: j.title, start: j.lastStart as string }));

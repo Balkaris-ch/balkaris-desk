@@ -1,6 +1,12 @@
 import { Hono, type Context } from "hono";
+import { existsSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import type { Person } from "../../people.ts";
 import type { Vars } from "../access.ts";
+import { apiError } from "../api.ts";
 import * as ga4 from "../ga4.ts";
+import { engineApi } from "../seo/api.ts";
+import { registerCheck } from "../sources.ts";
 import { status as jobStatus } from "../scheduler.ts";
 import { bing, gsc } from "../search/index.ts";
 import type { LinkCounts } from "../search/bing.ts";
@@ -10,7 +16,7 @@ import * as site from "../site/index.ts";
 import { specimenAllowed } from "../specimen.ts";
 import { off, ok, reading, series, since, today, waiting } from "../store.ts";
 import { scrub } from "../system.ts";
-import type { EarlySignals, JobListed, Range, Reading, SourceId, Stat } from "../../../web/src/contract/common.ts";
+import type { ApiError, EarlySignals, JobListed, Range, Reading, SourceId, Stat } from "../../../web/src/contract/common.ts";
 import type {
   AuditState,
   CheckKey,
@@ -45,11 +51,24 @@ import type {
 } from "../../../web/src/contract/seo.ts";
 
 /**
- * /api/v1/seo — the SEO screen, its full report and its full lists.
+ * /api/v1/seo — the SEO section: its eleven pages, the engine's own
+ * addresses, and the first SEO screen (now /seo/legacy) with its report and lists.
  *
- *   GET /             the whole screen in one answer: ?range=7d|30d|90d|1y, ?open=<query>
+ *   GET /             the first SEO screen in one answer: ?range=7d|30d|90d|1y, ?open=<query>
  *   GET /report       every finding of the last crawl, by check and by rule
  *   GET /list/:name   one panel's whole list: opportunities, gaps, movements, landing
+ *
+ *   /<page>/…         each page of the section, from its own file
+ *                     src/cc/routes/seo/<page>.ts (exporting `routes`), for
+ *                     overview, opportunities, pages, keywords, content-gaps,
+ *                     backlinks, technical, search-console, competitors,
+ *                     ai-search, automations and optimize (Page Optimization)
+ *                     (`SEO_PAGES` below), and any other file that folder
+ *                     holds but shared.ts. One page whose file is missing or
+ *                     broken answers 503 { error } and costs that page only.
+ *   /nav, /audit, /owner-tasks/:id, /indexing/requested, /clusters/:key/page,
+ *   /ai-checks, /imports/:kind
+ *                     the engine's own addresses (src/cc/seo/api.ts)
  *
  * WHERE EACH PANEL COMES FROM.
  *
@@ -823,6 +842,151 @@ routes.get("/report", async (c) => {
   };
   return c.json(body);
 });
+
+/* ---------- the SEO section's pages and the engine's addresses ----------------------------- */
+
+/**
+ * The pages of the SEO section, each answered by its own file
+ * src/cc/routes/seo/<name>.ts that exports `routes` (a Hono<Vars> router
+ * answering GET / with the page's payload, and its own changes).
+ *
+ * WHY EACH PAGE IS LOADED WHEN FIRST ASKED, NOT WHEN THIS FILE LOADS. A page
+ * may import this file (labelOf, crawlStat, assembleChecks …). Waiting here,
+ * at load time, for a page that waits for this file would hang the desk's
+ * start. So a page is imported on its first request (and once, quietly, a few
+ * seconds after start, so a broken one shows under the top bar's light without
+ * waiting for anyone to open it), and the request is handed to its router.
+ *
+ * ONE PAGE'S FAILURE IS THAT PAGE'S ONLY. A page whose file is not there yet
+ * answers 503 { error } saying so, and is looked for again on the next
+ * request. A page whose file throws while loading, or does not export a
+ * router, answers 503 { error } with the first line of what it threw, is
+ * written to the log, and is a failing check on the top bar's light; every
+ * other page answers as usual.
+ */
+export const SEO_PAGES = [
+  "overview",
+  "opportunities",
+  "pages",
+  "keywords",
+  "content-gaps",
+  "backlinks",
+  "technical",
+  "search-console",
+  "competitors",
+  "ai-search",
+  "automations",
+  /* Page Optimization (/seo/pages/view?path=), served from src/cc/routes/seo/optimize.ts. */
+  "optimize",
+] as const;
+export type SeoPageName = (typeof SEO_PAGES)[number];
+
+type PageLoad = { state: "ok"; app: Hono<Vars> } | { state: "broken"; detail: string };
+
+const pageLoads = new Map<string, Promise<PageLoad>>();
+
+/** Where a page's file is. */
+export const pageFile = (name: string): string => fileURLToPath(new URL(`./seo/${name}.ts`, import.meta.url));
+
+/** The first line of whatever was thrown, short enough to show. */
+const firstLine = (e: unknown): string => (e instanceof Error ? e.message : String(e)).split(/\r?\n/)[0]!.slice(0, 160);
+
+/** The person a handed-on request carries: the server's gate set it on the original, the page's router reads it from here. */
+const carried = new WeakMap<Request, Person>();
+
+/**
+ * Load a page's router once. Null while its file does not exist (asked again
+ * next time). Exported so the check script can prove a broken page is survived.
+ */
+export function loadPage(name: string, file: string = pageFile(name)): Promise<PageLoad> | null {
+  const had = pageLoads.get(name);
+  if (had) return had;
+  if (!existsSync(file)) return null;
+  const load = (async (): Promise<PageLoad> => {
+    try {
+      const mod = (await import(pathToFileURL(file).href)) as { routes?: unknown };
+      if (!(mod.routes instanceof Hono)) throw new Error("it does not export `routes` as a Hono router");
+      /* The page's router behind one that hands it the signed-in person and answers every error as { error }. */
+      const app = new Hono<Vars>();
+      app.use("*", async (c, next) => {
+        const who = carried.get(c.req.raw);
+        if (who) c.set("who", who);
+        await next();
+      });
+      app.route("/", mod.routes as Hono<Vars>);
+      app.onError(apiError);
+      app.notFound((c) => c.json<ApiError>({ error: `The SEO ${name} page has no address ${c.req.path}.` }, 404));
+      return { state: "ok", app };
+    } catch (e) {
+      const detail = firstLine(e);
+      console.error(`cc: the SEO ${name} page did not load and answers 503 until it is fixed and the desk restarted:`, e);
+      registerCheck(() => ({ name: `The SEO ${name} page loads`, ok: false, detail }));
+      return { state: "broken", detail };
+    }
+  })();
+  pageLoads.set(name, load);
+  return load;
+}
+
+/** Hand a request for /<name>/… to the page's own router, with the path it knows ("/", "/view"). */
+async function toPage(name: string, c: Context<Vars>): Promise<Response> {
+  const load = loadPage(name);
+  if (!load) {
+    return c.json<ApiError>({ error: `The SEO ${name} page is not on this desk yet: its server code (src/cc/routes/seo/${name}.ts) has not been written.` }, 503);
+  }
+  const got = await load;
+  if (got.state === "broken") {
+    return c.json<ApiError>({ error: `The SEO ${name} page is unavailable: its server code did not load (${got.detail}). The reason is under the top bar's light.` }, 503);
+  }
+  const url = new URL(c.req.url);
+  const mount = `/${name}`;
+  const inSeo = url.pathname.indexOf(`/seo${mount}`);
+  const at = inSeo >= 0 ? inSeo + 4 : url.pathname.indexOf(mount);
+  url.pathname = url.pathname.slice(at + mount.length) || "/";
+  const method = c.req.method;
+  const req = new Request(url, {
+    method,
+    headers: c.req.raw.headers,
+    ...(method === "GET" || method === "HEAD" ? {} : { body: await c.req.raw.arrayBuffer() }),
+  });
+  const who = c.get("who");
+  if (who) carried.set(req, who);
+  return got.app.fetch(req, c.env);
+}
+
+for (const name of SEO_PAGES) {
+  routes.all(`/${name}`, (c) => toPage(name, c));
+  routes.all(`/${name}/*`, (c) => toPage(name, c));
+}
+
+/* The engine's own addresses: /nav, /audit, owner tasks, the indexing queue, clusters, AI checks, imports. */
+routes.route("/", engineApi);
+
+/** A file in src/cc/routes/seo/ that is not a page: the helpers every page shares. */
+const NOT_PAGES = new Set(["shared"]);
+
+/**
+ * Any other file src/cc/routes/seo/<name>.ts that exists answers at /<name>
+ * too, so a page added beside the list above is mounted without a change
+ * here. Registered last: Hono tries routes in the order they were added, so
+ * every address above (the first screen, its report and lists, the engine's
+ * own) is answered before this is asked; a name with no file is a 404.
+ */
+const anyPage = (c: Context<Vars>): Promise<Response> | Response => {
+  const name = c.req.param("page") ?? "";
+  if (!/^[a-z][a-z0-9-]{0,40}$/.test(name) || NOT_PAGES.has(name) || !existsSync(pageFile(name))) {
+    return c.json<ApiError>({ error: `There is nothing at ${c.req.method} ${c.req.path}.` }, 404);
+  }
+  return toPage(name, c);
+};
+routes.all("/:page", anyPage);
+routes.all("/:page/*", anyPage);
+
+/* Every page that exists, loaded once a few seconds after start: a broken one is then
+   under the top bar's light before anybody opens it. Quiet for a page not written yet. */
+setTimeout(() => {
+  for (const name of SEO_PAGES) void loadPage(name);
+}, 3_000).unref();
 
 /* ---------- the full report ---------------------------------------------------------------- */
 

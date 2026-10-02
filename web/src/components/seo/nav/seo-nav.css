@@ -11,7 +11,18 @@
  */
 :root {
   --dk-seo-nav-tab-h: 40px;     /* a tab */
-  --dk-seo-nav-tab-x: 15px;     /* a tab's label from its edges */
+  /*
+   * A tab's label from its edges: the boards' 16 (34 from one label to the
+   * next with the 2 between tabs), closing up on a narrower window down to 5
+   * so all eleven still fit at 1280 with a scrollbar (measured: 1265 wide,
+   * a three-figure count on Opportunities, 5.7 each side). The eleven labels,
+   * the count and the strip's inset are about 830 wide; with the sidebar, the
+   * page's sides and a scrollbar, about 1140 of the window is spent before
+   * the 22 label edges get any. Narrower still, the strip scrolls. Eleven
+   * tabs: change the 22 if a tab is added.
+   */
+  --dk-seo-nav-fit: 1140px;
+  --dk-seo-nav-tab-x: clamp(calc(var(--x6) - var(--x1)), calc((100vw - var(--dk-seo-nav-fit)) / 22), var(--x16));
   --dk-seo-nav-underline: 2px;  /* the lit tab's green line */
   --dk-seo-nav-count-h: 18px;   /* the count on Opportunities */
   --dk-seo-nav-tools-top: 18px; /* the period and the audit, down to the title's level */
@@ -173,7 +184,7 @@
 .dk-seo-nav-tabs ul {
   display: flex;
   align-items: stretch;
-  gap: var(--x4);
+  gap: var(--x2);
   padding-left: var(--head-inset);
   overflow-x: auto;
   scrollbar-width: none;
@@ -244,6 +255,23 @@
   background: var(--green);
 }
 
+/* The label at the lit weight, unseen and with no height, holds every tab at its lit width. */
+.dk-seo-nav-tab-label {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.dk-seo-nav-tab-label::after {
+  content: attr(data-label);
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  font-weight: var(--w-medium);
+  pointer-events: none;
+  user-select: none;
+}
+
 .dk-seo-nav-tab:focus-visible {
   outline-offset: calc(-1 * var(--x2));
 }
@@ -263,6 +291,41 @@
   line-height: 1;
 }
 
+/* An arrow at an edge with more beyond it, for a mouse (SeoTabs.tsx). */
+.dk-seo-nav-more {
+  position: absolute;
+  top: 0;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--dk-seo-nav-tab-h);
+  border-radius: var(--r-chip);
+  background: var(--bg);
+  color: var(--ink-3);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-seo-nav-more:hover {
+  color: var(--ink);
+}
+
+.dk-seo-nav-more--before {
+  left: 0;
+}
+
+.dk-seo-nav-more--after {
+  right: 0;
+}
+
+/* A finger swipes the strip; the fade says there is more. */
+@media (hover: none) {
+  .dk-seo-nav-more {
+    display: none;
+  }
+}
+
 /* The strip's place while the browser reads the address. */
 .dk-seo-nav-tabs-space {
   height: calc(var(--dk-seo-nav-tab-h) + var(--x1));
@@ -270,6 +333,14 @@
 }
 
 /* ---------- narrow ---------- */
+/* No sidebar beside the page: the eleven cannot all fit anyway, so the strip
+   scrolls (a finger swipes it) and the tabs keep a comfortable width. */
+@media (max-width: 1023px) {
+  .dk-seo-nav-tabs {
+    --dk-seo-nav-tab-x: var(--x12);
+  }
+}
+
 @media (max-width: 760px) {
   .dk-seo-nav-tools {
     justify-content: start;
