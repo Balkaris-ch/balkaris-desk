@@ -1,7 +1,3 @@
-import type { SeoPayload } from "@/contract/seo";
-import { api } from "@/lib/api";
-import { parseRange } from "@/lib/format";
-import { PageHead } from "@/components/shell/PageHead";
 import { SpecimenRibbon } from "@/components/seo/bits";
 import { ContentGaps } from "@/components/seo/ContentGaps";
 import { ConsoleOverview } from "@/components/seo/ConsoleOverview";
@@ -13,47 +9,22 @@ import { QuickActions } from "@/components/seo/QuickActions";
 import { RankingTrend } from "@/components/seo/RankingTrend";
 import { SeoTiles } from "@/components/seo/SeoTiles";
 import { TechChecks } from "@/components/seo/TechChecks";
+import { seoPayload, type Search } from "@/components/seo/interim";
 import "@/components/seo/seo.css";
 
-export const metadata = { title: "SEO" };
-
-type Search = Promise<Record<string, string | string[] | undefined>>;
-
-const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
-
-/** This address with some params changed (undefined removes one). */
-function here(q: Record<string, string | string[] | undefined>, change: Record<string, string | undefined>): string {
-  const p = new URLSearchParams();
-  for (const [k, v] of Object.entries(q)) {
-    const s = one(v);
-    if (s !== undefined && !(k in change)) p.set(k, s);
-  }
-  for (const [k, v] of Object.entries(change)) if (v !== undefined) p.set(k, v);
-  const s = p.toString();
-  return s ? `/seo?${s}` : "/seo";
-}
+export const metadata = { title: "Overview · SEO" };
 
 /**
- * SEO: the website's search health. One request for the whole screen; every
- * panel is drawn from its own reading, so a panel whose source is not
- * connected keeps its place and says what would connect it.
+ * SEO › Overview. The head and the tab strip come from the SEO layout; this
+ * page draws every panel of the SEO screen, each from its own reading, until
+ * the Overview built to its board replaces it.
  */
-export default async function SeoPage({ searchParams }: { searchParams: Search }) {
-  const q = await searchParams;
-  const range = parseRange(q.range);
-  const open = one(q.open)?.trim() || undefined;
-  const data = await api<SeoPayload>("/api/v1/seo", { range, open, specimen: one(q.specimen) === "1" ? "1" : undefined });
-  /* The full lists follow the screen's range, and its specimen when it shows one. */
-  const listParams = new URLSearchParams();
-  if (data.range !== "30d") listParams.set("range", data.range);
-  if (data.specimen) listParams.set("specimen", "1");
-  const qs = listParams.size ? `?${listParams}` : "";
-
+export default async function SeoOverviewPage({ searchParams }: { searchParams: Search }) {
+  const { data, qs } = await seoPayload(searchParams);
   return (
     <>
-      {data.specimen ? <SpecimenRibbon realHref={here(q, { specimen: undefined })} /> : null}
-      <PageHead eyebrow="SEO" title="SEO" subtitle="Monitor rankings, find opportunities and keep your site ahead." ranges />
-      {data.open ? <OpenQuery open={data.open} closeHref={here(q, { open: undefined })} /> : null}
+      {data.specimen ? <SpecimenRibbon realHref="/seo" /> : null}
+      {data.open ? <OpenQuery open={data.open} closeHref="/seo" /> : null}
       <SeoTiles data={data} />
       <div className="dk-seo-board">
         <div className="dk-seo-grid">

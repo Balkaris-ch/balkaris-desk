@@ -1,0 +1,141 @@
+/*
+ * A sidebar section with a submenu (SEO): its row opens and closes the list
+ * of its pages, set under it as indented rows with small icons along a guide
+ * line that starts under the section's icon. The lit page is lit as the
+ * boards light a sidebar row, with a green mark on the guide line.
+ *
+ * On the section's own pages the rows close up, a pixel at a time, to keep
+ * the foot in sight beside the submenu (the same rule as shell.css, with the
+ * submenu's rows taken off the window first); a window too short even then
+ * scrolls the sidebar, as it always has. SideNav.tsx sets --side-rows and
+ * --side-subs (0 outside the section, where nothing moves when the submenu
+ * is opened).
+ */
+:root {
+  --dk-side-sub-row: 26px;  /* a page's row in a section's submenu */
+  --dk-side-sub-step: 28px; /* from one submenu row's top to the next */
+  --dk-side-sub-in: 23px;   /* the guide line, under the centre of the section's icon (row padding 14 + half of 18) */
+  --dk-side-sub-pad: 4px;   /* the room above and below the submenu's rows */
+}
+
+.dk-nav--grown {
+  --side-step: clamp(
+    var(--row-step-least),
+    calc((100dvh - var(--side-rest) - var(--side-subs) * var(--dk-side-sub-step) - 2 * var(--dk-side-sub-pad)) / var(--side-rows)),
+    var(--row-step)
+  );
+  --side-row: min(var(--row), calc(var(--side-step) - var(--row-gap-least)));
+}
+
+@supports (width: round(down, 1.5px, 1px)) {
+  .dk-nav--grown {
+    --side-step: clamp(
+      var(--row-step-least),
+      round(down, (100dvh - var(--side-rest) - var(--side-subs) * var(--dk-side-sub-step) - 2 * var(--dk-side-sub-pad)) / var(--side-rows), var(--x1)),
+      var(--row-step)
+    );
+  }
+}
+
+/* ---------- the section's row: a button that opens its pages ---------- */
+.dk-nav-row--group {
+  width: 100%;
+  text-align: left;
+}
+
+.dk-nav-caret {
+  margin-left: auto;
+  color: var(--ink-3);
+  transform: rotate(-90deg);
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-nav-row--group[aria-expanded="true"] .dk-nav-caret {
+  transform: none;
+}
+
+.dk-nav-row.dk-nav-row--group .dk-icon.dk-nav-caret {
+  color: var(--ink-3);
+}
+
+/* Inside the section with its pages showing: the page's row is the lit one, the section's only says where you are. */
+.dk-nav-row.dk-nav-row--within,
+.dk-nav-row.dk-nav-row--within:hover {
+  color: var(--ink);
+}
+
+.dk-nav-row.dk-nav-row--within .dk-icon,
+.dk-nav-row.dk-nav-row--within:hover .dk-icon {
+  color: var(--green);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-nav-caret {
+    transition: none;
+  }
+}
+
+/* ---------- the submenu ---------- */
+.dk-nav .dk-nav-sub {
+  gap: calc(var(--dk-side-sub-step) - var(--dk-side-sub-row));
+  margin: var(--dk-side-sub-pad) 0 var(--dk-side-sub-pad) var(--dk-side-sub-in);
+  padding-left: var(--x8);
+  border-left: var(--x1) solid var(--line-2);
+}
+
+.dk-nav-subrow {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  height: var(--dk-side-sub-row);
+  padding: 0 var(--x10);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-nav-subrow .dk-icon {
+  flex: none;
+  color: var(--ink-4);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-nav-subrow:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-nav-subrow:hover .dk-icon {
+  color: var(--ink-2);
+}
+
+.dk-nav-subrow--on,
+.dk-nav-subrow--on:hover {
+  border-color: var(--green-4);
+  background: var(--row-on);
+  color: var(--ink);
+}
+
+.dk-nav-subrow--on .dk-icon,
+.dk-nav-subrow--on:hover .dk-icon {
+  color: var(--green);
+}
+
+/* The lit page's mark on the guide line, as the boards mark the lit row at the sidebar's edge. */
+.dk-nav-subrow--on::before {
+  content: "";
+  position: absolute;
+  top: var(--x4);
+  bottom: var(--x4);
+  left: calc(-1 * (var(--x8) + var(--x2) + var(--x1)));
+  width: var(--x2);
+  border-radius: var(--r-pill);
+  background: var(--green);
+}

@@ -1,0 +1,22 @@
+import { Landing } from "@/components/seo/Landing";
+import { TechChecks } from "@/components/seo/TechChecks";
+import { seoPayload, type Search } from "@/components/seo/interim";
+import "@/components/seo/seo.css";
+import "@/components/seo/interim.css";
+
+export const metadata = { title: "Pages · SEO" };
+
+/**
+ * SEO › Pages. The head and the tab strip come from the SEO layout; this
+ * page draws the real panels of the SEO screen that belong here, each from its
+ * own reading, until the page built to its board replaces it.
+ */
+export default async function SeoPagesPage({ searchParams }: { searchParams: Search }) {
+  const { data, qs } = await seoPayload(searchParams);
+  return (
+    <div className="dk-seo-stack">
+        <Landing reading={data.landing} qs={qs} className="dk-seo-panel" />
+        <TechChecks checks={data.checks} className="dk-seo-panel" />
+    </div>
+  );
+}

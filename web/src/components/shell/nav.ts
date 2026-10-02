@@ -1,4 +1,5 @@
 import type { IconName } from "@/components/ui/icons";
+import { SEO_PAGES } from "@/components/seo/nav/pages";
 
 /** One of the desk's sections: a row in the sidebar and an entry in the palette. */
 export interface Section {
@@ -9,6 +10,22 @@ export interface Section {
   icon: IconName;
   /** What the section is for, in a few words. Shown in the command palette. */
   hint: string;
+  /**
+   * The section's own pages, when it has several: its sidebar row then opens
+   * a submenu of them instead of going to `href` (SideNav.tsx), and the
+   * palette finds each by name. SEO's eleven live in components/seo/nav/pages.ts.
+   */
+  children?: readonly SubSection[];
+}
+
+/** One page of a section that has several: a row in its submenu. */
+export interface SubSection {
+  /** Stable name, the address's second segment ("" for the section's first page). */
+  key: string;
+  label: string;
+  href: string;
+  icon: IconName;
+  hint: string;
 }
 
 /** The fifteen sections, in the order the sidebar lists them. */
@@ -16,7 +33,7 @@ export const SECTIONS: readonly Section[] = [
   { key: "", label: "Command Center", href: "/", icon: "home", hint: "The website today" },
   { key: "insights", label: "Insights", href: "/insights", icon: "article", hint: "Articles: plan, write, publish" },
   { key: "traffic", label: "Traffic", href: "/traffic", icon: "pulse", hint: "Who visits, and from where" },
-  { key: "seo", label: "SEO", href: "/seo", icon: "search", hint: "Search queries, indexing, technical checks" },
+  { key: "seo", label: "SEO", href: "/seo", icon: "search", hint: "Search queries, indexing, technical checks", children: SEO_PAGES },
   { key: "pages", label: "Pages", href: "/pages", icon: "pages", hint: "Every page of the site" },
   { key: "content", label: "Content", href: "/content", icon: "edit", hint: "Links, drafts and the writing queue" },
   { key: "conversions", label: "Conversions", href: "/conversions", icon: "funnel", hint: "From visitor to enquiry" },

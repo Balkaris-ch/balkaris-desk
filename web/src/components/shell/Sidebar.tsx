@@ -5,8 +5,10 @@ import { SideNav } from "./SideNav";
 const SITE = "https://www.balkaris.ch";
 
 /**
- * The frame's left column: the wordmark, the fourteen sections, and at the
- * bottom the way to the AI Operator and to the live site.
+ * The frame's left column: the wordmark, the fifteen sections (shell/nav.ts;
+ * Hosting, under the cloud icon, follows Site Health), and at the
+ * bottom the way to the AI Operator and to the live site. SEO's row opens a
+ * submenu of the SEO section's eleven pages (SideNav.tsx, side-group.css).
  */
 export function Sidebar() {
   return (

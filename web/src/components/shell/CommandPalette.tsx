@@ -125,6 +125,20 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       href: s.href,
       icon: s.icon,
     }));
+    /* A section's own pages (SEO's eleven, nav.ts) once something is typed: by
+       name ("keywords"), or by section and name ("seo key"); the section's
+       name alone lists only the section. */
+    if (needle) {
+      for (const s of SECTIONS) {
+        const own = s.label.toLowerCase();
+        for (const c of s.children ?? []) {
+          const name = c.label.toLowerCase();
+          if (name.includes(needle) || (needle.length > own.length && `${own} ${name}`.includes(needle))) {
+            sections.push({ kind: "section", title: c.label, sub: `${s.label} · ${c.hint}`, href: c.href, icon: c.icon });
+          }
+        }
+      }
+    }
     const found: Entry[] = hits
       /* The server may offer sections too; ours are already listed. */
       .filter((h) => h.kind !== "section")

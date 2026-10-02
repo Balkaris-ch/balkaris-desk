@@ -5,9 +5,10 @@ import type { SearchHit } from "../../web/src/contract/common.ts";
 /**
  * The search box in the top bar.
  *
- * It answers from what the desk has, by title: the fourteen sections, and the
- * desk's own articles and shared links. That is all it knows today. Pages,
- * keywords and assets arrive when their collectors do, through
+ * It answers from what the desk has, by title: the fifteen sections (and the
+ * SEO section's own pages), and the desk's own articles and shared links.
+ * That is all it knows today. Pages, keywords and assets arrive when their
+ * collectors do, through
  * `registerSearch`, and nothing here has to change when they land.
  *
  * ENQUIRIES. A hit of kind "lead" carries somebody's name. Whatever a
@@ -54,6 +55,26 @@ export const SECTIONS: Section[] = [
 ];
 
 /**
+ * The SEO section's own pages, so the search box finds "Keywords",
+ * "Backlinks" or "seo tech" by name. Kept apart from SECTIONS, which also
+ * mounts one API router per entry. The same eleven, in the same order, as the
+ * interface's list (web/src/components/seo/nav/pages.ts): keep the two in step.
+ */
+export const SEO_PAGES: Section[] = [
+  { name: "seo-overview", title: "Overview", href: "/seo" },
+  { name: "seo-opportunities", title: "Opportunities", href: "/seo/opportunities" },
+  { name: "seo-pages", title: "Pages", href: "/seo/pages" },
+  { name: "seo-keywords", title: "Keywords", href: "/seo/keywords" },
+  { name: "seo-content-gaps", title: "Content Gaps", href: "/seo/content-gaps" },
+  { name: "seo-backlinks", title: "Backlinks", href: "/seo/backlinks" },
+  { name: "seo-technical", title: "Technical", href: "/seo/technical" },
+  { name: "seo-search-console", title: "Search Console", href: "/seo/search-console" },
+  { name: "seo-competitors", title: "Competitors", href: "/seo/competitors" },
+  { name: "seo-ai-search", title: "AI Search", href: "/seo/ai-search" },
+  { name: "seo-automations", title: "Automations", href: "/seo/automations" },
+];
+
+/**
  * Something else that can be searched: pages, keywords, assets, enquiries.
  *
  * Given the query as typed (trimmed, at most 80 characters) and the person
@@ -88,6 +109,17 @@ function sections(words: string[]): SearchHit[] {
   return SECTIONS.filter((s) => has(`${s.title} ${s.name}`, words))
     .sort((a, b) => Number(begins(b)) - Number(begins(a)))
     .map((s): SearchHit => ({ kind: "section", title: s.title, href: s.href }));
+}
+
+/**
+ * SEO's pages whose name has a word of the query in it, every word found in
+ * "SEO <name>": "keywords" and "seo key" find Keywords, "seo" alone finds only
+ * the SEO section above.
+ */
+function seoPages(words: string[]): SearchHit[] {
+  return SEO_PAGES.filter((p) => has(`seo ${p.title}`, words) && words.some((w) => p.title.toLowerCase().includes(w))).map(
+    (p): SearchHit => ({ kind: "section", title: p.title, sub: "SEO", href: p.href }),
+  );
 }
 
 const DRAFT_STATE: Record<string, string> = {
@@ -177,7 +209,7 @@ export async function find(query: string, who: Person, limit = 20): Promise<Sear
   const words = wordsOf(q);
   if (q.length < 2 || !words.length) return [];
 
-  const hits: SearchHit[] = [...sections(words)];
+  const hits: SearchHit[] = [...sections(words), ...seoPages(words)];
   try {
     hits.push(...deskRows(words));
   } catch (e) {

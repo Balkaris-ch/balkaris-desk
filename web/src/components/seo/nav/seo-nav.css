@@ -1,0 +1,311 @@
+/*
+ * What every SEO page shares: its head and the tab strip under it. Measured
+ * on design/boards/seo/103.png and 105.webp (1672×941): breadcrumb, title and
+ * line as every desk screen's head; the period and "Run full SEO audit" level
+ * with the title on the right; the tabs about 40 high on a hairline the width
+ * of the page, the first tab's edge under the title's first letter, the lit
+ * one underlined in green with its label white, and the count on
+ * Opportunities a filled green chip.
+ *
+ * Every value is a token; the class names all begin dk-seo-nav-.
+ */
+:root {
+  --dk-seo-nav-tab-h: 40px;     /* a tab */
+  --dk-seo-nav-tab-x: 15px;     /* a tab's label from its edges */
+  --dk-seo-nav-underline: 2px;  /* the lit tab's green line */
+  --dk-seo-nav-count-h: 18px;   /* the count on Opportunities */
+  --dk-seo-nav-tools-top: 18px; /* the period and the audit, down to the title's level */
+  --dk-seo-nav-said: 46ch;      /* the audit's line under its button */
+  --dk-seo-nav-range-w: 148px;  /* "Last 12 months" and its chevron */
+  --dk-seo-nav-spin: 1.2s;      /* one turn of the audit's icon while it runs */
+}
+
+/* ---------- the head ---------- */
+.dk-seo-nav-head {
+  padding-bottom: 0;
+}
+
+.dk-seo-nav-crumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-nav-crumbs li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-nav-crumbs a {
+  color: inherit;
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-seo-nav-crumbs a:hover {
+  color: var(--ink);
+}
+
+.dk-seo-nav-crumbs .dk-icon {
+  color: var(--ink-4);
+}
+
+/* The period and the audit on one line, the audit's sentence under both. */
+.dk-seo-nav-tools {
+  flex: none;
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: end;
+  align-items: center;
+  column-gap: var(--x8);
+  row-gap: var(--x6);
+  max-width: 100%;
+  padding-top: var(--dk-seo-nav-tools-top);
+}
+
+.dk-seo-nav-range select {
+  min-width: var(--dk-seo-nav-range-w);
+}
+
+.dk-seo-nav-range-space {
+  display: block;
+  width: var(--dk-seo-nav-range-w);
+  height: var(--ctl);
+}
+
+/* The button and its sentence are the grid's own cells. */
+.dk-seo-nav-audit {
+  display: contents;
+}
+
+.dk-seo-nav-run {
+  position: relative;
+  overflow: hidden;
+}
+
+.dk-seo-nav-run--busy {
+  border-color: var(--green-4);
+  cursor: progress;
+}
+
+.dk-seo-nav-run .dk-icon {
+  color: var(--green);
+}
+
+/* The two labels in one cell: the one not showing keeps its width. */
+.dk-seo-nav-run-label {
+  display: inline-grid;
+}
+
+.dk-seo-nav-run-label > span {
+  grid-area: 1 / 1;
+  text-align: center;
+}
+
+.dk-seo-nav-run-label > [aria-hidden="true"] {
+  visibility: hidden;
+}
+
+/* How far the audit has got, along the button's foot. */
+.dk-seo-nav-run-bar {
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--x2);
+  background: var(--track);
+}
+
+.dk-seo-nav-run-bar i {
+  display: block;
+  height: 100%;
+  background: var(--green);
+  transition: width var(--slow) var(--ease);
+}
+
+.dk-seo-nav-spin {
+  animation-name: dk-seo-nav-spin;
+  animation-duration: var(--dk-seo-nav-spin);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-seo-nav-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dk-seo-nav-said {
+  grid-column: 1 / -1;
+  justify-self: end;
+  max-width: var(--dk-seo-nav-said);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  text-align: right;
+  text-wrap: pretty;
+  /* Two lines at most, so a long note cannot push the tabs far down; the whole sentence is its title. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.dk-seo-nav-said:empty {
+  display: none;
+}
+
+.dk-seo-nav-said--good {
+  color: var(--green);
+}
+
+.dk-seo-nav-said--warn {
+  color: var(--amber);
+}
+
+/* ---------- the tabs ---------- */
+.dk-seo-nav-tabs {
+  position: relative;
+  border-bottom: var(--x1) solid var(--line-2);
+}
+
+.dk-seo-nav-tabs ul {
+  display: flex;
+  align-items: stretch;
+  gap: var(--x4);
+  padding-left: var(--head-inset);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dk-seo-nav-tabs ul::-webkit-scrollbar {
+  display: none;
+}
+
+/* More to scroll to: the strip fades at that edge. */
+.dk-seo-nav-tabs[data-more-after] ul {
+  mask-image: linear-gradient(90deg, var(--bg) calc(100% - var(--x40)), transparent);
+}
+
+.dk-seo-nav-tabs[data-more-before] ul {
+  mask-image: linear-gradient(90deg, transparent, var(--bg) var(--x40));
+}
+
+.dk-seo-nav-tabs[data-more-before][data-more-after] ul {
+  mask-image: linear-gradient(90deg, transparent, var(--bg) var(--x40), var(--bg) calc(100% - var(--x40)), transparent);
+}
+
+.dk-seo-nav-tabs li {
+  flex: none;
+  display: flex;
+}
+
+.dk-seo-nav-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--dk-seo-nav-tab-h);
+  padding: 0 var(--dk-seo-nav-tab-x);
+  color: var(--ink-2);
+  font-size: var(--t-nav);
+  font-weight: var(--w-regular);
+  white-space: nowrap;
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-seo-nav-tab:hover {
+  color: var(--ink);
+}
+
+.dk-seo-nav-tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--dk-seo-nav-underline);
+  border-radius: var(--r-pill);
+  background: transparent;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-nav-tab:hover::after {
+  background: var(--line-2);
+}
+
+.dk-seo-nav-tab--on,
+.dk-seo-nav-tab--on:hover {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-nav-tab--on::after,
+.dk-seo-nav-tab--on:hover::after {
+  background: var(--green);
+}
+
+.dk-seo-nav-tab:focus-visible {
+  outline-offset: calc(-1 * var(--x2));
+}
+
+.dk-seo-nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x24);
+  height: var(--dk-seo-nav-count-h);
+  padding: 0 var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--green);
+  color: var(--bg);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+  line-height: 1;
+}
+
+/* The strip's place while the browser reads the address. */
+.dk-seo-nav-tabs-space {
+  height: calc(var(--dk-seo-nav-tab-h) + var(--x1));
+  border-bottom: var(--x1) solid var(--line-2);
+}
+
+/* ---------- narrow ---------- */
+@media (max-width: 760px) {
+  .dk-seo-nav-tools {
+    justify-content: start;
+    padding-top: 0;
+  }
+
+  .dk-seo-nav-said {
+    justify-self: start;
+    text-align: left;
+  }
+
+  .dk-seo-nav-tabs ul {
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 420px) {
+  /* The select and the button share the width, each as wide as it may be. */
+  .dk-seo-nav-tools {
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+  }
+
+  .dk-seo-nav-range,
+  .dk-seo-nav-range select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-seo-nav-spin {
+    animation-name: none;
+  }
+
+  .dk-seo-nav-run-bar i {
+    transition: none;
+  }
+}
