@@ -16,7 +16,7 @@
  * shown until Search Console is connected are GA4's, which counts consenting
  * visitors only.
  */
-import type { JobListed, Range, Reading, Stat } from "./common";
+import type { EarlySignals, JobListed, Range, Reading, Stat } from "./common";
 
 /** A window of whole days and the window of the same length before it. YYYY-MM-DD, both ends included. */
 export interface SeoWindow {
@@ -41,8 +41,12 @@ export interface SeoPayload {
   tiles: SeoTiles;
   /** How the health score is made, for its (i): the desk's own table, in numbers. Null when the table could not be read. */
   scoreRule: ScoreRule | null;
-  /** The floors the search tiles' rules use, for their (i), as the route applies them. */
-  floors: { opportunities: number; ctr: number };
+  /**
+   * The floors the search tiles' rules use, for their (i), as the route
+   * applies them. `early`: the keyword opportunities' early signals when the
+   * window is early (the floor is then 1), else null.
+   */
+  floors: { opportunities: number; ctr: number; early: EarlySignals | null };
   ranking: Reading<RankingTrend>;
   opportunities: Reading<Opportunities>;
   gaps: Reading<ContentGaps>;
@@ -63,7 +67,7 @@ export interface SeoTiles {
   /** Sitemap addresses Google's URL Inspection reports as indexed, at the last daily check. */
   indexed: Reading<Stat>;
   notIndexed: Reading<Stat>;
-  /** Queries at average position 4 to 20 shown at least the floor's number of times. */
+  /** Queries at average position 4 to 20 shown at least the floor's number of times. In an early window `sub` says "early signals". */
   keywordOpportunities: Reading<Stat>;
   /** Pages whose CTR is under half the median of this site's pages at a similar position. Our yardstick. */
   ctrOpportunities: Reading<Stat>;
@@ -120,6 +124,14 @@ export interface OpportunityRow {
   ctr: number;
   /** The page Google shows most for it, as a path, when known. */
   path: string | null;
+  /** Listed by the early mode: shown fewer times than the standard floor (see `Opportunities.early`). */
+  early?: boolean;
+  /**
+   * Set when it has an earlier position but was shown fewer than this many
+   * times in one of the two periods (the movements floor): a change in
+   * position on so few impressions is noise, so none is shown.
+   */
+  changeFloor?: number;
 }
 
 export interface Opportunities {
@@ -131,8 +143,10 @@ export interface Opportunities {
    * is unknown, and nothing is claimed about it.
    */
   compared: boolean;
-  /** The least impressions a query needs to be listed. */
+  /** The least impressions a query needs to be listed: the standard floor, or 1 in an early window. */
   floor: number;
+  /** Set when the window is early (src/cc/search/gsc.ts, EARLY): what that means, for the head of the list. */
+  early: EarlySignals | null;
   /** How many queries meet the rule. `rows` may be fewer. */
   total: number;
   rows: OpportunityRow[];
@@ -152,11 +166,15 @@ export interface GapGroup {
   impressions: number;
   /** The query with the most impressions among them. */
   top: string | null;
+  /** Every query in the group was listed by the early mode: each shown fewer times than the standard floor. */
+  early?: boolean;
 }
 
 export interface ContentGaps {
   window: SeoWindow;
   floor: number;
+  /** As in `Opportunities`. */
+  early: EarlySignals | null;
   /** Most impressions first. */
   groups: GapGroup[];
   /** Gaps Google lands on pages that are neither a service nor an industry page. */
@@ -173,6 +191,8 @@ export interface GapRow {
   path: string | null;
   /** That page's group: its title when it is a service or industry page. */
   group: string | null;
+  /** Listed by the early mode: shown fewer times than the standard floor. */
+  early?: boolean;
 }
 
 /* ---------- ranking movements ------------------------------------------------- */
@@ -193,6 +213,8 @@ export interface MovementRow {
 export interface Movements {
   window: SeoWindow;
   floor: number;
+  /** How many queries and pages were shown at least `floor` times in both periods: compared, moved or not. Null when not known. */
+  compared: { queries: number; pages: number } | null;
   total: number;
   rows: MovementRow[];
 }
@@ -260,6 +282,8 @@ export interface SearchLanding {
   ctr: number;
   position: number;
   previousPosition: number | null;
+  /** As in `OpportunityRow`: shown too few times in one of the two periods for its change in position to be shown. */
+  changeFloor?: number;
 }
 
 export interface OrganicLanding {
@@ -387,7 +411,7 @@ export interface SeoList {
 }
 
 export type SeoListBody =
-  | { name: "opportunities"; window: SeoWindow; floor: number; compared: boolean; rows: OpportunityRow[] }
-  | { name: "gaps"; window: SeoWindow; floor: number; rows: GapRow[] }
-  | { name: "movements"; window: SeoWindow; floor: number; rows: MovementRow[] }
+  | { name: "opportunities"; window: SeoWindow; floor: number; early: EarlySignals | null; compared: boolean; rows: OpportunityRow[] }
+  | { name: "gaps"; window: SeoWindow; floor: number; early: EarlySignals | null; rows: GapRow[] }
+  | { name: "movements"; window: SeoWindow; floor: number; compared: Movements["compared"]; rows: MovementRow[] }
   | { name: "landing"; landings: Landings };

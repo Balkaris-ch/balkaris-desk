@@ -13,7 +13,7 @@
  *
  * Types only. The server imports this file with `import type`.
  */
-import type { Range, Reading, Stat } from "./common";
+import type { EarlySignals, Range, Reading, Stat } from "./common";
 
 /** A page's kind, as the crawl decides it (src/cc/site/rules.ts `kindOf`). */
 export type ContentKind = "home" | "service" | "segment" | "article" | "insights" | "landing" | "case" | "legal" | "standard";
@@ -217,6 +217,17 @@ export interface GapRow {
   position: number;
   /** The page Google showed for it, when known: the nearest thing the site has. */
   path: string | null;
+  /** Listed by the early mode: shown fewer times than the standard floor (`GapList.early`). */
+  early?: boolean;
+}
+
+/** The content gaps panel: its rows, the floor they were read at, and the early signals when the window is early. */
+export interface GapList {
+  /** The least impressions a query needs to be listed: the standard floor, or 1 in an early window. */
+  floor: number;
+  /** Set when the window is early (src/cc/search/gsc.ts, EARLY): what that means, for the head of the list. */
+  early: EarlySignals | null;
+  rows: GapRow[];
 }
 
 /** One query from Bing's search statistics. */
@@ -255,7 +266,7 @@ export interface ContentPayload {
   images: Reading<ImageCoverage>;
   linking: Reading<Linking>;
   engagement: Reading<EngagementRow[]>;
-  gaps: Reading<GapRow[]>;
+  gaps: Reading<GapList>;
   bing: Reading<BingKeywordRow[]>;
   /** The crawl job, for "Run the crawl now". */
   crawl: { finished: string | null; running: boolean };

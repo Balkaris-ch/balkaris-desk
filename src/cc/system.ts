@@ -49,6 +49,74 @@ export function scrub(text: string): string {
     .replace(/\b(Bearer)\s+[\w.~+/=-]{8,}/gi, "$1 [hidden]");
 }
 
+/**
+ * Lines of an error that say nothing about why the job failed. A line that
+ * matches one of these is never chosen as the "why"; the whole text keeps it.
+ * Add a pattern only for a line known to be harmless, with the reason.
+ */
+const NOISE: readonly RegExp[] = [
+  /* llama.cpp, inside Ollama, prints this while it tries context sizes to fit
+     the model into the card's memory. Its own words: "this warning is normal
+     during memory fitting". It comes before the real cause on every failed
+     load, and Ollama's 500 begins with it. */
+  /this warning is normal during memory fitting/i,
+  /requires ctx_other to be set/i,
+  /* Node's hint after a warning: how to find where it came from, not what failed. */
+  /^\(Use `node --trace-\w+ \.\.\.` to show where the warning was created\)$/,
+  /* Stack frames, Node's ("    at fn (file:1:2)") and Python's ("  File "x.py", line 3, in f"): where, not why. */
+  /^at\s+\S.*(:\d+:\d+\)?|\(native\)|<anonymous>\)?)$/,
+  /^File ".+", line \d+/,
+  /* Python's announcement that a trace follows, and the line joining two of them. */
+  /^Traceback \(most recent call last\):$/,
+  /^During handling of the above exception, another exception occurred:$/,
+];
+
+/**
+ * An error's lines. A source's JSON body inside the text (Ollama's
+ * `Ollama 500: {"error":"…\n…"}`) is opened up first, so its escaped line
+ * breaks become lines; a body cut short by the caller is split on its escaped
+ * breaks instead, with the JSON's quoting taken off each line's ends.
+ */
+function linesOf(text: string): { label: string; lines: string[] } {
+  const split = (s: string): string[] =>
+    s
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+  /* "Name 500: {…}": a short label, then a JSON body to the end. */
+  const m = /^([^{\n]{0,60}?)\s*:?\s*(\{[\s\S]*)$/.exec(text);
+  if (!m) return { label: "", lines: split(text) };
+  const label = m[1]!.trim();
+  const body = m[2]!;
+  let inner: string | null = null;
+  try {
+    const j = JSON.parse(body) as { error?: unknown; message?: unknown };
+    const nested = j.error && typeof j.error === "object" ? (j.error as { message?: unknown }).message : undefined;
+    inner = typeof j.error === "string" ? j.error : typeof nested === "string" ? nested : typeof j.message === "string" ? j.message : null;
+  } catch {
+    /* Cut short (llm.ts keeps 300 characters of Ollama's answer): open it by hand when it is the usual shape. */
+    if (/^\{\s*"(?:error|message)"\s*:\s*"/.test(body)) inner = body.replace(/^\{\s*"(?:error|message)"\s*:\s*"/, "").replace(/"\s*\}?\s*$/, "").replace(/\\n/g, "\n").replace(/\\"/g, '"');
+  }
+  return inner === null ? { label: "", lines: split(text) } : { label, lines: split(inner) };
+}
+
+/**
+ * The one line that says why a job failed, for a row with room for one: the
+ * LAST line of the error that is not noise (a failing program prints its real
+ * cause last, after the warnings it met on the way), with the source's label
+ * in front when the line came from inside its body ("Ollama 500: error
+ * loading model: vector"). The whole text stays available beside it: this is
+ * a choice of line, never a rewrite. Both go through `scrub` first.
+ */
+export function whyLine(text: string): { line: string; full: string } {
+  const full = scrub(text).trim();
+  const { label, lines } = linesOf(full);
+  const said = lines.filter((l) => !NOISE.some((n) => n.test(l)));
+  /* All of it noise: the last line still beats an empty cell. */
+  const line = said.at(-1) ?? lines.at(-1) ?? full;
+  return { line: label && !line.startsWith(label) ? `${label}: ${line}` : line, full };
+}
+
 /** An activity row as a browser is shown it: its words through `scrub`. */
 export const scrubItem = (a: ActivityItem): ActivityItem => ({
   ...a,

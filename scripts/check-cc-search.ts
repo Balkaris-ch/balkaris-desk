@@ -20,7 +20,10 @@
  *      are left out rather than drawn as zero, a series is never shorter
  *      than its days, the rules built on the reads (movers, opportunities,
  *      CTR outliers, gaps) find what they should and nothing under their
- *      floors, and keywords reach the search box;
+ *      floors, and keywords reach the search box; on a young property the
+ *      lists that show (opportunities, gaps) read early from one impression,
+ *      marked, while the ones that compare (movers, CTR outliers) wait with
+ *      the reason and the date, and the attention rules keep their floors;
  *   4. the daily index check writes "Google indexed ..." exactly once, treats
  *      the front page's trailing slash as no difference, notes a drop, and a
  *      run cut short never writes part of the site into the daily counts;
@@ -124,6 +127,36 @@ const PAGES: Record<string, { now: Fig; before?: Fig }> = {
 };
 const row = (keys: string[], [position, impressions, clicks]: Fig) => ({ keys, clicks, impressions, ctr: impressions ? clicks / impressions : 0, position });
 
+/**
+ * A young property's query and page rows, for the early-signals checks: a
+ * handful of impressions, nowhere near a floor. With `fake.young` "new" the
+ * window before has nothing; with "thin" it has a little of the same.
+ */
+const YOUNG_QUERIES: Record<string, { now: Fig; before?: Fig; page: string }> = {
+  "specimen early one": { now: [6, 4, 0], before: [7, 3, 0], page: "/specimen-a" },
+  "specimen early two": { now: [12, 2, 0], page: "/specimen-b" },
+  "specimen early three": { now: [2, 3, 1], page: "/specimen-c" },
+};
+const YOUNG_PAGES: Record<string, { now: Fig; before?: Fig }> = {
+  "/specimen-a": { now: [5, 7, 1], before: [6, 5, 0] },
+  "/": { now: [3, 2, 0] },
+};
+/**
+ * A window well past 1,000 impressions that one query at the top carries
+ * ("brand"): no row at position 4 to 20 reaches 30. And a window where twelve
+ * rows at 4 to 20 reach it ("wide"). Repeated digits, specimen words.
+ */
+const BRAND_QUERIES: Record<string, { now: Fig; before?: Fig; page: string }> = {
+  "specimen brand": { now: [1, 1111, 99], before: [1, 999, 88], page: "/" },
+  "specimen early one": { now: [6, 4, 0], page: "/specimen-a" },
+  "specimen early two": { now: [12, 2, 0], page: "/specimen-b" },
+};
+const WIDE_QUERIES: Record<string, { now: Fig; before?: Fig; page: string }> = Object.fromEntries([
+  ...Array.from({ length: 12 }, (_, i) => [`specimen wide ${String(i + 1).padStart(2, "0")}`, { now: [5 + i, 111, 1] as Fig, before: [6 + i, 111, 1] as Fig, page: "/specimen-a" }] as const),
+  ["specimen wide small", { now: [7, 3, 0] as Fig, page: "/specimen-b" }] as const,
+]);
+const youngTable = () => (fake.young === "brand" ? BRAND_QUERIES : fake.young === "wide" ? WIDE_QUERIES : YOUNG_QUERIES);
+
 const PERSON = "Specimen Person Zzyzx";
 const MAILBOX = "zzyzx@specimen.invalid";
 const hoursAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
@@ -154,6 +187,10 @@ const fake = {
   bingTraffic: null as { from: number; to: number } | null,
   /** The engine holds only enquiries younger than this many hours: a record that began recently. */
   engineHoldsHours: null as number | null,
+  /** Answer query and page questions with the young property's rows (YOUNG_*): "new" has nothing before, "thin" a little; "brand" and "wide" are BRAND_QUERIES and WIDE_QUERIES. */
+  young: null as null | "new" | "thin" | "brand" | "wide",
+  /** The first day the stand-in reports queries for (date and query rows), when later than its first figure: a property whose query rows begin after its totals. */
+  queriesFrom: null as string | null,
 };
 
 const GOOGLE_DISABLED = {
@@ -171,7 +208,12 @@ const googleError = (code: number) => ({
 function searchAnalytics(body: { startDate: string; endDate: string; dimensions?: string[] }): unknown {
   const dims = (body.dimensions ?? []).join(",");
   const current = body.endDate === ANCHOR;
-  const pick = <T extends { now: Fig; before?: Fig }>(v: T): Fig | undefined => (current ? v.now : v.before);
+  const pick = <T extends { now: Fig; before?: Fig }>(v: T): Fig | undefined => (current ? v.now : fake.young === "new" ? undefined : v.before);
+  if (fake.young) {
+    if (dims === "query") return { rows: Object.entries(youngTable()).flatMap(([q, v]) => (pick(v) ? [row([q], pick(v)!)] : [])) };
+    if (dims === "page") return { rows: Object.entries(YOUNG_PAGES).flatMap(([p, v]) => (pick(v) ? [row([`${SITE}${p}`], pick(v)!)] : [])) };
+    if (dims === "query,page") return { rows: Object.entries(youngTable()).map(([q, v]) => row([q, `${SITE}${v.page}`], v.now)) };
+  }
   if (dims === "date") {
     const rows = [];
     for (let d = body.startDate < FIRST ? FIRST : body.startDate; d <= body.endDate && d <= ANCHOR; d = addDays(d, 1)) {
@@ -188,7 +230,8 @@ function searchAnalytics(body: { startDate: string; endDate: string; dimensions?
   if (dims === "device") return { rows: [row(["DESKTOP"], [6, 700, 60]), row(["MOBILE"], [7, 500, 32])] };
   if (dims === "date,query") {
     const rows = [];
-    for (let d = body.startDate < FIRST ? FIRST : body.startDate; d <= body.endDate; d = addDays(d, 1)) {
+    const from = [FIRST, fake.queriesFrom ?? FIRST, body.startDate].sort().at(-1)!;
+    for (let d = from; d <= body.endDate; d = addDays(d, 1)) {
       rows.push(row([d, "specimen beta"], [2, 10, 1]), row([d, "specimen alpha"], [8, 10, 1]), row([d, "specimen gamma"], [12, 10, 0]), row([d, "uncovered thing"], [60, 10, 0]));
     }
     return { rows };
@@ -574,6 +617,8 @@ type AnyReading = { state: string; reason?: string; step?: string; value?: unkno
 /** A reading's note, which only an `ok` reading has; "" for the others. */
 const noteOf = (r: { state: string }): string => (r.state === "ok" ? ((r as { note?: string }).note ?? "") : "");
 const activityWith = (text: string) => (db.prepare("SELECT COUNT(*) AS c FROM cc_activity WHERE text = ?").get(text) as { c: number }).c;
+/** 3b's 90-day totals where the first figure and the first query differ, and the day the collector promised: read against the screen's gate in 9b. */
+let sameDay: { totals: Awaited<ReturnType<typeof gsc.totalsByDay>>; promised: string } | null = null;
 
 try {
   /* ============ 0. the Clarity table of the first version, rebuilt ============ */
@@ -761,7 +806,8 @@ try {
     const m = await gsc.movers("30d");
     check("movers: the query and the page that moved, largest first", m.state === "ok" && m.value.rows.length === 2 && m.value.rows[0]!.key === "specimen alpha" && m.value.rows[0]!.change === 9 && m.value.rows[1]!.path === "/" && m.value.rows[1]!.change === 6, m.state === "ok" ? m.value.rows : m);
     check("  nothing under the floor: 'specimen delta' moved 15 places on 12 impressions and is not reported", m.state === "ok" && !m.value.rows.some((r) => r.key === "specimen delta") && m.value.floor === 30);
-    const o = await gsc.opportunities("30d");
+    /* At the standard floor, named: this specimen has only three rows at 4 to 20 over it, so read by itself the list is early (3b). */
+    const o = await gsc.opportunities("30d", { floor: gsc.FLOOR.opportunities });
     check("opportunities: positions 4 to 20 over the floor, most impressions first, with their page", o.state === "ok" && o.value.rows.map((r) => r.query).join() === "specimen alpha,specimen gamma,uncovered thing" && o.value.rows[0]!.path === "/specimen-a", o.state === "ok" ? o.value.rows.map((r) => r.query) : o);
     const out = await gsc.ctrOutliers("30d");
     check("ctrOutliers: the page far under its neighbours' median", out.state === "ok" && out.value.rows.length === 1 && out.value.rows[0]!.path === "/specimen-c" && out.value.rows[0]!.median === 9 && out.value.rows[0]!.peers === 3, out.state === "ok" ? out.value.rows : out);
@@ -827,6 +873,144 @@ try {
     );
     fake.gscQuietDay = null;
     store.forget("gsc:totals:30d");
+  }
+
+  /* ============ 3b. a young property: early signals, and honest waits ======== */
+  section("3b. Search Console: a young property");
+  {
+    const lists = ["gsc:queries:30d", "gsc:pages:30d", "gsc:query-pages:30d"];
+    const fresh = () => lists.forEach((k) => store.forget(k));
+
+    const many = (n: number, impressions: number) => Array.from({ length: n }, () => ({ impressions }));
+    check("the early rule: a window under 1,000 impressions is early, however many of the list's rows reach its floor", gsc.isEarly(many(12, 50), many(12, 50), 30) && gsc.isEarly(many(10, 30), [...many(10, 30), { impressions: 699 }], 30));
+    check("  and so is a list with fewer than 10 of its own rows over its floor, however large the window", gsc.isEarly(many(9, 40), [{ impressions: 5000 }, ...many(9, 40)], 30) && gsc.isEarly([], [{ impressions: 5000 }], 30));
+    check("  ten of its own rows at the floor, in a window of 1,000 impressions, is not", !gsc.isEarly(many(10, 30), [...many(10, 30), { impressions: 700 }], 30));
+    const grown = await gsc.opportunities("30d");
+    check(
+      "  the specimen window above (1,192 impressions, but only three of its rows at 4 to 20 over 30) is early by the list's own count: those three unmarked, 'specimen delta' (12) listed and marked",
+      grown.state === "ok" &&
+        grown.value.early !== null &&
+        grown.value.floor === 1 &&
+        grown.value.rows.map((r) => `${r.query}${r.early ? " (early)" : ""}`).join() === "specimen alpha,specimen gamma,uncovered thing,specimen delta (early)",
+      grown.state === "ok" ? grown.value : grown,
+    );
+
+    /* One query at the top carries the window past 1,000 impressions and 30: the list at 4 to 20 must not go back to an empty standard floor. */
+    fake.young = "brand";
+    fresh();
+    const brand = await gsc.opportunities("30d");
+    check(
+      "a window past 1,000 impressions that one top query carries: the list at 4 to 20 stays early, its rows listed and marked, never empty",
+      brand.state === "ok" && brand.value.early?.impressions === 1117 && brand.value.floor === 1 && brand.value.rows.map((r) => r.query).join() === "specimen early one,specimen early two" && brand.value.rows.every((r) => r.early),
+      brand.state === "ok" ? brand.value : brand,
+    );
+    fake.young = "wide";
+    fresh();
+    const wide = await gsc.opportunities("30d");
+    check(
+      "twelve rows at 4 to 20 over 30 in a window past 1,000: the standard floor, unmarked, the row under it left out",
+      wide.state === "ok" && wide.value.early === null && wide.value.floor === 30 && wide.value.rows.length === 12 && wide.value.rows.every((r) => !r.early) && !wide.value.rows.some((r) => r.query === "specimen wide small"),
+      wide.state === "ok" ? wide.value : wide,
+    );
+
+    fake.young = "new";
+    fresh();
+    const o = await gsc.opportunities("30d");
+    check(
+      "opportunities, early: from one impression up, each row under the standard floor marked",
+      o.state === "ok" && o.value.floor === 1 && o.value.rows.map((r) => r.query).join() === "specimen early one,specimen early two" && o.value.rows.every((r) => r.early === true),
+      o.state === "ok" ? o.value : o,
+    );
+    check(
+      "  with what the window holds and the standard floor it returns to",
+      o.state === "ok" && o.value.early?.standard === 30 && o.value.early.impressions === 9 && o.value.early.queries === 3 && /^Early signals: Google showed the site 9 times for the 3 queries/.test(o.value.early.line) && /standard floor of 30 by itself/.test(o.value.early.line),
+      o.state === "ok" ? o.value.early : o,
+    );
+    check("  and the note says it in plain words, with the rule", /Early signals/.test(noteOf(o)) && /1,000 impressions/.test(noteOf(o)), noteOf(o));
+    const asked = await gsc.opportunities("30d", { floor: 30 });
+    check("a floor asked for is kept exactly and is never early", asked.state === "ok" && asked.value.floor === 30 && asked.value.early === null && asked.value.rows.length === 0, asked.state === "ok" ? asked.value : asked);
+    const g = await gsc.gaps("30d", []);
+    check(
+      "gaps, early: from one impression up, marked under their own standard floor of 10",
+      g.state === "ok" && g.value.floor === 1 && g.value.early?.standard === 10 && g.value.rows.map((r) => r.query).join() === "specimen early one,specimen early three,specimen early two" && g.value.rows.every((r) => r.early),
+      g.state === "ok" ? g.value : g,
+    );
+
+    const m = (await gsc.movers("30d")) as AnyReading;
+    const start = addDays(ANCHOR, -29);
+    check(
+      "movers with no query in the window before (Google's figures cover it): waiting, never early, with the day that window first holds one",
+      m.state === "waiting" && /^No comparison yet/.test(m.reason ?? "") && (m.reason ?? "").includes(`queries from ${gsc.dayText(start)}`) && (m.reason ?? "").includes(`reach ${gsc.dayText(addDays(start, 30))}`),
+      m,
+    );
+    const c = (await gsc.ctrOutliers("30d")) as AnyReading;
+    check("CTR outliers on a handful of clicks: waiting, with the window's actual counts", c.state === "waiting" && /^Too few to compare click rates: [\d,]+ clicks and [\d,]+ impressions in this window, and no page shown 50 times/.test(c.reason ?? ""), c);
+
+    /* The one rule for the day a movement can first be measured: the later of the two gates. */
+    const byFigures = gsc.firstComparison({ figures: "2026-01-01" }, 30);
+    check("firstComparison: from Google's first figure, two whole windows", byFigures.includes("begin on 1 Jan 2026") && byFigures.includes("reach 1 Mar 2026"), byFigures);
+    const byQueries = gsc.firstComparison({ figures: "2026-01-01", queries: "2026-02-15" }, 30);
+    check("  and the later day when the first query comes after that: the window before must hold one", byQueries.includes("queries from 15 Feb 2026") && byQueries.includes("reach 17 Mar 2026") && !byQueries.includes("1 Mar 2026"), byQueries);
+    const byYear = gsc.firstComparison({ figures: "2026-01-01" }, 365);
+    check("  and for a year, never a day: Google keeps sixteen months, so two whole years are never both there", /sixteen months/.test(byYear) && !/reach/.test(byYear), byYear);
+    check("a period inside one year is dated once, across New Year with both years", gsc.spanText("2026-09-01", "2026-09-30") === "1 Sep – 30 Sep 2026" && gsc.spanText("2024-09-30", "2025-09-29") === "30 Sep 2024 – 29 Sep 2025", [gsc.spanText("2026-09-01", "2026-09-30"), gsc.spanText("2024-09-30", "2025-09-29")]);
+    const asked1y = requests;
+    const year = (await gsc.movers("1y")) as AnyReading;
+    check(
+      "movers over a year: off, without a step, saying why, and no day promised that Search Console cannot reach; nothing is asked",
+      year.state === "off" && !year.step && /sixteen months/.test(year.reason ?? "") && !/reach/.test(year.reason ?? "") && requests === asked1y,
+      year,
+    );
+
+    /* Query rows that begin later than Google's first figure (a property whose old pages were shown without a query Google reports). The day
+       named by the collector and the day the screen's own gate (routes/seo.ts, moversRead) holds to must be the same day. */
+    fake.queriesFrom = addDays(ANCHOR, -20);
+    const kept90 = ["gsc:buckets:30d", "gsc:buckets:90d", "gsc:totals:90d", "gsc:queries:90d", "gsc:pages:90d"];
+    kept90.forEach((k) => store.forget(k));
+    const m90 = (await gsc.movers("90d")) as AnyReading;
+    const t90y = await gsc.totalsByDay("90d");
+    const promised = gsc.dayText(addDays(FIRST, 179));
+    check(
+      "first figure and first query on different days, 90 days: the later gate is the figures', and the day is theirs",
+      m90.state === "waiting" && (m90.reason ?? "").includes(`begin on ${gsc.dayText(FIRST)}`) && (m90.reason ?? "").includes(`reach ${promised}`) && !(m90.reason ?? "").includes(gsc.dayText(addDays(ANCHOR, 70))),
+      m90,
+    );
+    /* The screen's own gate is read at the end (9b): loading the SEO screen's module registers sources this check does not set up. */
+    sameDay = { totals: t90y, promised };
+    const m30q = (await gsc.movers("30d")) as AnyReading;
+    check(
+      "  30 days, where Google's figures cover the window before: the day is the first query's, a window later",
+      m30q.state === "waiting" && (m30q.reason ?? "").includes(`queries from ${gsc.dayText(addDays(ANCHOR, -20))}`) && (m30q.reason ?? "").includes(`reach ${gsc.dayText(addDays(ANCHOR, 10))}`),
+      m30q,
+    );
+    fake.queriesFrom = null;
+    kept90.forEach((k) => store.forget(k));
+
+    fake.young = "thin";
+    fresh();
+    const thin = (await gsc.movers("30d")) as AnyReading;
+    check(
+      "movers with a little in both windows: waiting, with how much was shown in both and the floor",
+      thin.state === "waiting" && /^Too few impressions to measure a movement: 1 query and 1 page were shown in both/.test(thin.reason ?? "") && /30 times in each/.test(thin.reason ?? ""),
+      thin,
+    );
+
+    /* The attention rules keep the standard floors: no alert is raised on noise, and the young window gives them nothing to find. */
+    const { RULES } = await import("../src/cc/attention.ts");
+    const drop = await RULES.find((r) => r.id === "seo.position-drop")!.find("30d");
+    const lowCtr = await RULES.find((r) => r.id === "seo.low-ctr")!.find("30d");
+    check("the attention rules raise nothing on a young window: they wait, with the reason", drop.state === "waiting" && lowCtr.state === "waiting", [drop.state, lowCtr.state]);
+    const { readFileSync } = await import("node:fs");
+    const ruleSource = readFileSync(new URL("../src/cc/attention.ts", import.meta.url), "utf8");
+    check(
+      "  and they name the standard floors explicitly, so an early mode can never reach them",
+      ruleSource.includes("movers(range, { floor: g.FLOOR.movers })") && ruleSource.includes("ctrOutliers(range, { floor: g.FLOOR.ctr })"),
+    );
+
+    /* Back to the grown specimen, and its answers kept again: later sections read them as kept. */
+    fake.young = null;
+    fresh();
+    await Promise.all([gsc.queries("30d"), gsc.pages("30d"), gsc.queryPages("30d")]);
   }
 
   /* ============ 4. the daily index check ===================================== */
@@ -1353,6 +1537,22 @@ try {
     const st = sources.sources();
     check("in the end every source is connected or waiting, none failing", st.every((s) => s.state === "connected" || s.state === "waiting"), st.map((s) => `${s.id}:${s.state}`));
     check("and nothing is left for the owner to do", search.ownerSteps().length === 0, search.ownerSteps());
+  }
+
+  /* ============ 9b. one day for a movement, on the collector and on the screen ============ */
+  section("9b. The day a movement can first be measured, as the screen's own gate names it");
+  {
+    const seoRoutes = await import("../src/cc/routes/seo.ts");
+    const t = sameDay?.totals;
+    const gate =
+      t?.state === "ok"
+        ? seoRoutes.moversRead({ totals: t, movers: { state: "ok", value: { window: t.value.window, floor: 30, rows: [] }, source: "gsc", asOf: new Date().toISOString() } } as unknown as Parameters<typeof seoRoutes.moversRead>[0])
+        : null;
+    check(
+      "once the window before holds queries, the screen's gate names the day the collector promised (3b, 90 days)",
+      !!sameDay && gate?.state === "waiting" && gate.reason.includes(`reach ${sameDay.promised}`) && /do not cover the period this one is measured against/.test(gate.reason),
+      gate ?? sameDay,
+    );
   }
 } catch (e) {
   failedChecks++;

@@ -1,4 +1,4 @@
-import type { DayPoint, Range, Reading, Stat } from "./common";
+import type { DayPoint, EarlySignals, Range, Reading, Stat } from "./common";
 
 /**
  * What GET /api/v1/insights answers: the whole Insights screen in one call.
@@ -63,8 +63,13 @@ export interface InsightRow {
   draftId: number | null;
   /** The existing retry action applies: a stuck job, or a link that could not be read. */
   canRetry: boolean;
-  /** Why it is stuck or could not be read, in the desk's words. */
+  /**
+   * Why it is stuck or could not be read, in one line: the most informative
+   * line of the error (src/cc/system.ts `whyLine`), not its first.
+   */
   problem: string | null;
+  /** The whole error, scrubbed, for the hover and the row's detail. Null when there is no problem. */
+  problemFull: string | null;
 }
 
 /** An article's GA4 figures over the range, by its path. */
@@ -92,6 +97,8 @@ export interface SearchFigures {
   position: number | null;
   /** Distinct queries Google showed the article for; null when that read failed. */
   keywords: number | null;
+  /** The window is early and the article was shown fewer times than the standard floor: its CTR and keywords are early signals (`table.searchEarly`). */
+  early?: boolean;
 }
 
 /** A query Search Console shows the site for that no article's title or heading answers. */
@@ -103,6 +110,8 @@ export interface Opportunity {
   position: number;
   /** The page Google shows for it today, when known. */
   path: string | null;
+  /** Listed by the early mode: shown fewer times than the standard floor (`opportunities.early`). */
+  early?: boolean;
 }
 
 /** The Article traffic chart and its headline. */
@@ -147,7 +156,9 @@ export interface InboxRow {
   href: string;
   status: InsightStatus;
   canRetry: boolean;
+  /** As in `InsightRow`: the most informative line, and the whole text for the hover. */
   problem: string | null;
+  problemFull: string | null;
 }
 
 /** A finding of one of the stated rules. Never a prediction. */
@@ -223,13 +234,21 @@ export interface InsightsPayload {
     ga4: Reading<Record<string, ArticleFigures>>;
     gsc: Reading<Record<string, SearchFigures>>;
     /**
+     * Set when Search Console's window is early (src/cc/search/gsc.ts, EARLY): the line for the
+     * table, and the floor under which an article's CTR and keywords are marked early. Else null.
+     */
+    searchEarly: EarlySignals | null;
+    /**
      * GA4's generate_lead read answered, so a live article it has no row for had no conversions (a
      * real zero). False when that read failed while the views did not: Conversions are then unknown.
      */
     conversionsRead: boolean;
   };
-  /** `rows` are the first ones Search Console shows most; `total` is how many there are in all. */
-  opportunities: Reading<{ rows: Opportunity[]; floor: number; total: number }>;
+  /**
+   * `rows` are the first ones Search Console shows most; `total` is how many there are in all.
+   * `floor` is the standard floor, or 1 in an early window, when `early` says what that means.
+   */
+  opportunities: Reading<{ rows: Opportunity[]; floor: number; early: EarlySignals | null; total: number }>;
   recommendations: Reading<Recommendation[]>;
   state: InsightsState;
 }

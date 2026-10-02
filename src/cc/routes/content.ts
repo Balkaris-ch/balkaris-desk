@@ -14,7 +14,7 @@ import type {
   ContentPayload,
   CoverageRow,
   EngagementRow,
-  GapRow,
+  GapList,
   ImageCoverage,
   Linking,
   LinkingRow,
@@ -579,7 +579,7 @@ function engagement(v: CrawlView, visits: Visits): EngagementRow[] {
     .sort((a, b) => b.words - a.words || a.path.localeCompare(b.path));
 }
 
-async function gaps(range: Range, v: Reading<CrawlView>): Promise<Reading<GapRow[]>> {
+async function gaps(range: Range, v: Reading<CrawlView>): Promise<Reading<GapList>> {
   const { gsc } = await import("../search/index.ts");
   const titles = v.state === "ok" ? v.value.offered.filter((r) => r.title).map((r) => ({ path: r.path, title: r.title as string, h1: r.h1 })) : [];
   /* Without the crawl every query would look like a gap; say so instead. */
@@ -588,7 +588,11 @@ async function gaps(range: Range, v: Reading<CrawlView>): Promise<Reading<GapRow
   if (r.state !== "ok") return pass(r);
   return {
     ...r,
-    value: r.value.rows.map((g) => ({ query: g.query, impressions: g.impressions, clicks: g.clicks, position: g.position, path: g.path })),
+    value: {
+      floor: r.value.floor,
+      early: r.value.early,
+      rows: r.value.rows.map((g) => ({ query: g.query, impressions: g.impressions, clicks: g.clicks, position: g.position, path: g.path, ...(g.early ? { early: true } : {}) })),
+    },
     note: `${r.note ?? ""} Positions are Google's average position, not a tracked rank. Only queries Google already shows the site for can be found this way.`.trim(),
   };
 }
@@ -691,15 +695,19 @@ const visitSpan = (s: Span): VisitSpan => ({ start: s.partial ? s.since : s.star
  */
 const SPECIMEN_NOTE = "SPECIMEN: artificial rows to see the connected panel. Not from any source.";
 
-const SPECIMEN_GAPS = (): Reading<GapRow[]> =>
+const SPECIMEN_GAPS = (): Reading<GapList> =>
   ok(
-    [
-      { query: "specimen query alpha", impressions: 400, clicks: 4, position: 12.5, path: "/specimen-page-a" },
-      { query: "specimen query beta", impressions: 300, clicks: 3, position: 18, path: "/specimen-page-b" },
-      { query: "specimen query gamma", impressions: 200, clicks: 0, position: 24.5, path: null },
-      { query: "specimen query delta", impressions: 100, clicks: 1, position: 31, path: "/specimen-page-c" },
-      { query: "specimen query epsilon", impressions: 50, clicks: 0, position: 45, path: null },
-    ],
+    {
+      floor: 10,
+      early: null,
+      rows: [
+        { query: "specimen query alpha", impressions: 400, clicks: 4, position: 12.5, path: "/specimen-page-a" },
+        { query: "specimen query beta", impressions: 300, clicks: 3, position: 18, path: "/specimen-page-b" },
+        { query: "specimen query gamma", impressions: 200, clicks: 0, position: 24.5, path: null },
+        { query: "specimen query delta", impressions: 100, clicks: 1, position: 31, path: "/specimen-page-c" },
+        { query: "specimen query epsilon", impressions: 50, clicks: 0, position: 45, path: null },
+      ],
+    },
     "gsc",
     Date.now(),
     SPECIMEN_NOTE,

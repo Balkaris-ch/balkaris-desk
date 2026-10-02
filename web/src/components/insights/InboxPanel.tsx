@@ -62,8 +62,9 @@ export function InboxPanel({ data, view }: { data: InsightsPayload; view: View }
                       <time dateTime={r.shared}>{ago(r.shared)}</time>
                       <span className={`dk-insights-word dk-insights-word--${r.status}`}>{STATUS_WORD[r.status]}</span>
                     </p>
+                    {/* The line that says why; the whole error on hover, and on the link's own page. */}
                     {r.problem ? (
-                      <p className="dk-insights-inbox-problem" title={r.problem}>
+                      <p className="dk-insights-inbox-problem" title={r.problemFull ?? r.problem}>
                         {r.problem}
                       </p>
                     ) : null}

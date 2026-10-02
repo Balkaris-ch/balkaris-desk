@@ -123,6 +123,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
                 rows={narrowed || view.rows === "all" ? rows : rows.slice(0, RADAR_ROWS)}
                 ga4={data.table.ga4}
                 gsc={data.table.gsc}
+                searchEarly={data.table.searchEarly}
                 conversionsRead={data.table.conversionsRead}
                 categories={categories}
                 statusFilter
@@ -156,6 +157,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
           rows={rows}
           ga4={data.table.ga4}
           gsc={data.table.gsc}
+          searchEarly={data.table.searchEarly}
           conversionsRead={data.table.conversionsRead}
           columns={tab === "review" || tab === "published" ? "site" : "queue"}
           why={tab === "inbox"}

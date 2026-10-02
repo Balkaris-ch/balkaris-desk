@@ -10,7 +10,7 @@ import * as site from "../site/index.ts";
 import { specimenAllowed } from "../specimen.ts";
 import { off, ok, reading, series, since, today, waiting } from "../store.ts";
 import { scrub } from "../system.ts";
-import type { JobListed, Range, Reading, SourceId, Stat } from "../../../web/src/contract/common.ts";
+import type { EarlySignals, JobListed, Range, Reading, SourceId, Stat } from "../../../web/src/contract/common.ts";
 import type {
   AuditState,
   CheckKey,
@@ -106,7 +106,8 @@ export function labelOf(title: string | null | undefined, path: string): string 
 
 /* ---------- what the screen reads from the search sources ---------------------------- */
 
-type Ruled<R> = { window: DayWindow; floor: number; rows: R[] };
+/** A rule's list as the collectors return it. `early` only on the lists that have an early mode (gsc.ts, EARLY). */
+type Ruled<R> = { window: DayWindow; floor: number; rows: R[]; early?: EarlySignals | null; compared?: { queries: number; pages: number } };
 
 /**
  * Everything Search Console and Bing contribute, as their own readings. Live,
@@ -200,7 +201,11 @@ async function loadSearch(range: SeoRange, pagesKnown: site.PageRow[], o: { open
   if (totals.state === "ok" && totals.value.clicks.previous !== null) {
     const w = totals.value.window;
     const got = await reading("gsc", () => gsc.query({ startDate: w.previousStart, endDate: w.previousEnd, dimensions: ["query"], rowLimit: 1000 }));
-    previousQueries = carry(got, (v) => ({ rows: v.rows.map((r) => ({ query: r.keys[0] ?? "", position: r.position, impressions: r.impressions })) }));
+    /* No query at all for a window in which Google did show the site: every
+       query of it was withheld as rare, and an empty list is not a count of
+       zero. Queries are then not compared, exactly as for an uncounted window. */
+    const withheld = got.state === "ok" && got.value.rows.length === 0 && (totals.value.impressions.previous ?? 0) > 0;
+    previousQueries = withheld ? null : carry(got, (v) => ({ rows: v.rows.map((r) => ({ query: r.keys[0] ?? "", position: r.position, impressions: r.impressions })) }));
   }
 
   const access = quietly(() => gsc.access(), null);
@@ -275,7 +280,9 @@ export async function assembleTiles(src: SearchSources, range: SeoRange): Promis
     reading("crawl", () => crawlStat("seo.score", days, "score", "The desk's own score out of 100 by its stated rules (src/cc/site/rules.ts), recorded once a day since the first crawl. Not a figure from Google.", 100)),
     reading("gsc", () => indexStat("indexed")),
     reading("gsc", () => indexStat("notIndexed")),
-    reading("gsc", () => carry(src.opportunities, (v) => ({ value: v.rows.length, previous: previousOpportunities(v.floor), unit: "count", series: [] }) as Stat)),
+    reading("gsc", () =>
+      carry(src.opportunities, (v) => ({ value: v.rows.length, previous: previousOpportunities(v.floor), unit: "count", series: [], ...(v.early ? { sub: "early signals" } : {}) }) as Stat),
+    ),
     reading("gsc", () => carry(src.outliers, (v) => ({ value: v.rows.length, previous: null, unit: "count", series: [] }) as Stat)),
     reading("bing", () =>
       carry(src.links, (v) => {
@@ -329,30 +336,52 @@ export function assembleRanking(src: SearchSources): Reading<RankingTrend> {
  */
 const earlier = (src: SearchSources, before: { position: number } | null): number | null => (before && coveredBefore(src) ? before.position : null);
 
-const opportunityRow = (src: SearchSources) => (r: Opportunity): OpportunityRow => ({
-  query: r.query,
-  position: r.position,
-  previousPosition: earlier(src, r.previous),
-  impressions: r.impressions,
-  clicks: r.clicks,
-  ctr: r.ctr,
-  path: r.path,
-});
+/**
+ * A row's change in position follows the movements' rule (gsc.ts, `movers`):
+ * it is measured only on a row shown at least FLOOR.movers times in both
+ * periods. Under that, `changeFloor` says so and the screen prints no arrow,
+ * so a list never shows a movement the Movements panel beside it calls noise.
+ */
+const changeFloor = (now: { impressions: number }, before: { impressions: number } | null, previousPosition: number | null): { changeFloor?: number } =>
+  previousPosition !== null && before && (now.impressions < gsc.FLOOR.movers || before.impressions < gsc.FLOOR.movers) ? { changeFloor: gsc.FLOOR.movers } : {};
+
+const opportunityRow = (src: SearchSources) => (r: Opportunity): OpportunityRow => {
+  const previousPosition = earlier(src, r.previous);
+  return {
+    query: r.query,
+    position: r.position,
+    previousPosition,
+    impressions: r.impressions,
+    clicks: r.clicks,
+    ctr: r.ctr,
+    path: r.path,
+    ...changeFloor(r, r.previous, previousPosition),
+    ...(r.early ? { early: true } : {}),
+  };
+};
 
 /**
  * Whether a query without an earlier position is new: only when the window
- * before is covered and the query list was not cut at Google's row limit (a
- * query below the cut in the window before would otherwise pass for new).
+ * before is covered, its queries could be read (Google did not withhold every
+ * one of them: `loadSearch`), and the query list was not cut at Google's row
+ * limit (a query below the cut in the window before would otherwise pass for new).
  */
-const queriesCompared = (src: SearchSources): boolean => coveredBefore(src) && src.queries.state === "ok" && src.queries.value.complete;
+const queriesCompared = (src: SearchSources): boolean => coveredBefore(src) && src.previousQueries?.state === "ok" && src.queries.state === "ok" && src.queries.value.complete;
 
 export function assembleOpportunities(src: SearchSources, limit = 8): Reading<Opportunities> {
-  return carry(src.opportunities, (v) => ({ window: windowOf(v.window), floor: v.floor, compared: queriesCompared(src), total: v.rows.length, rows: v.rows.slice(0, limit).map(opportunityRow(src)) }));
+  return carry(src.opportunities, (v) => ({
+    window: windowOf(v.window),
+    floor: v.floor,
+    early: v.early ?? null,
+    compared: queriesCompared(src),
+    total: v.rows.length,
+    rows: v.rows.slice(0, limit).map(opportunityRow(src)),
+  }));
 }
 
 /** The whole list behind "View all", with the same rule for "new". */
-export function opportunityList(src: SearchSources): Reading<{ window: SeoWindow; floor: number; compared: boolean; rows: OpportunityRow[] }> {
-  return carry(src.opportunities, (v) => ({ window: windowOf(v.window), floor: v.floor, compared: queriesCompared(src), rows: v.rows.map(opportunityRow(src)) }));
+export function opportunityList(src: SearchSources): Reading<{ window: SeoWindow; floor: number; early: EarlySignals | null; compared: boolean; rows: OpportunityRow[] }> {
+  return carry(src.opportunities, (v) => ({ window: windowOf(v.window), floor: v.floor, early: v.early ?? null, compared: queriesCompared(src), rows: v.rows.map(opportunityRow(src)) }));
 }
 
 /** The groups content gaps are counted by: every service page and every industry page the crawl knows. */
@@ -365,6 +394,8 @@ export function gapGroups(pagesKnown: site.PageRow[]): { path: string; label: st
 export function assembleGaps(src: SearchSources, groups: { path: string; label: string; kind: "service" | "segment" }[], limit = 6): Reading<ContentGaps> {
   return carry(src.gaps, (v) => {
     const by = new Map<string, GapGroup>(groups.map((g) => [g.path, { ...g, queries: 0, impressions: 0, top: null }]));
+    /* A group is early when every query in it is: it stands on nothing above the standard floor. */
+    const firm = new Set<string>();
     const elsewhere = { queries: 0, impressions: 0 };
     for (const r of v.rows) {
       const g = r.path ? by.get(r.path) : undefined;
@@ -375,20 +406,33 @@ export function assembleGaps(src: SearchSources, groups: { path: string; label: 
       }
       g.queries++;
       g.impressions += r.impressions;
+      if (!r.early) firm.add(g.path);
       /* Rows arrive most impressions first, so the first is the top one. */
       g.top ??= r.query;
     }
-    const list = [...by.values()].filter((g) => g.queries > 0).sort((a, b) => b.impressions - a.impressions || b.queries - a.queries);
-    return { window: windowOf(v.window), floor: v.floor, groups: list.slice(0, limit), elsewhere };
+    const list = [...by.values()]
+      .filter((g) => g.queries > 0)
+      .map((g) => (v.early && !firm.has(g.path) ? { ...g, early: true } : g))
+      .sort((a, b) => b.impressions - a.impressions || b.queries - a.queries);
+    return { window: windowOf(v.window), floor: v.floor, early: v.early ?? null, groups: list.slice(0, limit), elsewhere };
   });
 }
 
-export function gapRows(src: SearchSources, groups: { path: string; label: string }[]): Reading<{ window: DayWindow; floor: number; rows: GapRow[] }> {
+export function gapRows(src: SearchSources, groups: { path: string; label: string }[]): Reading<{ window: DayWindow; floor: number; early: EarlySignals | null; rows: GapRow[] }> {
   const named = new Map(groups.map((g) => [g.path, g.label]));
   return carry(src.gaps, (v) => ({
     window: v.window,
     floor: v.floor,
-    rows: v.rows.map((r) => ({ query: r.query, impressions: r.impressions, clicks: r.clicks, position: r.position, path: r.path, group: r.path ? (named.get(r.path) ?? null) : null })),
+    early: v.early ?? null,
+    rows: v.rows.map((r) => ({
+      query: r.query,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      position: r.position,
+      path: r.path,
+      group: r.path ? (named.get(r.path) ?? null) : null,
+      ...(r.early ? { early: true } : {}),
+    })),
   }));
 }
 
@@ -414,12 +458,20 @@ export function movementRows(list: Mover[]): MovementRow[] {
 export function moversRead(src: SearchSources): SearchSources["movers"] {
   if (src.movers.state !== "ok") return src.movers;
   if (src.totals.state !== "ok") return waiting("gsc", "Whether Google's figures cover the period before cannot be read just now, so no movement is measured against it.");
-  if (!coveredBefore(src)) return waiting("gsc", `Google's figures for the site begin inside the period before (${src.movers.value.window.previousStart} to ${src.movers.value.window.previousEnd}), so no movement can be measured against it yet. Movements appear once a whole period before is covered.`);
+  if (!coveredBefore(src)) {
+    const t = src.totals.value;
+    const w = src.movers.value.window;
+    /* The day named is `movers`'s own (gsc.ts, firstComparison): one rule, so the panel never promises two different days. */
+    return waiting(
+      "gsc",
+      `No comparison yet: Google's figures for the site do not cover the period this one is measured against (${gsc.spanText(w.previousStart, w.previousEnd)}) from its first day, so no movement can be measured against it. ${gsc.firstComparison({ figures: gsc.figuresBegin(t) }, t.window.days)}`,
+    );
+  }
   return src.movers;
 }
 
 export function assembleMovements(src: SearchSources, limit = 5): Reading<Movements> {
-  return carry(moversRead(src), (v) => ({ window: windowOf(v.window), floor: v.floor, total: v.rows.length, rows: movementRows(v.rows).slice(0, limit) }));
+  return carry(moversRead(src), (v) => ({ window: windowOf(v.window), floor: v.floor, compared: v.compared ?? null, total: v.rows.length, rows: movementRows(v.rows).slice(0, limit) }));
 }
 
 export function assembleConsole(src: SearchSources): Reading<ConsoleOverview> {
@@ -446,8 +498,9 @@ export async function assembleLanding(src: SearchSources, range: SeoRange, pages
         window: windowOf(v.window),
         compared: coveredBefore(src) && v.complete,
         total: v.rows.length,
-        rows: v.rows.slice(0, limit).map(
-          (r): SearchLanding => ({
+        rows: v.rows.slice(0, limit).map((r): SearchLanding => {
+          const previousPosition = earlier(src, r.previous);
+          return {
             page: r.page,
             path: r.path,
             label: label(r.page, r.path),
@@ -457,9 +510,10 @@ export async function assembleLanding(src: SearchSources, range: SeoRange, pages
             impressions: r.impressions,
             ctr: r.ctr,
             position: r.position,
-            previousPosition: earlier(src, r.previous),
-          }),
-        ),
+            previousPosition,
+            ...changeFloor(r, r.previous, previousPosition),
+          };
+        }),
       };
     });
   }
@@ -712,6 +766,7 @@ routes.get("/", async (c) => {
     floors: {
       opportunities: src.opportunities.state === "ok" ? src.opportunities.value.floor : gsc.FLOOR.opportunities,
       ctr: src.outliers.state === "ok" ? src.outliers.value.floor : gsc.FLOOR.ctr,
+      early: src.opportunities.state === "ok" ? (src.opportunities.value.early ?? null) : null,
     },
     ranking,
     opportunities,
@@ -741,9 +796,9 @@ routes.get("/list/:name", async (c) => {
       case "opportunities":
         return carry(opportunityList(src), (v) => ({ name, ...v }));
       case "gaps":
-        return carry(gapRows(src, groups), (v) => ({ name, window: windowOf(v.window), floor: v.floor, rows: v.rows }));
+        return carry(gapRows(src, groups), (v) => ({ name, window: windowOf(v.window), floor: v.floor, early: v.early, rows: v.rows }));
       case "movements":
-        return carry(moversRead(src), (v) => ({ name, window: windowOf(v.window), floor: v.floor, rows: movementRows(v.rows) }));
+        return carry(moversRead(src), (v) => ({ name, window: windowOf(v.window), floor: v.floor, compared: v.compared ?? null, rows: movementRows(v.rows) }));
       case "landing":
         return carry(await assembleLanding(src, range, specimen ? [] : pagesKnown, 500), (landings) => ({ name, landings }));
     }
@@ -1062,10 +1117,10 @@ export function specimenSearch(range: SeoRange, now: number = Date.now()): Searc
     buckets: said(buckets),
     queries: said({ window, rows: queries, complete: true }),
     previousQueries: said({ rows: queries.filter((r) => r.previous).map((r) => ({ query: r.query, position: r.previous!.position, impressions: r.previous!.impressions })) }),
-    opportunities: said({ window, floor: 30, rows: opportunities }),
+    opportunities: said({ window, floor: 30, early: null, rows: opportunities }),
     outliers: said({ window, floor: 50, rows: outliers }),
     movers: said({ window, floor: 30, rows: movers }),
-    gaps: said({ window, floor: 10, rows: gapsRows }),
+    gaps: said({ window, floor: 10, early: null, rows: gapsRows }),
     pages: said({ window, rows: pagesList, complete: true }),
     queryPages: said({ window, rows: queries.map((r, i) => ({ query: r.query, page: `https://specimen.invalid${landingOf(i)}`, path: landingOf(i), clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position })), complete: true }),
     indexing: said(indexing),

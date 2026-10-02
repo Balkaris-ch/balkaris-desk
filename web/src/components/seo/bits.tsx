@@ -16,32 +16,53 @@ export const windowText = (w: { start: string; end: string }): string => `${shor
 /** A position as Search Console gives it: an average, one decimal at most. */
 export const position = (p: number | null | undefined): string => (p == null ? DASH : num(p, 1));
 
-/** What a missing earlier position means when the window before was not measured whole. */
-export const NOT_COMPARED = "The period before is not covered by Google’s figures, so there is no earlier position to compare with.";
+/**
+ * What a missing earlier position means when the list is not `compared`. True
+ * for each reason that makes it so (routes/seo.ts, queriesCompared): Google's
+ * figures do not cover the period before from its first day, Google reported
+ * none of that period's queries (all withheld as rare), or Google's row limit
+ * cut the list.
+ */
+export const NOT_COMPARED = "No earlier position to compare with: Google’s figures do not cover the period before whole, or report none of its queries, so whether it was shown then is not known.";
+
+/** What a missing earlier position means for a query listed early: Google withholds rare queries, so its absence says nothing. */
+export const NOT_NEW_EARLY =
+  "Google reported no position for it in the period before, but it withholds rare queries, and one shown this few times may have been shown then too. So it is not called new.";
+
+/** Why no change is shown for a row shown too few times in one of the two periods. */
+export const changeTooThin = (floor: number): string =>
+  `Shown fewer than ${num(floor)} times in one of the two periods: a change in position on so few impressions is noise, so none is shown (the same floor as Recent ranking movements).`;
+
+/** The absent dash with its reason on hover and for a screen reader. */
+function NoChange({ why }: { why: string }) {
+  return (
+    <span className="dk-seo-move dk-seo-move--flat" title={why}>
+      <span aria-hidden>{DASH}</span>
+      <span className="dk-sr">{why}</span>
+    </span>
+  );
+}
 
 /**
  * Positions gained between two windows: "↑ 4" in green when the page or query
  * moved up (a smaller number), "↓ 3" in red when it fell. Without an earlier
  * position it says "new" only when the window before was measured whole
- * (`compared`); otherwise the earlier position is unknown, and it shows the
- * absent dash with the reason.
+ * (`compared`) and the row is not an early one (`early`: Google may have
+ * withheld it then as rare); otherwise it shows the absent dash with the
+ * reason. With `changeFloor` (the row was shown too few times in one of the
+ * periods) it shows the dash instead of an arrow.
  */
-export function PositionChange({ previous, current, compared }: { previous: number | null; current: number; compared: boolean }) {
+export function PositionChange({ previous, current, compared, early, changeFloor }: { previous: number | null; current: number; compared: boolean; early?: boolean; changeFloor?: number }) {
   if (previous === null) {
-    if (!compared) {
-      return (
-        <span className="dk-seo-move dk-seo-move--flat" title={NOT_COMPARED}>
-          <span aria-hidden>{DASH}</span>
-          <span className="dk-sr">{NOT_COMPARED}</span>
-        </span>
-      );
-    }
+    if (!compared) return <NoChange why={NOT_COMPARED} />;
+    if (early) return <NoChange why={NOT_NEW_EARLY} />;
     return (
       <span className="dk-seo-move dk-seo-move--new" title="Google did not show the site for it in the period before">
         new
       </span>
     );
   }
+  if (changeFloor !== undefined) return <NoChange why={changeTooThin(changeFloor)} />;
   const gained = previous - current;
   const size = Math.abs(gained);
   const text = size >= 10 ? num(Math.round(size)) : num(size, 1);

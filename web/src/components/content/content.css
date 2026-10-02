@@ -113,6 +113,11 @@
   overflow-wrap: anywhere;
 }
 
+/* The early-signals line at the head of a list read early (ui/Early.tsx), aligned with the table's first column. */
+.dk-content-early {
+  padding: 0 var(--pad) var(--x10);
+}
+
 /* An opened list scrolls inside its panel. */
 .dk-content-scroll {
   max-height: var(--dk-content-open-h);

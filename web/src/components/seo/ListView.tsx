@@ -1,12 +1,13 @@
 import type { SeoList } from "@/contract/seo";
 import { Card } from "@/components/ui/Card";
+import { EarlyFigure, EarlyLine } from "@/components/ui/Early";
 import { Stamp } from "@/components/ui/Stamp";
 import { Table } from "@/components/ui/Table";
 import { num } from "@/lib/format";
 import { position, windowText, SeoRead } from "./bits";
-import { opportunityColumns } from "./KeywordOpportunities";
+import { opportunitiesEmpty, opportunityColumns } from "./KeywordOpportunities";
 import { organicLandingColumns, searchLandingColumns } from "./Landing";
-import { movementColumns } from "./Movements";
+import { movementColumns, movementsEmpty } from "./Movements";
 import "./seo.css";
 
 export const LIST_TITLES = {
@@ -24,8 +25,17 @@ export function ListView({ list }: { list: SeoList }) {
       <SeoRead reading={list.reading}>
         {(b, r) => (
           <div className="dk-seo-flush">
+            {(b.name === "opportunities" || b.name === "gaps") && b.early ? <EarlyLine early={b.early} rows="Queries" className="dk-seo-early" /> : null}
             {b.name === "opportunities" ? (
-              <Table caption={meta.title} rows={b.rows} rowKey={(x) => x.query} columns={opportunityColumns(b.compared)} minWidth={640} defaultSort={{ key: "impressions", dir: "desc" }} empty="No query meets the rule in this period." />
+              <Table
+                caption={meta.title}
+                rows={b.rows}
+                rowKey={(x) => x.query}
+                columns={opportunityColumns(b.compared, b.early?.standard)}
+                minWidth={640}
+                defaultSort={{ key: "impressions", dir: "desc" }}
+                empty={opportunitiesEmpty(b)}
+              />
             ) : b.name === "gaps" ? (
               <Table
                 caption={meta.title}
@@ -35,16 +45,31 @@ export function ListView({ list }: { list: SeoList }) {
                 defaultSort={{ key: "impressions", dir: "desc" }}
                 columns={[
                   { key: "query", head: "Query", cell: (x) => <span className="dk-seo-cell-text">{x.query}</span>, sort: (x) => x.query },
-                  { key: "impressions", head: "Impressions", numeric: true, cell: (x) => num(x.impressions), sort: (x) => x.impressions },
+                  {
+                    key: "impressions",
+                    head: "Impressions",
+                    numeric: true,
+                    cell: (x) => (
+                      <EarlyFigure early={x.early} standard={b.early?.standard}>
+                        {num(x.impressions)}
+                      </EarlyFigure>
+                    ),
+                    sort: (x) => x.impressions,
+                  },
                   { key: "clicks", head: "Clicks", numeric: true, cell: (x) => num(x.clicks), sort: (x) => x.clicks },
                   { key: "position", head: "Position", numeric: true, cell: (x) => position(x.position), sort: (x) => x.position },
                   { key: "page", head: "Page Google shows", cell: (x) => <span className="dk-seo-cell-text">{x.path ?? "not known"}</span>, sort: (x) => x.path ?? "" },
                   { key: "group", head: "Service or industry", cell: (x) => <span className="dk-seo-cell-text">{x.group ?? "Another page"}</span>, sort: (x) => x.group ?? "" },
                 ]}
-                empty="No query in this period lacks a page that answers it."
+                empty={b.early ? "Every query Google has shown the site for so far has a page whose title or heading carries its words." : "No query in this period lacks a page that answers it."}
               />
             ) : b.name === "movements" ? (
-              <Table caption={meta.title} rows={b.rows} rowKey={(x) => x.key} columns={movementColumns(b.window)} minWidth={560} className="dk-seo-tight" empty="Nothing moved by a whole position in this period." />
+              /* No rows: the sentence as a paragraph the width of the panel, as on the screen's own panel (Movements.tsx). */
+              b.rows.length ? (
+                <Table caption={meta.title} rows={b.rows} rowKey={(x) => x.key} columns={movementColumns(b.window)} minWidth={560} className="dk-seo-tight" />
+              ) : (
+                <p className="dk-seo-none">{movementsEmpty(b)}</p>
+              )
             ) : b.landings.source === "gsc" ? (
               <Table caption={meta.title} rows={b.landings.rows} rowKey={(x) => x.page} columns={searchLandingColumns(b.landings.compared)} minWidth={640} className="dk-seo-tight" empty="Google sent nobody to any page in this period." />
             ) : (
@@ -69,5 +94,6 @@ function listSub(list: SeoList): string {
     const l = b.landings;
     return l.source === "gsc" ? `${meta.sub} ${windowText(l.window)}, ${num(l.total)} pages.` : `${meta.sub} ${windowText(l)}, ${num(l.total)} pages, from GA4.`;
   }
-  return `${meta.sub} ${windowText(b.window)}, ${num(b.rows.length)} rows; each shown at least ${b.floor} times.`;
+  const early = (b.name === "opportunities" || b.name === "gaps") && b.early;
+  return `${meta.sub} ${windowText(b.window)}, ${num(b.rows.length)} ${b.rows.length === 1 ? "row" : "rows"}; ${early ? `each shown at least once (early signals; the standard floor is ${early.standard})` : `each shown at least ${b.floor} times`}.`;
 }

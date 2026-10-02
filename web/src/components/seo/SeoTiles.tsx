@@ -89,13 +89,17 @@ export function SeoTiles({ data }: { data: SeoPayload }) {
         noStamp
         label="Keyword Opportunities"
         reading={t.keywordOpportunities}
-        info={`Search Console queries at an average position of 4 to 20 over the period, shown at least ${floors.opportunities} times: already on the first two pages, not yet at the top. Compared with the period before only when Google counted it whole.`}
+        info={
+          floors.early
+            ? `Search Console queries at an average position of 4 to 20 over the period, already on the first two pages and not yet at the top. ${floors.early.line} Compared with the period before only when Google reported queries for it.`
+            : `Search Console queries at an average position of 4 to 20 over the period, shown at least ${floors.opportunities} times: already on the first two pages, not yet at the top. Compared with the period before only when Google counted it whole.`
+        }
       />
       <Tile
         noStamp
         label="CTR Opportunities"
         reading={t.ctrOpportunities}
-        info={`Our own yardstick, not Google’s: pages whose click-through rate is under half the median of this site’s own pages in the same position band, counting pages shown at least ${floors.ctr} times. Google publishes no expected CTR.`}
+        info={`Our own yardstick, not Google’s: pages whose click-through rate is under half the median of this site’s own pages in the same position band, counting pages shown at least ${floors.ctr} times; a band needs three such pages before it is compared. Google publishes no expected CTR.`}
       />
       <Tile
         noStamp

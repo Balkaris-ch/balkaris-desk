@@ -12,9 +12,9 @@ import { articleStats, asReading, insightsByDay, report, where, type GaRange, ty
 import { gsc } from "../search/index.ts";
 import { crawledAt, inventory, LIMITS, type PageRow } from "../site/index.ts";
 import { specimenAllowed } from "../specimen.ts";
-import { scrub } from "../system.ts";
+import { whyLine } from "../system.ts";
 import { ok, off, reading, waiting } from "../store.ts";
-import type { DayPoint, Range, Reading, Stat } from "../../../web/src/contract/common.ts";
+import type { DayPoint, EarlySignals, Range, Reading, Stat } from "../../../web/src/contract/common.ts";
 import type {
   ArticleFigures,
   ArticleTraffic,
@@ -323,6 +323,9 @@ function buildRows(desk: Desk, crawl: Crawl | null): InsightRow[] {
     const path = onSite && l.slug ? `/insights/${l.slug}` : null;
     const job = desk.writeJob.get(l.id);
     const when = status === "published" ? desk.firstListed.get(l.id) : status === "review" ? desk.firstLive.get(l.id) : undefined;
+    /* Why it is stuck or unread: the line that says so (not the first, which for the local model is a harmless load warning), and the whole text beside it. */
+    const raw = status === "stuck" ? (job?.error ?? "The workstation gave it up after three attempts.") : l.draft_id === null && l.state === "failed" ? (l.error ?? "It could not be read.") : null;
+    const why = raw === null ? null : whyLine(raw);
     rows.push({
       key: `l${l.id}`,
       href: l.draft_id !== null ? `/insights/${l.draft_id}` : `/insights/link/${l.id}`,
@@ -340,7 +343,8 @@ function buildRows(desk: Desk, crawl: Crawl | null): InsightRow[] {
       linkId: l.id,
       draftId: l.draft_id,
       canRetry: status === "stuck" || (l.draft_id === null && l.state === "failed"),
-      problem: status === "stuck" ? scrub(job?.error ?? "The workstation gave it up after three attempts.") : l.draft_id === null && l.state === "failed" ? scrub(l.error ?? "It could not be read.") : null,
+      problem: why?.line ?? null,
+      problemFull: why?.full ?? null,
     });
   }
 
@@ -368,6 +372,7 @@ function buildRows(desk: Desk, crawl: Crawl | null): InsightRow[] {
         draftId: null,
         canRetry: false,
         problem: null,
+        problemFull: null,
       });
     }
   }
@@ -552,6 +557,8 @@ function specimenSearch(paths: string[]): Record<string, SearchFigures> {
 /** The Opportunities tab lists this many queries, the most shown first; its count is all of them. */
 const OPPORTUNITIES_SHOWN = 100;
 
+type OpportunityList = InsightsPayload["opportunities"] extends Reading<infer T> ? T : never;
+
 const SPECIMEN_OPPORTUNITIES: Opportunity[] = ["a", "b", "c", "d", "e"].map((x, i) => ({
   query: `specimen query ${x}`,
   impressions: (5 - i) * 111,
@@ -561,9 +568,24 @@ const SPECIMEN_OPPORTUNITIES: Opportunity[] = ["a", "b", "c", "d", "e"].map((x, 
   path: null,
 }));
 
-async function searchByPath(range: ScreenRange): Promise<Reading<Record<string, SearchFigures>>> {
-  const [pages, pairs] = await Promise.all([gsc.pages(range), gsc.queryPages(range)]);
+/**
+ * Search Console's figures per article, and the window's early signals: in
+ * an early window (gsc.ts, EARLY) an article shown fewer times than the
+ * standard floor has its CTR and keyword count marked early.
+ */
+async function searchByPath(range: ScreenRange): Promise<Reading<{ byPath: Record<string, SearchFigures>; early: EarlySignals | null }>> {
+  const [pages, pairs, q] = await Promise.all([gsc.pages(range), gsc.queryPages(range), gsc.queries(range)]);
   if (pages.state !== "ok") return absent(pages);
+  /* The list's own rows are the articles Google showed: early while fewer than ten of them reach the floor (gsc.ts, EARLY). */
+  const articles = pages.value.rows.filter((r) => isArticlePath(clean(r.path)));
+  const early =
+    q.state === "ok"
+      ? gsc.earlySignals(
+          { own: articles, all: q.value.rows },
+          gsc.FLOOR.opportunities,
+          `A click rate or a keyword count measured on 1 to ${gsc.FLOOR.opportunities - 1} impressions moves a lot from day to day; those figures are marked early until enough data exists.`,
+        )
+      : null;
   const words = new Map<string, Set<string>>();
   if (pairs.state === "ok") {
     for (const r of pairs.value.rows) {
@@ -583,9 +605,10 @@ async function searchByPath(range: ScreenRange): Promise<Reading<Record<string, 
       ctr: r.impressions > 0 ? r.ctr : null,
       position: r.impressions > 0 ? r.position : null,
       keywords: pairs.state === "ok" ? (words.get(p)?.size ?? 0) : null,
+      ...(early && r.impressions < early.standard ? { early: true } : {}),
     };
   }
-  return ok(out, "gsc", pages.asOf, `${pages.note ?? ""} Position is Google's average position, not a tracked rank.`.trim());
+  return ok({ byPath: out, early }, "gsc", pages.asOf, `${pages.note ?? ""} Position is Google's average position, not a tracked rank.${early ? ` ${early.line}` : ""}`.trim());
 }
 
 /* ---------- recommendations ---------------------------------------------------- */
@@ -674,9 +697,11 @@ routes.get("/", async (c) => {
     reading("gsc", async () => {
       const titles = rows.filter((r) => r.path).map((r) => ({ path: r.path!, title: r.title, h1: crawl.state === "ok" ? (crawl.value.articles.get(r.path!)?.h1 ?? null) : null }));
       const g = await gsc.gaps(range, titles);
-      if (g.state !== "ok") return absent<{ rows: Opportunity[]; floor: number; total: number }>(g);
-      const out = g.value.rows.slice(0, OPPORTUNITIES_SHOWN).map((r) => ({ query: r.query, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, position: r.position, path: r.path ? clean(r.path) : null }));
-      return ok({ rows: out, floor: g.value.floor, total: g.value.rows.length }, "gsc", g.asOf, g.note);
+      if (g.state !== "ok") return absent<OpportunityList>(g);
+      const out = g.value.rows
+        .slice(0, OPPORTUNITIES_SHOWN)
+        .map((r) => ({ query: r.query, impressions: r.impressions, clicks: r.clicks, ctr: r.ctr, position: r.position, path: r.path ? clean(r.path) : null, ...(r.early ? { early: true } : {}) }));
+      return ok({ rows: out, floor: g.value.floor, early: g.value.early, total: g.value.rows.length }, "gsc", g.asOf, g.note);
     }),
   ]);
 
@@ -803,11 +828,16 @@ routes.get("/", async (c) => {
   const inboxRows: InboxRow[] = linkRows
     .filter((r) => r.source.key === source && WAITING.includes(r.status))
     .slice(0, 4)
-    .map((r) => ({ linkId: r.linkId!, title: r.title, handle: r.handle, shared: r.shared!, cover: r.cover, href: r.href, status: r.status, canRetry: r.canRetry, problem: r.problem }));
+    .map((r) => ({ linkId: r.linkId!, title: r.title, handle: r.handle, shared: r.shared!, cover: r.cover, href: r.href, status: r.status, canRetry: r.canRetry, problem: r.problem, problemFull: r.problemFull }));
 
-  const gscTable: Reading<Record<string, SearchFigures>> = specimen ? ok(specimenSearch(live.map((r) => r.path!)), "gsc", new Date().toISOString(), "Specimen data: made-up figures, shown only on a workstation.") : search;
-  const opportunities: Reading<{ rows: Opportunity[]; floor: number; total: number }> = specimen
-    ? ok({ rows: SPECIMEN_OPPORTUNITIES, floor: 10, total: SPECIMEN_OPPORTUNITIES.length }, "gsc", new Date().toISOString(), "Specimen data: made-up queries, shown only on a workstation.")
+  const gscTable: Reading<Record<string, SearchFigures>> = specimen
+    ? ok(specimenSearch(live.map((r) => r.path!)), "gsc", new Date().toISOString(), "Specimen data: made-up figures, shown only on a workstation.")
+    : search.state === "ok"
+      ? { ...search, value: search.value.byPath }
+      : search;
+  const searchEarly = !specimen && search.state === "ok" ? search.value.early : null;
+  const opportunities: Reading<OpportunityList> = specimen
+    ? ok({ rows: SPECIMEN_OPPORTUNITIES, floor: 10, early: null, total: SPECIMEN_OPPORTUNITIES.length }, "gsc", new Date().toISOString(), "Specimen data: made-up queries, shown only on a workstation.")
     : gaps;
 
   const count = (s: InsightStatus) => rows.filter((r) => r.status === s).length;
@@ -829,7 +859,7 @@ routes.get("/", async (c) => {
     top,
     calendar: { month, today: todayZ(), dots },
     inbox: { sources, source, rows: inboxRows, asOf: desk.at },
-    table: { rows, asOf: desk.at, ga4, gsc: gscTable, conversionsRead: land.data !== null },
+    table: { rows, asOf: desk.at, ga4, gsc: gscTable, searchEarly, conversionsRead: land.data !== null },
     opportunities,
     recommendations: recommend(rows, desk, crawl),
     state: stateFor(c, desk),

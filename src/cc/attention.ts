@@ -102,7 +102,9 @@ export const RULES: readonly AttentionRule[] = [
     source: "gsc",
     rule: "A page whose average position in Google fell by 3 places or more against the window before, shown at least 30 times in both windows (Google's average position, not a tracked rank).",
     find: async (range) => {
-      const r = await (await gsc()).movers(range);
+      /* The standard floor, named: a rule never reads a list in its early mode (gsc.ts, EARLY). */
+      const g = await gsc();
+      const r = await g.movers(range, { floor: g.FLOOR.movers });
       if (r.state !== "ok") return r;
       return ok(
         r.value.rows
@@ -129,7 +131,8 @@ export const RULES: readonly AttentionRule[] = [
     source: "gsc",
     rule: "A page whose click-through rate is under half the median of this site's own pages at a similar position, shown at least 50 times. The yardstick is ours: Google publishes no expected CTR.",
     find: async (range) => {
-      const r = await (await gsc()).ctrOutliers(range);
+      const g = await gsc();
+      const r = await g.ctrOutliers(range, { floor: g.FLOOR.ctr });
       if (r.state !== "ok") return r;
       return ok(
         r.value.rows.map((p) => ({

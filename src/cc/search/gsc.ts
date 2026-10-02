@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { db } from "../../db.ts";
-import type { Range, Reading, SourceStatus, Stat } from "../../../web/src/contract/common.ts";
+import type { EarlySignals, Range, Reading, SourceStatus, Stat } from "../../../web/src/contract/common.ts";
 import { accountEmail, hasKey, SCOPES, token } from "../gauth.ts";
 import type { Job } from "../scheduler.ts";
 import { cached, forget, kept, note, off, ok, record, series, setState, state, today, waiting } from "../store.ts";
@@ -26,6 +26,7 @@ import {
   setCount,
   siteBase,
   SourceError,
+  SPAN,
   statusOf,
 } from "./shared.ts";
 
@@ -854,6 +855,161 @@ function derived<A, B>(r: Reading<A>, make: (value: A) => B, rule: string): Read
  */
 export const FLOOR = { movers: 30, opportunities: 30, ctr: 50, gaps: 10 } as const;
 
+/**
+ * EARLY SIGNALS: what a young site sees instead of empty lists.
+ *
+ * The floors above are set for a site Google already shows often. A property
+ * a few weeks old has almost nothing above them, so every list built on them
+ * comes back empty, and an empty list reads as a broken one. So the lists that
+ * only SHOW what Google showed (`opportunities`, `gaps`, and through them the
+ * Insights screen) have an early mode; the lists that COMPARE (`movers`,
+ * `ctrOutliers`) do not, because a comparison on a handful of impressions is
+ * noise however it is labelled: they say why they wait instead.
+ *
+ * THE RULE, stated here and nowhere else: a list is EARLY while fewer than
+ * 10 of its own rows (the rows its rule keeps, before any floor) reach its
+ * standard floor, or while the queries Google reports for the window add up
+ * to fewer than 1,000 impressions. The first half is the list's own: a window
+ * can be well past 1,000 impressions with one query carrying most of them,
+ * and a list that asked only about the window would then go back to its
+ * standard floor with nothing above it, empty again. The second half keeps a
+ * young window early as a whole, so ten rows that barely reach the floor in a
+ * site's first weeks are still read as early.
+ *
+ * In an early list the floor drops to 1 impression, every row under the
+ * standard floor carries `early: true`, and the list carries `early`
+ * (EarlySignals) with the line a screen prints at its head. Nothing switches
+ * it back by hand: the first read after the list stops being early is at the
+ * standard floor again, and it has at least ten rows then.
+ *
+ * A caller that passes `floor` gets exactly that floor and never the early
+ * mode. The attention rules do (src/cc/attention.ts): an alert must never
+ * fire on noise.
+ */
+export const EARLY = { impressions: 1000, rows: 10 } as const;
+
+const EARLY_RULE = `A list is early while fewer than ${EARLY.rows} of its rows reach its standard floor, or while the queries Google reports for the window add up to fewer than ${EARLY.impressions.toLocaleString("en-GB")} impressions.`;
+
+/**
+ * Whether a list is early (the rule above). `own` are the rows the list's
+ * rule keeps before any floor; `all` every query row of the window.
+ */
+export function isEarly(own: readonly { impressions: number }[], all: readonly { impressions: number }[], standard: number): boolean {
+  const impressions = all.reduce((n, r) => n + r.impressions, 0);
+  return impressions < EARLY.impressions || own.filter((r) => r.impressions >= standard).length < EARLY.rows;
+}
+
+const count = (n: number, one: string, many = `${one}s`): string => `${n.toLocaleString("en-GB")} ${n === 1 ? one : many}`;
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "9 Nov 2026": a day as a person reads it in a sentence, with the screens' month names (Intl's en-GB now says "Sept"). */
+export const dayText = (day: string): string => {
+  const [y, m, d] = day.split("-").map(Number);
+  return `${d} ${MONTHS[(m ?? 1) - 1]} ${y}`;
+};
+
+/**
+ * A period as a person reads it: "1 Sep – 30 Sep 2026" inside one year,
+ * "30 Sep 2024 – 29 Sep 2025" across two, so a window that crosses New Year
+ * is never dated as if it began in the year it ends.
+ */
+export const spanText = (start: string, end: string): string =>
+  start.slice(0, 4) === end.slice(0, 4) ? `${dayText(start).replace(/ \d{4}$/, "")} – ${dayText(end)}` : `${dayText(start)} – ${dayText(end)}`;
+
+/**
+ * The early signals of a list, or null when it is not early (the rule above).
+ * `own` are the rows the list's rule keeps before any floor, `all` every query
+ * row of the window; `after` is the list's own sentence: what a figure under
+ * its standard floor is worth, and that the list returns to the floor by itself.
+ */
+export function earlySignals(rows: { own: readonly { impressions: number }[]; all: readonly { impressions: number }[] }, standard: number, after: string): EarlySignals | null {
+  if (!isEarly(rows.own, rows.all, standard)) return null;
+  const impressions = rows.all.reduce((n, r) => n + r.impressions, 0);
+  return {
+    standard,
+    queries: rows.all.length,
+    impressions,
+    line: `Early signals: Google showed the site ${count(impressions, "time")} for the ${count(rows.all.length, "query", "queries")} it reports in this window (rare queries are withheld). ${after}`,
+  };
+}
+
+/** What a row under each list's standard floor is worth, in one clause. */
+const UNDER = {
+  opportunities: (standard: number) => `A position measured on 1 to ${standard - 1} impressions moves a lot from day to day`,
+  gaps: (standard: number) => `A query shown 1 to ${standard - 1} times can be a one-off rather than a question people keep asking`,
+};
+
+/**
+ * The floor a list is read at: the caller's, or the standard one, or 1 with
+ * the early signals. `own` are the rows the list's rule keeps before any
+ * floor, `all` every query row of the window.
+ */
+function floorFor(
+  rows: { own: readonly { impressions: number }[]; all: readonly { impressions: number }[] },
+  standard: number,
+  asked: number | undefined,
+  under: (standard: number) => string,
+): { floor: number; early: EarlySignals | null } {
+  if (asked !== undefined) return { floor: asked, early: null };
+  const early = earlySignals(rows, standard, `${under(standard)}; the list switches to the standard floor of ${standard} by itself once enough data exists.`);
+  return { floor: early ? 1 : standard, early };
+}
+
+/**
+ * The first day of Google's figures for the property, as a window's totals
+ * read it: the earliest day of the window before that has a figure, or the
+ * first day drawn when none does. When the window before is covered from its
+ * first day, that first day (Google's own begin earlier). The day the totals'
+ * rule (`coveredBefore` in routes/seo.ts) measures coverage by.
+ */
+export function figuresBegin(t: SearchTotals): string {
+  return t.days.map((d) => d.previous?.date).filter((d): d is string => !!d).sort()[0] ?? t.from;
+}
+
+/** Google keeps sixteen months of Search Console figures; at their shortest that is 485 days. */
+const KEPT_DAYS = 485;
+
+/**
+ * WHEN A MOVEMENT CAN FIRST BE MEASURED, in one place for every sentence that
+ * names the day (`movers` here, `moversRead` in routes/seo.ts), so the day a
+ * panel promises is the day the desk starts comparing. Two things must hold
+ * for a window of `days` days ending on day E:
+ *
+ *   Google's figures cover the window before from its first day (the totals'
+ *   rule; `figures` is the first day of Google's figures, `figuresBegin`):
+ *   E ≥ figures + 2 × days − 1.
+ *   The window before holds a query Search Console reports, or there is
+ *   nothing to compare (`queries` is the first day it reports one, when
+ *   known): E ≥ queries + days.
+ *
+ * The later of the two, as a sentence, with the fact that sets it. Google
+ * finishes counting a day two to three days after it. Two whole windows of
+ * more than sixteen months together are never both in Search Console: said
+ * instead of a day that would never come.
+ */
+export function firstComparison(o: { figures: string | null; queries?: string | null }, days: number): string {
+  if (2 * days > KEPT_DAYS) {
+    return `Google keeps sixteen months of Search Console figures, so two whole ${days}-day periods can never both be read from it; movements are measured over 7, 30 or 90 days.`;
+  }
+  const byFigures = o.figures ? addDays(o.figures, 2 * days - 1) : null;
+  const byQueries = o.queries ? addDays(o.queries, days) : null;
+  const late = " (Google finishes counting a day two to three days after it)";
+  if (byQueries && (!byFigures || byQueries > byFigures)) {
+    return `Search Console reports queries from ${dayText(o.queries!)}; the period before first holds them, and the first movement can be measured, once Google's final figures reach ${dayText(byQueries)}${late}.`;
+  }
+  if (byFigures) {
+    return `Google's figures for the site begin on ${dayText(o.figures!)}; the first comparison of two full ${days}-day windows is possible once its final figures reach ${dayText(byFigures)}${late}.`;
+  }
+  return `A comparison of two full ${days}-day windows becomes possible ${2 * days - 1} days after Google's first figure for the site.`;
+}
+
+/** The first day of the window with a query in it, from the ranking trend's own kept answer. */
+async function firstQueryDay(range: Range): Promise<string | null> {
+  const b = await positionBuckets(range);
+  return b.state === "ok" ? (b.value.days.find((d) => d.queries > 0)?.date ?? null) : null;
+}
+
 export interface Mover {
   kind: "query" | "page";
   /** The query, or the page's full address. */
@@ -873,14 +1029,29 @@ export interface Mover {
  * Pages and queries whose average position changed between the two windows,
  * largest move first. Only those shown at least `floor` times in BOTH
  * windows, and moved by at least one position: below that it is noise.
+ *
+ * NO EARLY MODE. A movement is a comparison, and a comparison needs a window
+ * before with figures in it. When nothing moved, the reading says which of
+ * three things is true: something passed the floor in both windows and did
+ * not move (ok, an empty list); Search Console reports no query at all for
+ * the window before, so there is nothing to compare with yet (waiting, with
+ * the day the first comparison becomes possible, by `firstComparison`); or
+ * both windows have figures and none reaches the floor in both (waiting,
+ * with the counts). A year is never compared (off, without a step): Google
+ * keeps sixteen months, so a year and the year before are never both there.
  */
-export async function movers(range: Range, o: { floor?: number } = {}): Promise<Reading<{ window: DayWindow; floor: number; rows: Mover[] }>> {
+export async function movers(range: Range, o: { floor?: number } = {}): Promise<Reading<{ window: DayWindow; floor: number; rows: Mover[]; compared: { queries: number; pages: number } }>> {
   const floor = o.floor ?? FLOOR.movers;
+  /* A year against the year before is never both in Search Console: not "waiting", it cannot be given. Nothing is asked. */
+  if (2 * SPAN[range] > KEPT_DAYS) return off("gsc", firstComparison({ figures: null }, SPAN[range]));
   const [q, p] = await Promise.all([queries(range), pages(range)]);
   if (q.state !== "ok") return q;
   const list: Mover[] = [];
+  /* What passed the floor in both windows: compared, whether or not it moved. */
+  const compared = { queries: 0, pages: 0 };
   const add = (kind: Mover["kind"], key: string, path: string | undefined, r: Figures & { previous: Figures | null }) => {
     if (!r.previous || r.impressions < floor || r.previous.impressions < floor) return;
+    compared[kind === "query" ? "queries" : "pages"]++;
     const change = round(r.previous.position - r.position, 1);
     if (Math.abs(change) < 1) return;
     list.push({ kind, key, ...(path ? { path } : {}), previous: r.previous.position, current: r.position, change, impressions: r.impressions, previousImpressions: r.previous.impressions, clicks: r.clicks });
@@ -888,7 +1059,32 @@ export async function movers(range: Range, o: { floor?: number } = {}): Promise<
   for (const r of q.value.rows) add("query", r.query, undefined, r);
   if (p.state === "ok") for (const r of p.value.rows) add("page", r.page, r.path, r);
   list.sort((a, b) => Math.abs(b.change) - Math.abs(a.change));
-  return derived(q, (v) => ({ window: v.window, floor, rows: list }), `Average position, this window against the one before; only what was shown at least ${floor} times in both.`);
+
+  const passed = compared.queries + compared.pages > 0;
+  if (!list.length && !passed) {
+    const w = q.value.window;
+    const shownBefore = <R extends { impressions: number; previous: Figures | null }>(rows: R[]) => rows.filter((r) => r.previous && r.previous.impressions > 0);
+    const queriesBoth = shownBefore(q.value.rows);
+    const pagesBoth = p.state === "ok" ? shownBefore(p.value.rows) : [];
+    /* "No query in the period before" is asked of that period itself (one row is enough, kept six hours): a query shown then and not now is not in the rows above. */
+    const before = queriesBoth.length ? null : await query({ startDate: w.previousStart, endDate: w.previousEnd, dimensions: ["query"], rowLimit: 1 });
+    if (before?.state === "ok" && before.value.rows.length === 0) {
+      /* The day is the one `moversRead` (routes/seo.ts) will hold to as well: the same rule, from the same two facts. */
+      const [first, t] = await Promise.all([firstQueryDay(range), totalsByDay(range)]);
+      return waiting(
+        "gsc",
+        `No comparison yet: Search Console reports no query for the site in ${spanText(w.previousStart, w.previousEnd)}, the period this one is measured against. ` +
+          (first
+            ? firstComparison({ figures: t.state === "ok" ? figuresBegin(t.value) : null, queries: first }, w.days)
+            : `A comparison becomes possible ${w.days} days after Search Console reports a first query for the site.`),
+      );
+    }
+    return waiting(
+      "gsc",
+      `Too few impressions to measure a movement: ${count(queriesBoth.length, "query", "queries")} and ${count(pagesBoth.length, "page")} were shown in both ${spanText(w.previousStart, w.previousEnd)} and ${spanText(w.start, w.end)}, none of them ${floor} times in each. The list starts by itself once a query or a page has been shown at least ${floor} times in both periods.`,
+    );
+  }
+  return derived(q, (v) => ({ window: v.window, floor, rows: list, compared }), `Average position, this window against the one before; only what was shown at least ${floor} times in both.`);
 }
 
 export interface Opportunity extends Figures {
@@ -897,29 +1093,50 @@ export interface Opportunity extends Figures {
   /** The page Google shows most for it, when known. */
   page: string | null;
   path: string | null;
+  /** Listed by an early list and shown fewer times than the standard floor (EARLY above). */
+  early?: boolean;
+}
+
+/** A list built on the query rows: its window, the floor it was read at, its early signals, its rows. */
+export interface QueryRule<R> {
+  window: DayWindow;
+  floor: number;
+  /** Null when the list was read at its standard floor (or at a floor the caller chose). */
+  early: EarlySignals | null;
+  rows: R[];
+}
+
+/** The page Google showed most for each query. */
+function landingOf(qp: Reading<Listed<QueryPageRow>>): Map<string, QueryPageRow> {
+  const landing = new Map<string, QueryPageRow>();
+  if (qp.state === "ok") for (const r of qp.value.rows) if ((landing.get(r.query)?.impressions ?? -1) < r.impressions) landing.set(r.query, r);
+  return landing;
 }
 
 /**
  * Queries the site already ranks for on the first two pages without being at
  * the top: average position 4 to 20, shown at least `floor` times. The ones
- * where a better page moves real traffic. Most impressions first.
+ * where a better page moves real traffic. Most impressions first. In an early
+ * list, from one impression up, the rows under the floor marked (EARLY).
  */
-export async function opportunities(range: Range, o: { floor?: number } = {}): Promise<Reading<{ window: DayWindow; floor: number; rows: Opportunity[] }>> {
-  const floor = o.floor ?? FLOOR.opportunities;
+export async function opportunities(range: Range, o: { floor?: number } = {}): Promise<Reading<QueryRule<Opportunity>>> {
   const [q, qp] = await Promise.all([queries(range), queryPages(range)]);
-  const landing = new Map<string, QueryPageRow>();
-  if (qp.state === "ok") for (const r of qp.value.rows) if ((landing.get(r.query)?.impressions ?? -1) < r.impressions) landing.set(r.query, r);
+  if (q.state !== "ok") return q;
+  const landing = landingOf(qp);
+  const ranked = q.value.rows.filter((r) => r.position >= 4 && r.position <= 20);
+  const { floor, early } = floorFor({ own: ranked, all: q.value.rows }, FLOOR.opportunities, o.floor, UNDER.opportunities);
   return derived(
     q,
     (v) => ({
       window: v.window,
       floor,
-      rows: v.rows
-        .filter((r) => r.position >= 4 && r.position <= 20 && r.impressions >= floor)
+      early,
+      rows: ranked
+        .filter((r) => r.impressions >= floor)
         .sort((a, b) => b.impressions - a.impressions)
-        .map((r) => ({ ...r, page: landing.get(r.query)?.page ?? null, path: landing.get(r.query)?.path ?? null })),
+        .map((r) => ({ ...r, page: landing.get(r.query)?.page ?? null, path: landing.get(r.query)?.path ?? null, ...(early && r.impressions < early.standard ? { early: true } : {}) })),
     }),
-    `Queries at average position 4 to 20 shown at least ${floor} times.`,
+    early ? `Queries at average position 4 to 20, shown at least once. ${early.line} ${EARLY_RULE}` : `Queries at average position 4 to 20 shown at least ${floor} times.`,
   );
 }
 
@@ -942,32 +1159,53 @@ export interface CtrOutlier extends Figures {
   peers: number;
 }
 
+/** The least number of pages a position band needs, each shown `floor` times, before their click rates are compared. */
+const PEERS = 3;
+
 /**
  * Pages whose CTR is less than half the median CTR of this site's own pages
  * at a similar position.
  *
  * THE YARDSTICK IS OURS. Google publishes no expected CTR. The comparison is
  * a page against its neighbours on this site, in five position bands, and
- * only where a band holds at least three pages shown `floor` times or more.
- * A site with few ranked pages will honestly return nothing.
+ * only where a band holds at least three pages shown `floor` times or more
+ * and the median of their CTR is above zero.
+ *
+ * NO EARLY MODE: click rates on a handful of clicks are noise. When no band
+ * can be compared at all, the reading waits and says so with the window's
+ * actual clicks and impressions; an empty list is kept for the case where
+ * bands were compared and no page fell under half their median.
  */
 export async function ctrOutliers(range: Range, o: { floor?: number } = {}): Promise<Reading<{ window: DayWindow; floor: number; rows: CtrOutlier[] }>> {
   const floor = o.floor ?? FLOOR.ctr;
+  const p = await pages(range);
+  if (p.state !== "ok") return p;
+  const out: CtrOutlier[] = [];
+  let compared = 0;
+  for (const [from, to, band] of BANDS) {
+    const inBand = p.value.rows.filter((r) => r.impressions >= floor && r.position > (from === 1 ? 0 : from) && r.position <= to);
+    const mid = median(inBand.map((r) => r.ctr));
+    if (inBand.length < PEERS || mid === null || mid === 0) continue;
+    compared++;
+    for (const r of inBand) {
+      if (r.ctr < mid / 2) out.push({ page: r.page, path: r.path, clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position, median: round(mid, 2), band, peers: inBand.length });
+    }
+  }
+  if (!compared) {
+    /* The window's own totals, as the overview shows them; the page rows when they cannot be read (they count an impression once per page shown). */
+    const t = await totalsByDay(range);
+    const clicks = t.state === "ok" ? t.value.clicks.value : p.value.rows.reduce((n, r) => n + r.clicks, 0);
+    const impressions = t.state === "ok" ? t.value.impressions.value : p.value.rows.reduce((n, r) => n + r.impressions, 0);
+    const shown = p.value.rows.filter((r) => r.impressions >= floor).length;
+    return waiting(
+      "gsc",
+      `Too few to compare click rates: ${count(clicks, "click")} and ${count(impressions, "impression")} in this window, ${shown ? `and ${count(shown, "page")} shown at least ${floor} times` : `and no page shown ${floor} times`}. This list starts when ${PEERS} pages at a similar position have each been shown at least ${floor} times, with clicks among them.`,
+    );
+  }
+  out.sort((a, b) => b.impressions - a.impressions);
   return derived(
-    await pages(range),
-    (v) => {
-      const out: CtrOutlier[] = [];
-      for (const [from, to, band] of BANDS) {
-        const inBand = v.rows.filter((r) => r.impressions >= floor && r.position > (from === 1 ? 0 : from) && r.position <= to);
-        const mid = median(inBand.map((r) => r.ctr));
-        if (inBand.length < 3 || mid === null || mid === 0) continue;
-        for (const r of inBand) {
-          if (r.ctr < mid / 2) out.push({ page: r.page, path: r.path, clicks: r.clicks, impressions: r.impressions, ctr: r.ctr, position: r.position, median: round(mid, 2), band, peers: inBand.length });
-        }
-      }
-      out.sort((a, b) => b.impressions - a.impressions);
-      return { window: v.window, floor, rows: out };
-    },
+    p,
+    (v) => ({ window: v.window, floor, rows: out }),
     `Our own yardstick, not Google's: a page is listed when its CTR is under half the median of this site's pages in the same position band (pages shown at least ${floor} times). Google publishes no expected CTR.`,
   );
 }
@@ -984,6 +1222,8 @@ export interface Gap extends Figures {
   /** The page Google shows for it today, when known: the nearest thing the site has. */
   page: string | null;
   path: string | null;
+  /** Listed by an early list and shown fewer times than the standard floor (EARLY above). */
+  early?: boolean;
 }
 
 /** Words that say nothing about what a query is about, in the site's two languages. */
@@ -1002,29 +1242,38 @@ const words = (text: string): string[] =>
  * given pages carries all of the query's words in its title or h1.
  *
  * It only finds gaps among queries Google already shows the site for; what
- * people search and never see the site for is not knowable for free.
+ * people search and never see the site for is not knowable for free. In an
+ * early list, from one impression up, the rows under the floor marked (EARLY).
  */
-export async function gaps(range: Range, pageTitles: PageTitle[], o: { floor?: number } = {}): Promise<Reading<{ window: DayWindow; floor: number; rows: Gap[] }>> {
-  const floor = o.floor ?? FLOOR.gaps;
+export async function gaps(range: Range, pageTitles: PageTitle[], o: { floor?: number } = {}): Promise<Reading<QueryRule<Gap>>> {
   const [q, qp] = await Promise.all([queries(range), queryPages(range)]);
-  const landing = new Map<string, QueryPageRow>();
-  if (qp.state === "ok") for (const r of qp.value.rows) if ((landing.get(r.query)?.impressions ?? -1) < r.impressions) landing.set(r.query, r);
+  if (q.state !== "ok") return q;
+  const landing = landingOf(qp);
   const heads = pageTitles.map((p) => new Set(words(`${p.title} ${p.h1 ?? ""}`)));
+  const unanswered = q.value.rows.filter((r) => {
+    const terms = words(r.query);
+    return terms.length > 0 && !heads.some((h) => terms.every((t) => h.has(t)));
+  });
+  const { floor, early } = floorFor({ own: unanswered, all: q.value.rows }, FLOOR.gaps, o.floor, UNDER.gaps);
   return derived(
     q,
     (v) => ({
       window: v.window,
       floor,
-      rows: v.rows
-        .filter((r) => {
-          if (r.impressions < floor) return false;
-          const terms = words(r.query);
-          return terms.length > 0 && !heads.some((h) => terms.every((t) => h.has(t)));
-        })
+      early,
+      rows: unanswered
+        .filter((r) => r.impressions >= floor)
         .sort((a, b) => b.impressions - a.impressions)
-        .map(({ previous: _previous, ...r }) => ({ ...r, page: landing.get(r.query)?.page ?? null, path: landing.get(r.query)?.path ?? null })),
+        .map(({ previous: _previous, ...r }) => ({
+          ...r,
+          page: landing.get(r.query)?.page ?? null,
+          path: landing.get(r.query)?.path ?? null,
+          ...(early && r.impressions < early.standard ? { early: true } : {}),
+        })),
     }),
-    `Queries shown at least ${floor} times for which no page's title or h1 contains every word of the query. Our own rule.`,
+    early
+      ? `Queries shown at least once for which no page's title or h1 contains every word of the query. Our own rule. ${early.line} ${EARLY_RULE}`
+      : `Queries shown at least ${floor} times for which no page's title or h1 contains every word of the query. Our own rule.`,
   );
 }
 

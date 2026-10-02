@@ -14,7 +14,8 @@
  *      made; the crawl's panels wait for the first crawl;
  *   2. the assembling functions turn hand-made Search Console readings into
  *      exactly the figures the rules say (ranking headline, opportunities and
- *      their earlier count, gaps by group, movements, the overview);
+ *      their earlier count, gaps by group, movements, the overview), and an
+ *      early list's floor, line and row marks reach the screen unchanged;
  *   3. a comparison with a period before measurement began is absent, not 0%;
  *   4. the crawl's daily figures compare only with a day the history reaches;
  *   5. ?specimen=1 feeds the connected state only where specimenAllowed says
@@ -172,13 +173,46 @@ try {
   const youngOpps = seo.assembleOpportunities(young);
   check("opportunities: a window before Google's figures is not compared", isOk(youngOpps) && youngOpps.value.compared === false && youngOpps.value.rows.every((r) => r.previousPosition === null), youngOpps);
   const youngMoves = seo.assembleMovements(young);
-  check("movements: none against a window before Google's figures, and why", youngMoves.state === "waiting" && /begin inside the period before/.test(youngMoves.reason), youngMoves);
+  check("movements: none against a window before Google's figures, and why", youngMoves.state === "waiting" && /do not cover the period this one is measured against/.test(youngMoves.reason), youngMoves);
   const cutList = seo.assembleOpportunities({ ...src, queries: said({ window: w, rows: queries, complete: false }) });
   check("opportunities: a list cut at the row limit is not compared", isOk(cutList) && cutList.value.compared === false);
   const youngOpen = seo.assembleOpen(young, "specimen query 02");
   check("an opened keyword on a young property is not compared", isOk(youngOpen) && youngOpen.value.compared === false && youngOpen.value.previous === null, youngOpen);
   const youngLanding = await seo.assembleLanding(young, "30d", []);
   check("landing on a young property is not compared", isOk(youngLanding) && youngLanding.value.source === "gsc" && youngLanding.value.compared === false && youngLanding.value.rows.every((r) => r.previousPosition === null), youngLanding);
+
+  /* A change in position follows the movements' floor (30 in both periods): under it the row says so and no arrow is drawn. */
+  const thinLanding = await seo.assembleLanding(
+    {
+      ...src,
+      pages: said({
+        window: w,
+        complete: true,
+        rows: [
+          { page: "https://www.balkaris.ch/specimen/a", path: "/specimen/a", ...fig(12, 550, 8), previous: fig(6, 315, 10) },
+          { page: "https://www.balkaris.ch/specimen/b", path: "/specimen/b", ...fig(0, 1, 20), previous: fig(0, 3, 6) },
+          { page: "https://www.balkaris.ch/specimen/c", path: "/specimen/c", ...fig(1, 40, 9), previous: fig(0, 2, 30) },
+        ],
+      }),
+    },
+    "30d",
+    [],
+  );
+  check(
+    "landing: a change in position only where the page was shown 30 times in both periods; under that, the floor instead of an arrow",
+    isOk(thinLanding) &&
+      thinLanding.value.source === "gsc" &&
+      thinLanding.value.rows[0]!.changeFloor === undefined &&
+      thinLanding.value.rows[1]!.changeFloor === 30 &&
+      thinLanding.value.rows[2]!.changeFloor === 30 &&
+      thinLanding.value.rows.every((r) => r.previousPosition !== null),
+    thinLanding,
+  );
+  const thinOpps = seo.assembleOpportunities({
+    ...src,
+    opportunities: said({ window: w, floor: 30, rows: [{ query: "specimen query 05", ...fig(0, 45, 9), previous: fig(0, 4, 14), page: null, path: null }] }),
+  });
+  check("opportunities: the same floor for a change in position", isOk(thinOpps) && thinOpps.value.rows[0]!.changeFloor === 30 && isOk(opps) && opps.value.rows.every((r) => r.changeFloor === undefined), thinOpps);
 
   /* Apex and www addresses of one path (a Domain property after the move): two rows, two keys, told apart by host. */
   const twin = await seo.assembleLanding(
@@ -220,6 +254,53 @@ try {
 
   const moves = seo.assembleMovements(src);
   check("movements: a page is named by its path", isOk(moves) && moves.value.rows[1]!.label === "/specimen/b" && moves.value.total === 2, moves);
+  check("movements: without the collector's count of what was compared, it is null, not zero", isOk(moves) && moves.value.compared === null, moves);
+  const counted = seo.assembleMovements({ ...src, movers: said({ window: w, floor: 30, rows: [], compared: { queries: 0, pages: 1 } }) });
+  check("movements: an empty list carries what was compared", isOk(counted) && counted.value.total === 0 && counted.value.compared?.pages === 1 && counted.value.compared.queries === 0, counted);
+  check(
+    "movements on a young property name the day two whole periods can first be compared",
+    youngMoves.state === "waiting" && /first comparison of two full 30-day windows/.test(youngMoves.reason) && /30 Oct 2026/.test(youngMoves.reason),
+    youngMoves,
+  );
+
+  /* ---- 2b. early signals, carried to the screen ----------------------------- */
+  const early = { standard: 30, queries: 4, impressions: 9, line: "Early signals: specimen line." };
+  const earlyRows = [
+    { query: "specimen early 01", ...fig(0, 4, 6), previous: null, page: null, path: "/specimen/a", early: true },
+    { query: "specimen early 02", ...fig(0, 2, 12), previous: null, page: null, path: "/specimen/a", early: true },
+  ];
+  const youngSrc: SearchSources = {
+    ...src,
+    previousQueries: null,
+    opportunities: said({ window: w, floor: 1, early, rows: earlyRows }),
+    gaps: said({
+      window: w,
+      floor: 1,
+      early: { ...early, standard: 10 },
+      rows: [
+        { query: "specimen early 01", ...fig(0, 4, 6), page: null, path: "/specimen/a", early: true },
+        { query: "specimen early 03", ...fig(0, 12, 9), page: null, path: "/specimen/b" },
+        { query: "specimen early 04", ...fig(0, 2, 9), page: null, path: "/specimen/b", early: true },
+      ],
+    }),
+  };
+  const earlyOpps = seo.assembleOpportunities(youngSrc);
+  check("early opportunities: the floor, the early signals and each row's mark reach the screen", isOk(earlyOpps) && earlyOpps.value.floor === 1 && earlyOpps.value.early?.standard === 30 && earlyOpps.value.rows.every((r) => r.early === true), earlyOpps);
+  check("  and with no queries for the window before, a missing earlier position is never 'new'", isOk(earlyOpps) && earlyOpps.value.compared === false, earlyOpps);
+  const earlyList = seo.opportunityList(youngSrc);
+  check("  the full list carries them too", isOk(earlyList) && earlyList.value.early?.line === early.line && earlyList.value.rows.length === 2);
+  const earlyTiles = await seo.assembleTiles(youngSrc, "30d");
+  check("the keyword opportunities tile counts the early rows, says 'early signals', and compares with nothing", isOk(earlyTiles.keywordOpportunities) && earlyTiles.keywordOpportunities.value.value === 2 && earlyTiles.keywordOpportunities.value.sub === "early signals" && earlyTiles.keywordOpportunities.value.previous === null, earlyTiles.keywordOpportunities);
+  check("a standard list's tile has no such line", isOk(tiles.keywordOpportunities) && tiles.keywordOpportunities.value.sub === undefined);
+  const earlyGaps = seo.assembleGaps(youngSrc, [{ path: "/specimen/a", label: "Specimen service A", kind: "service" }, { path: "/specimen/b", label: "Specimen industry B", kind: "segment" }]);
+  const groupA = isOk(earlyGaps) ? earlyGaps.value.groups.find((x) => x.path === "/specimen/a") : undefined;
+  const groupB = isOk(earlyGaps) ? earlyGaps.value.groups.find((x) => x.path === "/specimen/b") : undefined;
+  check("early gaps: a group standing only on early queries is marked, one with a query over the floor is not", isOk(earlyGaps) && earlyGaps.value.early?.standard === 10 && groupA?.early === true && groupB?.early === undefined, earlyGaps);
+  check("  and their rows keep the mark in the full list", (() => {
+    const r = seo.gapRows(youngSrc, []);
+    return isOk(r) && r.value.early?.standard === 10 && r.value.rows.filter((x) => x.early).length === 2;
+  })());
+  check("a standard list says early: null", isOk(opps) && opps.value.early === null && isOk(gaps) && gaps.value.early === null);
 
   /* One rule for every check line: opportunities never colour a line nor count as issues. */
   const opp = { severity: "opportunity" as const };

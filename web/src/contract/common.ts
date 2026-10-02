@@ -30,6 +30,9 @@ export type SourceId =
   | "engine" /* enquiries, read from the engine */
   | "desk" /* the desk's own database: links, drafts, jobs, events */
   | "runner" /* the workstation and its local model */
+  | "vercel-drain" /* Vercel's own request records, delivered to the desk by a log drain */
+  | "vercel-api" /* the Vercel REST API, read with a desk-only project token */
+  | "vercel-status" /* Vercel's public status page */
   | "none"; /* no free source exists */
 
 /**
@@ -61,6 +64,23 @@ export interface Stat {
   of?: number;
   /** A small line under the figure ("+10 this month"). Real, or absent. */
   sub?: string;
+}
+
+/**
+ * A Search Console list read in its early mode (the rule is `EARLY` in
+ * src/cc/search/gsc.ts): the window holds too little for the list's standard
+ * floor to mean anything, so rows from one impression up are listed and every
+ * row under the standard floor carries `early: true`. Null on a list read at
+ * its standard floor. The list returns to that floor by itself.
+ */
+export interface EarlySignals {
+  /** The floor the list returns to once enough data exists. */
+  standard: number;
+  /** What the window holds: the queries Google reports for it, and their impressions together. */
+  queries: number;
+  impressions: number;
+  /** One line in plain words for the head of the list. */
+  line: string;
 }
 
 /** One day of something, with the same day one period earlier. */

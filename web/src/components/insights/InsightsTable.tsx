@@ -1,10 +1,11 @@
 import type { ReactNode } from "react";
-import type { Reading } from "@/contract/common";
+import type { EarlySignals, Reading } from "@/contract/common";
 import type { ArticleFigures, InsightRow, SearchFigures } from "@/contract/insights";
 import { LinkButton } from "@/components/ui/Button";
 import { Chip, Count } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Delta } from "@/components/ui/Delta";
+import { EarlyFigure, EarlyLine } from "@/components/ui/Early";
 import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { Absent } from "@/components/ui/Read";
@@ -28,6 +29,8 @@ export interface InsightsTableProps {
   total: number;
   ga4: Reading<Record<string, ArticleFigures>>;
   gsc: Reading<Record<string, SearchFigures>>;
+  /** Search Console's window is early: the line over the table, and the floor under which an article's figures are marked. */
+  searchEarly?: EarlySignals | null;
   /** GA4's conversions read answered: a live article with no GA4 row had none. False: they are unknown. */
   conversionsRead: boolean;
   /** The shelves the category filter offers. */
@@ -68,7 +71,7 @@ function AbsentNote({ what, r }: { what: string; r: Reading<unknown> }) {
  * CTR and keywords beside the ones that are live. Search, status and
  * category filters write the address; the server draws only what matches.
  */
-export function InsightsTable({ title, rows, total, ga4, gsc, conversionsRead, categories, statusFilter, asOf, empty, columns: set = "site", why, narrow, more, className }: InsightsTableProps) {
+export function InsightsTable({ title, rows, total, ga4, gsc, searchEarly, conversionsRead, categories, statusFilter, asOf, empty, columns: set = "site", why, narrow, more, className }: InsightsTableProps) {
   const g = ga4.state === "ok" ? ga4.value : null;
   const s = gsc.state === "ok" ? gsc.value : null;
   const none = <span className="dk-insights-none">{DASH}</span>;
@@ -141,7 +144,19 @@ export function InsightsTable({ title, rows, total, ga4, gsc, conversionsRead, c
       key: "keywords",
       head: "Keywords",
       align: "center",
-      cell: (r) => gscCell(r, (f) => (f.keywords === null ? DASH : <Count>{num(f.keywords)}</Count>)),
+      cell: (r) =>
+        gscCell(r, (f) =>
+          f.keywords === null ? (
+            DASH
+          ) : (
+            <EarlyFigure early={f.early} standard={searchEarly?.standard}>
+              {/* Shown and no query reported: Google withholds rare queries, so the count is not "searched for nothing". */}
+              <span title={f.keywords === 0 && f.impressions > 0 ? `Google reported none of the queries it showed this article for (${num(f.impressions)} ${f.impressions === 1 ? "impression" : "impressions"}): it withholds rare queries.` : undefined}>
+                <Count>{num(f.keywords)}</Count>
+              </span>
+            </EarlyFigure>
+          ),
+        ),
     },
     {
       key: "conversions",
@@ -172,7 +187,8 @@ export function InsightsTable({ title, rows, total, ga4, gsc, conversionsRead, c
             key: "why",
             head: "Why",
             width: "34%",
-            cell: (r: InsightRow) => (r.problem ? <span className="dk-insights-why" title={r.problem}>{r.problem}</span> : none),
+            /* The line that says why; the whole error on hover, and on the row's own page. */
+            cell: (r: InsightRow) => (r.problem ? <span className="dk-insights-why" title={r.problemFull ?? r.problem}>{r.problem}</span> : none),
           },
         ]
       : []),
@@ -208,6 +224,13 @@ export function InsightsTable({ title, rows, total, ga4, gsc, conversionsRead, c
         </div>
       }
     >
+      {figures && searchEarly && gsc.state === "ok" && rows.some((r) => r.path && gsc.value[r.path]?.early) ? (
+        <EarlyLine
+          early={searchEarly}
+          marked={`Articles shown fewer than ${num(searchEarly.standard)} times have their keywords marked early.`}
+          className="dk-insights-early"
+        />
+      ) : null}
       <Table caption={title} rows={rows} rowKey={(r) => r.key} rowHref={(r) => r.href} columns={columns} minWidth={narrow ? undefined : 700} empty={empty} />
       <p className="dk-insights-foot dk-insights-foot--pad">
         <Stamp source="desk" asOf={asOf} />

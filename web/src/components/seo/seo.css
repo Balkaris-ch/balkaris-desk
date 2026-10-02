@@ -190,6 +190,22 @@
   line-height: var(--lh-tight);
 }
 
+/* The early-signals line at the head of a list read early (ui/Early.tsx), aligned with the table's first column. */
+.dk-seo-early {
+  padding: 0 var(--pad) var(--x10);
+}
+
+/* A panel's list with no rows, said as a paragraph the width of the panel (a table's empty row is as wide as the table). */
+.dk-seo-none {
+  flex: 1;
+  margin: 0;
+  padding: var(--x16) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-align: center;
+}
+
 .dk-seo-cell-text {
   display: block;
   max-width: 100%;

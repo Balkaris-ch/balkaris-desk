@@ -284,8 +284,11 @@ export async function searchBlock(range: GaRange, room: number): Promise<Block> 
   const label = "Search Console";
   const r = await searchOpportunities(range === "24h" ? "7d" : range);
   if (r.state !== "ok") return absent("search", label, "gsc", r.state, `${r.reason}${r.state === "off" && r.step ? ` ${r.step}` : ""}`);
-  const head = `SEARCH — Google Search Console, ${r.value.window.start} to ${r.value.window.end}: queries where the site shows on Google's first two pages without being at the top (average position 4 to 20, at least ${r.value.floor} impressions). Position is Google's average position, not a tracked rank.`;
-  const rows = r.value.rows.slice(0, 25).map((q) => `- "${q.query}": ${q.impressions} impressions, ${q.clicks} clicks, average position ${q.position.toFixed(1)}${q.path ? `, page ${q.path}` : ""}`);
+  const early = r.value.early;
+  const head = `SEARCH — Google Search Console, ${r.value.window.start} to ${r.value.window.end}: queries where the site shows on Google's first two pages without being at the top (average position 4 to 20, at least ${r.value.floor === 1 ? "one impression" : `${r.value.floor} impressions`}). Position is Google's average position, not a tracked rank.${early ? ` ${early.line} Rows marked EARLY were shown fewer than ${early.standard} times: treat them as signals, not findings.` : ""}`;
+  const rows = r.value.rows
+    .slice(0, 25)
+    .map((q) => `- "${q.query}": ${q.impressions} impressions, ${q.clicks} clicks, average position ${q.position.toFixed(1)}${q.path ? `, page ${q.path}` : ""}${q.early ? " (EARLY)" : ""}`);
   if (!rows.length) rows.push("- none at present");
   return { name: "search", label, source: "gsc", asOf: r.asOf, state: "ok", note: "Google's average position, not a tracked rank.", text: fit(head, rows, room) };
 }

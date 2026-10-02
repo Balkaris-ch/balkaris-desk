@@ -3,6 +3,7 @@ import type { ContentGaps as Gaps } from "@/contract/seo";
 import { Bar } from "@/components/charts";
 import { Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
+import { EarlyFigure, EarlyLine } from "@/components/ui/Early";
 import { Stamp } from "@/components/ui/Stamp";
 import { Table } from "@/components/ui/Table";
 import { num } from "@/lib/format";
@@ -18,13 +19,19 @@ import "./seo.css";
  */
 export function ContentGaps({ reading, qs, className }: { reading: Reading<Gaps>; qs: string; className?: string }) {
   const listHref = `/seo/list/gaps${qs}`;
+  const shown =
+    reading.state !== "ok"
+      ? "often enough to count"
+      : reading.value.early
+        ? `at least once (early signals: the standard floor of ${reading.value.early.standard} returns by itself once enough data exists)`
+        : `at least ${reading.value.floor} times`;
   return (
     <Card
       className={className}
       title="Content gap analysis"
       icon="target"
       flush
-      info={`Queries Google showed the site for, ${reading.state === "ok" ? `at least ${reading.value.floor} times` : "often enough to count"} in the period, for which no page of the site carries every word of the query in its title or main heading: a question the site is seen for and does not answer. Each is counted under the service or industry page Google showed most for it. Our own rule; it can only find gaps among queries Google already shows the site for.`}
+      info={`Queries Google showed the site for, ${shown} in the period, for which no page of the site carries every word of the query in its title or main heading: a question the site is seen for and does not answer. Each is counted under the service or industry page Google showed most for it. Our own rule; it can only find gaps among queries Google already shows the site for.`}
       right={reading.state === "ok" ? <LinkButton href={listHref} size="sm">View opportunities</LinkButton> : null}
     >
       <SeoRead reading={reading}>
@@ -32,6 +39,7 @@ export function ContentGaps({ reading, qs, className }: { reading: Reading<Gaps>
           const top = Math.max(1, ...g.groups.map((x) => x.impressions));
           return (
             <div className="dk-seo-flush">
+              {g.early ? <EarlyLine early={g.early} rows="Groups whose queries are all" className="dk-seo-early" /> : null}
               <Table
                 caption="Content gaps by service and industry"
                 rows={g.groups}
@@ -53,7 +61,9 @@ export function ContentGaps({ reading, qs, className }: { reading: Reading<Gaps>
                     head: <span className="dk-seo-wraphead">Impressions without a matching page</span>,
                     cell: (x) => (
                       <span className="dk-seo-gapbar">
-                        <b className="dk-num">{num(x.impressions)}</b>
+                        <EarlyFigure early={x.early} standard={g.early?.standard}>
+                          <b className="dk-num">{num(x.impressions)}</b>
+                        </EarlyFigure>
                         <Bar value={x.impressions} max={top} label={`${num(x.impressions)} impressions`} />
                       </span>
                     ),
@@ -63,7 +73,9 @@ export function ContentGaps({ reading, qs, className }: { reading: Reading<Gaps>
                 empty={
                   g.elsewhere.queries
                     ? `No gap lands on a service or industry page; ${num(g.elsewhere.queries)} land on other pages (see View opportunities).`
-                    : `Every query Google showed the site for at least ${g.floor} times has a page whose title or heading carries its words.`
+                    : g.early
+                      ? "Every query Google has shown the site for so far has a page whose title or heading carries its words."
+                      : `Every query Google showed the site for at least ${g.floor} times has a page whose title or heading carries its words.`
                 }
               />
               <div className="dk-seo-flush-foot">

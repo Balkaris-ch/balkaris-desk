@@ -1,0 +1,46 @@
+/* Early signals: quiet on purpose. An early row is real, just young; it is
+   neither a warning nor a highlight, so it takes no colour of its own. */
+
+.dk-early-mark {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: 0 var(--x4);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-regular);
+  line-height: 1.5;
+  letter-spacing: var(--track-label);
+  white-space: nowrap;
+  cursor: help;
+}
+
+/* A figure and its mark, kept on one line and right-aligned with the column. */
+.dk-early-figure {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+  white-space: nowrap;
+}
+
+.dk-early-line {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-early-line .dk-early-mark {
+  cursor: default;
+}
+
+.dk-early-text {
+  min-width: 0;
+}

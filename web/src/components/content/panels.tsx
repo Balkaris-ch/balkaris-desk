@@ -7,6 +7,7 @@ import type {
   ContentLimits,
   CoverageRow,
   EngagementRow,
+  GapList,
   GapRow,
   ImageCoverage,
   Linking,
@@ -21,6 +22,7 @@ import { Bar } from "@/components/charts";
 import { Chip, Count } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { EarlyFigure, EarlyLine } from "@/components/ui/Early";
 import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { Absent } from "@/components/ui/Read";
@@ -724,25 +726,57 @@ export function LinkingPanel({ reading, view }: { reading: Reading<Linking>; vie
 
 /* ---------- Content gaps and Bing ------------------------------------------------------------ */
 
-export function GapsPanel({ reading, view }: { reading: Reading<GapRow[]>; view: ContentView }) {
+export function GapsPanel({ reading, view }: { reading: Reading<GapList>; view: ContentView }) {
+  const standard = reading.state === "ok" ? reading.value.early?.standard : undefined;
   const columns: Column<GapRow>[] = [
     { key: "query", head: "Query", cell: (g) => <span className="dk-content-served dk-content-query" title={g.query}>{g.query}</span> },
-    { key: "impr", head: "Impressions", numeric: true, cell: (g) => <span title={`${num(g.clicks)} click${g.clicks === 1 ? "" : "s"}`}>{num(g.impressions)}</span> },
+    {
+      key: "impr",
+      head: "Impressions",
+      numeric: true,
+      cell: (g) => (
+        <EarlyFigure early={g.early} standard={standard}>
+          <span title={`${num(g.clicks)} click${g.clicks === 1 ? "" : "s"}`}>{num(g.impressions)}</span>
+        </EarlyFigure>
+      ),
+    },
     { key: "pos", head: "Position", numeric: true, cell: (g) => num(g.position, 1) },
     { key: "page", head: "Nearest page", cell: (g) => (g.path ? <span className="dk-content-quiet" title={g.path}>{shortPath(g.path, 22)}</span> : <span className="dk-content-none">None shown</span>) },
   ];
+  const floor =
+    reading.state !== "ok"
+      ? "often enough to count"
+      : reading.value.early
+        ? `at least once (early signals: the standard floor of ${reading.value.early.standard} returns by itself once enough data exists)`
+        : `at least ${num(reading.value.floor)} times`;
   return (
     <Card
       id="gaps"
       title="Content gaps"
       icon="target"
-      info="Queries Google showed the site for, at least ten times in the period, for which no page's title or main heading carries every word of the query: something people look for that no page is about. It finds gaps only among queries Google already shows the site for; what people search and never see the site for is not knowable for free. Positions are Google's average position, not a tracked rank."
+      info={`Queries Google showed the site for, ${floor} in the period, for which no page's title or main heading carries every word of the query: something people look for that no page is about. It finds gaps only among queries Google already shows the site for; what people search and never see the site for is not knowable for free. Positions are Google's average position, not a tracked rank.`}
       sub={`Search Console queries no page answers · ${rangeShort(view.range)}`}
       flush
       footer={<Foot reading={reading} />}
     >
       <Body reading={reading}>
-        {(list) => <Table caption="Content gaps" rows={list.slice(0, 8)} columns={columns} rowKey={(g) => g.query} empty="Every query shown at least ten times has a page whose title or heading carries all its words." minWidth={520} />}
+        {(g) => (
+          <>
+            {g.early ? <EarlyLine early={g.early} rows="Queries" className="dk-content-early" /> : null}
+            <Table
+              caption="Content gaps"
+              rows={g.rows.slice(0, 8)}
+              columns={columns}
+              rowKey={(x) => x.query}
+              empty={
+                g.early
+                  ? "Every query Google has shown the site for so far has a page whose title or heading carries all its words."
+                  : `Every query shown at least ${num(g.floor)} times has a page whose title or heading carries all its words.`
+              }
+              minWidth={520}
+            />
+          </>
+        )}
       </Body>
     </Card>
   );

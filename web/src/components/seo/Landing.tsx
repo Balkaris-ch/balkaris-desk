@@ -6,7 +6,8 @@ import { Delta } from "@/components/ui/Delta";
 import { Stamp } from "@/components/ui/Stamp";
 import { Table, type Column } from "@/components/ui/Table";
 import { Thumb } from "@/components/ui/Thumb";
-import { num, percent } from "@/lib/format";
+import { ctrText } from "@/components/insights/rate";
+import { num } from "@/lib/format";
 import { position, PositionChange, SeoRead } from "./bits";
 import "./seo.css";
 
@@ -36,9 +37,16 @@ export function searchLandingColumns(compared: boolean): Column<SearchLanding>[]
     { key: "page", head: "Page", cell: (r) => <PageCell {...r} />, sort: (r) => r.label },
     { key: "clicks", head: "Clicks", numeric: true, cell: (r) => num(r.clicks), sort: (r) => r.clicks, width: "60px" },
     { key: "impressions", head: "Impressions", numeric: true, cell: (r) => num(r.impressions), sort: (r) => r.impressions, width: "90px" },
-    { key: "ctr", head: "CTR", numeric: true, cell: (r) => percent(r.ctr), sort: (r) => r.ctr, width: "52px" },
+    /* A rate on fewer than thirty impressions is noise: its two counts are printed instead ("1 of 2"). */
+    { key: "ctr", head: "CTR", numeric: true, cell: (r) => ctrText(r.clicks, r.impressions, r.ctr), sort: (r) => r.ctr, width: "60px" },
     { key: "position", head: "Position", numeric: true, cell: (r) => position(r.position), sort: (r) => r.position, width: "68px" },
-    { key: "change", head: <span className="dk-sr">Change in position</span>, cell: (r) => <PositionChange previous={r.previousPosition} current={r.position} compared={compared} />, width: "60px" },
+    {
+      key: "change",
+      head: <span className="dk-sr">Change in position</span>,
+      /* Under the movements floor in either period no arrow is drawn: the Movements panel beside it would call that move noise. */
+      cell: (r) => <PositionChange previous={r.previousPosition} current={r.position} compared={compared} changeFloor={r.changeFloor} />,
+      width: "60px",
+    },
   ];
 }
 
@@ -68,7 +76,7 @@ export function Landing({ reading, qs, className }: { reading: Reading<Landings>
       info={
         ga4
           ? "Until Search Console is connected: sessions that GA4 saw begin on each page from the Organic Search channel. GA4 counts consenting visitors only, so this is an undercount, and it knows nothing of impressions or positions."
-          : "The pages Google sent people to, most clicks first, with Google’s average position and its change against the period before. Search Console, Google Search only."
+          : "The pages Google sent people to, most clicks first, with Google’s average position and its change against the period before, drawn only for a page shown often enough in both periods to measure it (the floor of Recent ranking movements). A click-through rate on fewer than 30 impressions is noise, so it is shown as its two counts (“1 of 2”). Search Console, Google Search only."
       }
       right={reading.state === "ok" && reading.value.total > 0 ? <LinkButton href={listHref} size="sm">View all</LinkButton> : null}
     >

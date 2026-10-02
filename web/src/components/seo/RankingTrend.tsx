@@ -32,9 +32,16 @@ export function RankingTrend({ reading, className }: { reading: Reading<Trend>; 
             <div className="dk-seo-trend-head">
               <p className="dk-seo-trend-figure">
                 <b className="dk-num">{num(t.top50)}</b>
-                <span>{t.complete ? "queries in the top 50" : "or more queries in the top 50"}</span>
-                <Delta value={t.top50} previous={t.previousTop50} />
-                {t.previousTop50 !== null ? <span className="dk-seo-trend-vs">vs previous period</span> : null}
+                <span>{`${t.complete ? "" : "or more "}${t.top50 === 1 ? "query" : "queries"} in the top 50`}</span>
+                {t.previousTop50 !== null ? (
+                  <>
+                    <Delta value={t.top50} previous={t.previousTop50} />
+                    <span className="dk-seo-trend-vs">vs previous period</span>
+                  </>
+                ) : (
+                  /* No lone dash: say why there is no comparison. */
+                  <span className="dk-seo-trend-vs">no earlier period with Google’s queries to compare</span>
+                )}
               </p>
               <Legend
                 className="dk-seo-trend-legend"
