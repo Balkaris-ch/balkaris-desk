@@ -189,9 +189,11 @@ export function buildPrompt(kind: TaskKind, question: string, pack: Pack, retryN
       prompt = [
         "TASK: Write a better search title and description for each page in the DATA.",
         "Rules:",
-        `- "title": the page's own part only, at most ${OWN_TITLE_MOST} characters. The website adds "${BRAND.trim()}" after every title by itself, so never write Balkaris in a title. "description": between 70 and ${DESCRIPTION_MOST} characters. Count the characters.`,
+        `- "title": the page's own part only, at most ${OWN_TITLE_MOST} characters. The website adds "${BRAND.trim()}" after a title by itself where the whole still fits in ${TITLE_MOST} characters, so never write Balkaris in a title. "description": between 70 and ${DESCRIPTION_MOST} characters. Count the characters.`,
         "- Write in the page's own language.",
-        "- In the studio's voice: plain, confident and specific. No hype words, no exclamation marks, no emoji, no questions as titles.",
+        "- In the studio's voice: plain, confident and specific, in sentence case. No hype words, no exclamation marks, no emoji.",
+        "- A page whose current title is the question it answers keeps that question as its title: it is what people search. Shorten it only if it is over the limit, and keep its words.",
+        "- Keep a price or a figure the current title already gives.",
         "- Change nothing factual. Use only what the page's current title, heading, share text and the start of its text say. Do not add numbers, prices, places, clients, awards or claims that are not there.",
         "- Every title must differ from the other pages' titles.",
         `Answer with JSON only: {"pages":[{"path":"...","title":"...","description":"..."}]}, one entry for each page, with "path" exactly as given.`,
@@ -481,7 +483,7 @@ export function check(kind: TaskKind, question: string, pack: Pack, raw: string,
           const own = figuresIn(ownText);
           const wrong: string[] = [];
           if (title.length < 10 || shown.length > TITLE_MOST) {
-            wrong.push(`its title is ${title.length} characters, ${shown.length} with the "${BRAND.trim()}" the site adds; the title must be 10 to ${OWN_TITLE_MOST} characters`);
+            wrong.push(`its title is ${title.length} characters; the title must be 10 to ${OWN_TITLE_MOST} characters`);
           }
           if (description.length < 70 || description.length > DESCRIPTION_MOST) wrong.push(`its description is ${description.length} characters; it must be 70 to ${DESCRIPTION_MOST}`);
           if (/[<>]/.test(title + description)) wrong.push("it contains < or >");

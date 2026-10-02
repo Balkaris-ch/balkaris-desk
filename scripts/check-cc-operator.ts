@@ -371,12 +371,17 @@ check(
 a = await ask(`/api/v1/operator/proposals/${waiting[0].id}`, { who: owner });
 check("the review shows it as the site will, the brand included", a.json?.shownTitle === "Specimen page A | Balkaris" && a.json?.lengths?.title === 26, `${a.json?.shownTitle} ${a.json?.lengths?.title}`);
 const { strayNames, check: checkAnswer, figuresIn, strayFigures } = await import("../src/cc/operator/kinds.ts");
+const { shownTitle } = await import("../src/cc/operator/packs.ts");
 {
   const target = { path: "/x", lang: "en", kind: "Page", shown: "Specimen X | Balkaris", title: "Specimen X", description: null, h1: "Specimen X", ogTitle: null, ogDescription: null, excerpt: null, findings: [] };
   const pk = { builtAt: at, range: "30d", depth: "quick", blocks: [], known: ["/x"], meta: [target] } as never;
   const description = "A specimen description for page X of the specimen studio, long enough to pass the check.";
-  const long = checkAnswer("metadata", "", pk, JSON.stringify({ pages: [{ path: "/x", title: "Specimen X for the specimen studio and its specimen pages", description }] }), false, new Map());
-  check("a title that would show over 60 characters once the site adds the brand is refused", !long.ok && /with the "\| Balkaris" the site adds/.test(long.why), long.ok ? "kept" : long.why);
+  /* The site adds the brand only where the whole fits in 60 (website lib/seo.tsx withBrand): a 57-character title is shown alone, a 61-character one is too long. */
+  const fits = checkAnswer("metadata", "", pk, JSON.stringify({ pages: [{ path: "/x", title: "Specimen X for the specimen studio and its specimen pages", description }] }), false, new Map());
+  check("a title of 57 characters is kept, and shown without the brand", fits.ok && shownTitle("Specimen X for the specimen studio and its specimen pages") === "Specimen X for the specimen studio and its specimen pages", fits.ok ? "kept" : fits.why);
+  check("  a short title is shown with the brand", shownTitle("Specimen X") === "Specimen X | Balkaris");
+  const long = checkAnswer("metadata", "", pk, JSON.stringify({ pages: [{ path: "/x", title: "Specimen X for the specimen studio and all of its specimen pages", description }] }), false, new Map());
+  check("a title over 60 characters is refused", !long.ok && /title is \d+ characters; the title must be 10 to 60/.test(long.why), long.ok ? "kept" : long.why);
   const twin = checkAnswer("metadata", "", pk, JSON.stringify({ pages: [{ path: "/x", title: "Specimen services", description }] }), false, new Map([["/services", "Specimen services | Balkaris"]]));
   check("a duplicate is judged on the title as shown", !twin.ok && /same as \/services/.test(twin.why), twin.ok ? "kept" : twin.why);
   const f = figuresIn("Period: 2026-09-01 to 2026-09-30. Visitors: 1,234 (40 → 52).");

@@ -41,8 +41,16 @@ export interface Block extends Given {
  * given and writes only "Services", the override stores "Services", and the
  * page shows "Services | Balkaris". A title stored with the brand would show
  * it twice.
+ *
+ * ONLY WHERE IT FITS. Since 3 October 2026 (website 7b00b41, lib/seo.tsx
+ * `withBrand`) the brand is added only when the whole title still fits in 60
+ * characters; a longer own part is shown alone, so a question or a price is
+ * never cut for the brand's sake.
  */
 export const BRAND = " | Balkaris";
+
+/** The website's room for a whole title (lib/seo.tsx TITLE_ROOM). */
+const SITE_TITLE_ROOM = 60;
 
 /** The page's own part of a title: the brand the website appends, taken off (with any separator a model put before it). */
 export function ownTitle(t: string): string;
@@ -52,8 +60,8 @@ export function ownTitle(t: string | null): string | null {
   return t.replace(/(?:\s*\|\s*|\s+[–—:-]\s+)Balkaris\s*$/i, "").trim();
 }
 
-/** The title a page shows when its own part is `own`: the website appends the brand. */
-export const shownTitle = (own: string): string => `${own}${BRAND}`;
+/** The title a page shows when its own part is `own`: the brand after it where both fit, else the own part alone. */
+export const shownTitle = (own: string): string => (own.length + BRAND.length <= SITE_TITLE_ROOM ? `${own}${BRAND}` : own);
 
 /** A page a metadata task writes for: everything the model may use, and nothing else. */
 export interface MetaTarget {
@@ -542,5 +550,5 @@ export async function contextBlocks(choice: string, range: GaRange, room: number
  */
 export const TITLE_MOST = Math.min(60, LIMITS.title);
 export const DESCRIPTION_MOST = Math.min(155, LIMITS.description);
-/** The longest own part of a title: TITLE_MOST is measured on the title as shown, the brand included. */
-export const OWN_TITLE_MOST = TITLE_MOST - BRAND.length;
+/** The longest own part of a title: the whole room, since a title that long is shown without the brand (shownTitle). */
+export const OWN_TITLE_MOST = TITLE_MOST;

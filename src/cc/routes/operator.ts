@@ -4,6 +4,7 @@ import { me, type Vars } from "../access.ts";
 import { articleStats, channels, gaRange, pages as gaPages, type GaRange } from "../ga4.ts";
 import { approve, proposalCount, proposalRow, proposals, proposeRedirect, reject, withdraw } from "../operator/apply.ts";
 import { contextInsights, contextIssues, contextPages, contextTraffic, fixable, waitingDrafts } from "../operator/context.ts";
+import { shownTitle } from "../operator/packs.ts";
 import { advanceAudits, allResults, allTasks, cancel, cards, createTask, latest, newest, openRows, result, runnerState, taskCounts, workingNow } from "../operator/queue.ts";
 import { db } from "../../db.ts";
 import { addTodo, markTodo, removeTodo, todos } from "../operator/todos.ts";
@@ -95,7 +96,7 @@ function specimenProposal(id: number, kind: ProposalRow["kind"], state: Proposal
     source: "operator",
     taskId: 9101,
     proposedBy: null,
-    shownTitle: after.title !== undefined ? `${after.title} | Balkaris` : null,
+    shownTitle: after.title !== undefined ? shownTitle(after.title) : null,
     drift: null,
     state,
     decidedBy: state === "waiting" ? null : "Specimen person",

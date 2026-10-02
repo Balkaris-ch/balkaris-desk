@@ -7,6 +7,7 @@ import { CLOSING_JOBS, FORMATS, isFormat, template, type ClosingJob, type Templa
 import { getPerson } from "../../people.ts";
 import { clipFacts, clipPath, hasClip, hasCover } from "../../covers.ts";
 import { watchFrom } from "../../watch.ts";
+import { shownTitle } from "../operator/packs.ts";
 import { cached, off, ok, reading, waiting } from "../store.ts";
 import { scrub } from "../system.ts";
 import type { ActivityItem, DayPoint, Range, Reading, Tone } from "../../../web/src/contract/common.ts";
@@ -455,8 +456,6 @@ async function repoOf(slug: string): Promise<Reading<RepoState>> {
 
 /* ---------- the search listing ---------------------------------------------- */
 
-/** The website's root layout appends this to every page's own title (app/layout.tsx `template`). */
-const BRAND = " | Balkaris";
 
 /**
  * The website's own `fitDescription` (lib/seo.tsx), copied: the excerpt ended
@@ -524,7 +523,8 @@ async function metaOf(d: DraftRow, post: StoredPost, state: SiteState): Promise<
     const title = approved.title ?? post.title ?? "";
     const description = approved.description ?? fitDescription(post.excerpt ?? "");
     return ok<ArticleMeta>(
-      { title: line(`${title}${BRAND}`, titleLimit), description: line(description, descLimit), from: approved.title || approved.description ? "approved" : "built" },
+      /* As the website shows it: the brand after the title where both fit (operator/packs.ts shownTitle). */
+      { title: line(shownTitle(title), titleLimit), description: line(description, descLimit), from: approved.title || approved.description ? "approved" : "built" },
       "desk",
       Date.now(),
       "Worked out the way the website builds it, from the draft and any title or description approved on the desk. The limits are the desk's working yardsticks: Google cuts a title by its width.",

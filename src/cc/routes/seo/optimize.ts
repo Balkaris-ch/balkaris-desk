@@ -4,7 +4,7 @@ import { z } from "zod";
 import { db } from "../../../db.ts";
 import { me, type Vars } from "../../access.ts";
 import { propose, proposalRow } from "../../operator/apply.ts";
-import { BRAND, ownTitle as ownOf } from "../../operator/packs.ts";
+import { ownTitle as ownOf, shownTitle } from "../../operator/packs.ts";
 import { openRows } from "../../operator/queue.ts";
 import { json as taskJson, toTaskRow, type TaskDb, type TaskOptions } from "../../operator/tables.ts";
 import * as gsc from "../../search/gsc.ts";
@@ -1337,7 +1337,7 @@ routes.post("/propose", async (c) => {
   const who = me(c).name;
   note("operator-proposal", `Proposed a new ${after.title !== undefined && after.description !== undefined ? "title and description" : after.title !== undefined ? "title" : "description"} for ${path}`, {
     tone: "info",
-    detail: `By ${who}, on Page Optimization; it waits for approval.${after.title !== undefined ? ` Title as shown: “${after.title}${BRAND}”.` : ""}`,
+    detail: `By ${who}, on Page Optimization; it waits for approval.${after.title !== undefined ? ` Title as shown: “${shownTitle(after.title)}”.` : ""}`,
     href: "/operator?ap=waiting#approvals",
     actor: who,
     dedupe: `op:proposed:${made.id}`,

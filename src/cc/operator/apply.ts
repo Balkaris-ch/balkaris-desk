@@ -11,7 +11,7 @@ import { abs, get, pathOf } from "../site/http.ts";
 import { commitUrl, inventory, lastSitemap } from "../site/index.ts";
 import { note } from "../store.ts";
 import type { NewProposal } from "./kinds.ts";
-import { BRAND, ownTitle, PLAIN } from "./packs.ts";
+import { BRAND, ownTitle, PLAIN, shownTitle } from "./packs.ts";
 import { now, proposalById, stuck, toProposalRow, type ProposalDb } from "./tables.ts";
 import type { ProposalRow } from "../../../web/src/contract/operator.ts";
 
@@ -121,7 +121,7 @@ export function metaRefusal(address: string, after: { title?: string; descriptio
   if (!(a === "/" || PLAIN.test(a)) || a.length > 200) return `"${a}" is not a plain address on the site.`;
   if (after.title === undefined && after.description === undefined) return "It changes nothing.";
   if (after.title !== undefined && ownTitle(after.title) !== after.title.trim()) {
-    return `The website adds "${BRAND.trim()}" to every title itself: a title that ends with the brand would show it twice.`;
+    return `The website adds "${BRAND.trim()}" to a title itself where it fits: a title that ends with the brand would show it twice.`;
   }
   if (after.title !== undefined && (!after.title.trim() || after.title.length > 110)) return "The website accepts a title of 1 to 110 characters.";
   if (after.description !== undefined && (!after.description.trim() || after.description.length > 300)) return "The website accepts a description of 1 to 300 characters.";
@@ -318,7 +318,7 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
       ? [`${p.address} now redirects to ${after.to}: added to ${FILE}.`]
       : [
           `${p.address}: changed in ${FILE}.`,
-          ...(after.title !== undefined ? [`Title: ${quote(before.title)} → ${quote(after.title)} (shown as ${quote(`${after.title}${BRAND}`)}: the root layout appends the brand)`] : []),
+          ...(after.title !== undefined ? [`Title: ${quote(before.title)} → ${quote(after.title)} (shown as ${quote(shownTitle(after.title))}: the website adds the brand where it fits)`] : []),
           ...(after.description !== undefined ? [`Description: ${quote(before.description)} → ${quote(after.description)}`] : []),
         ];
   const body = [
