@@ -33,6 +33,8 @@ const KEY = "seo:audit";
 const SHOWN_MS = 60 * 60_000;
 /** A step not started this long after it was asked was lost (the desk restarted). */
 const LOST_MS = 45 * 60_000;
+/** When this desk process started: a step asked before it and not started since was in the queue the restart forgot. */
+const BOOT = new Date(Date.now() - process.uptime() * 1000).toISOString();
 
 interface Kept {
   id: string;
@@ -79,7 +81,7 @@ export function auditRun(): AuditRun | null {
     if (started && j.lastEnd && j.lastEnd >= j.lastStart!) {
       return { job: s.job, title: s.title, state: j.lastOk ? "done" : "failed", note: j.lastNote ? scrub(j.lastNote) : null, progress: null, startedAt: j.lastStart, endedAt: j.lastEnd };
     }
-    if (Date.now() - Date.parse(s.asked) > LOST_MS) return { job: s.job, title: s.title, state: "failed", note: "It never started: the desk restarted and forgot the queue. Run the audit again.", progress: null, startedAt: null, endedAt: null };
+    if (s.asked < BOOT || Date.now() - Date.parse(s.asked) > LOST_MS) return { job: s.job, title: s.title, state: "failed", note: "It never started: the desk restarted and forgot the queue. Run the audit again.", progress: null, startedAt: null, endedAt: null };
     return { job: s.job, title: s.title, state: "queued", note: null, progress: null, startedAt: null, endedAt: null };
   });
   const open = steps.some((s) => s.state === "queued" || s.state === "running");

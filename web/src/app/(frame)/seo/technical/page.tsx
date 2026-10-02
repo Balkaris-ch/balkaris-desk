@@ -1,5 +1,7 @@
+import type { Reading } from "@/contract/common";
 import type { SeoTechnicalPayload } from "@/contract/seo/technical";
-import { api, ask } from "@/lib/api";
+import type { ExtractResults, ExtractRule, SpiderDuplicates } from "@/contract/spider";
+import { api, ask, askMe } from "@/lib/api";
 import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
@@ -10,7 +12,11 @@ import { IssuesCard, PagesCard } from "@/components/seo/technical/Issues";
 import { OppsCard } from "@/components/seo/technical/Opps";
 import { BrokenCard, RedirectsCard, RobotsCard, SchemaCard, SitemapCard } from "@/components/seo/technical/Site";
 import { SpeedCard, VitalsCard } from "@/components/seo/technical/Speed";
+import { AuditCard } from "@/components/seo/technical/SpiderAudit";
+import { DuplicatesCard } from "@/components/seo/technical/SpiderDuplicates";
+import { ExtractionCard } from "@/components/seo/technical/SpiderRules";
 import "@/components/seo/technical/tech.css";
+import "@/components/seo/technical/spider.css";
 
 export const metadata = { title: "Technical · SEO" };
 
@@ -32,11 +38,25 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
  * panel and says what connects it. The buttons queue operator proposals
  * (which wait for approval), ask for a measurement, or record a person's step;
  * nothing here changes the live website.
+ *
+ * Last, the crawler's tools (contract/spider.ts): an audit of one page of any
+ * public website, the duplicate content the last crawl found, and the owner's
+ * custom extraction rules with what each found (?rule=<id> opens one). Their
+ * readings are asked beside the page's own request, in the same round, and a
+ * failure costs only its own panel.
  */
 export default async function SeoTechnicalPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
   const range = parseRange(q.range, undefined, "30d");
-  const got = await ask<SeoTechnicalPayload>("/api/v1/seo/technical", { range });
+  const open = typeof q.rule === "string" && /^\d{1,9}$/.test(q.rule) ? Number(q.rule) : null;
+  /* The rules are the owner's alone (the server refuses them to anybody else). Who is looking was asked by the frame already; askMe answers from that. */
+  const owners = <T,>(path: string) => askMe().then((who) => (who.ok && who.value.owner ? ask<T>(path) : null));
+  const [got, duplicates, rules, found] = await Promise.all([
+    ask<SeoTechnicalPayload>("/api/v1/seo/technical", { range }),
+    ask<Reading<SpiderDuplicates>>("/api/v1/spider/duplicates"),
+    owners<ExtractRule[]>("/api/v1/spider/extract"),
+    open === null ? null : owners<ExtractResults>(`/api/v1/spider/extract/${open}/results`),
+  ]);
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoTechnicalPayload>("/api/v1/seo/technical", { range });
@@ -49,6 +69,15 @@ export default async function SeoTechnicalPage({ searchParams }: { searchParams:
     );
   }
   const d = got.value;
+
+  /* This page's address with one rule's results open, or none; the period and anything else in it kept. */
+  const ruleHref = (rule: number | null, hash: string): string => {
+    const p = new URLSearchParams();
+    for (const [k, v] of Object.entries(q)) if (k !== "rule" && typeof v === "string") p.set(k, v);
+    if (rule !== null) p.set("rule", String(rule));
+    const s = p.toString();
+    return `/seo/technical${s ? `?${s}` : ""}#${hash}`;
+  };
 
   return (
     <div className="dk-seo-technical">
@@ -79,6 +108,17 @@ export default async function SeoTechnicalPage({ searchParams }: { searchParams:
         </Stack>
       </Grid>
       <OppsCard rows={d.opportunities} owner={d.viewer?.owner ?? false} />
+      <section className="dk-seo-technical-spider" aria-label="The crawler’s tools">
+        <AuditCard />
+        {rules ? (
+          <Grid cols="1fr 1fr">
+            <DuplicatesCard answer={duplicates} />
+            <ExtractionCard answer={rules} open={open} found={found} href={ruleHref} nextCrawl={d.jobs.crawl?.nextRun ?? null} />
+          </Grid>
+        ) : (
+          <DuplicatesCard answer={duplicates} />
+        )}
+      </section>
     </div>
   );
 }

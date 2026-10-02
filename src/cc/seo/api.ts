@@ -13,7 +13,7 @@ import { auditRun, startAudit } from "./audit.ts";
 import { markSubmitted } from "./engine.ts";
 import { importAll } from "./import.ts";
 import { clusters, setClusterPage } from "./keywords.ts";
-import { markOwnerTask } from "./owner.ts";
+import { markOwnerTask, ownerTask } from "./owner.ts";
 import { siteView } from "./site.ts";
 
 /**
@@ -24,7 +24,8 @@ import { siteView } from "./site.ts";
  *   GET  /audit                        the last full audit, while it runs and an hour after → { audit }
  *   POST /audit                        run the full audit (crawl, Search Console, snapshot,
  *                                      readiness, engine) through the scheduler      → AuditAnswer
- *   POST /owner-tasks/:id              { done, note? }  a person marks a task done or open → OwnerTaskAnswer
+ *   POST /owner-tasks/:id              { done, note? }  a person marks a task done or open; the owner's
+ *                                      own steps only the owner                       → OwnerTaskAnswer
  *   POST /indexing/requested           { path, submitted }  the lead requested indexing by hand → OpportunityAnswer
  *   POST /clusters/:key/page           { path | null }  map a cluster to a page by hand → { ok, cluster }
  *   POST /ai-checks          OWNER     { checks: NewAiCheck[] }  record AI checks      → { ok, added, rows }
@@ -34,8 +35,9 @@ import { siteView } from "./site.ts";
  *
  * RIGHTS. The server's gate (src/server.ts) has already made sure somebody is
  * signed in and that a change comes from the desk's own pages (the Origin
- * rule). Reading and changing a state is any signed-in person's; recording AI
- * checks and importing are the owner's (requireOwner). Nothing here changes
+ * rule). Reading and changing a state is any signed-in person's, except
+ * closing one of the owner's own steps; recording AI checks and importing are
+ * the owner's (requireOwner). Nothing here changes
  * the live website: the one route that leads there, an opportunity's action,
  * queues an operator task whose proposals wait for a person's approval.
  */
@@ -71,6 +73,8 @@ engineApi.post("/owner-tasks/:id", async (c) => {
   const b = await body(c);
   if (typeof b.done !== "boolean") bad("done must be true or false.");
   if (b.note !== undefined && b.note !== null && (typeof b.note !== "string" || b.note.length > 500)) bad("note is at most 500 characters.");
+  /* The owner's own steps (his accounts, his keys, his decisions) are his to close; the lead's browser steps are anyone's. */
+  if (ownerTask(c.req.param("id"))?.whoAll === "owner" && !me(c).owner) throw new HTTPException(403, { message: "Only the owner can mark his own steps." });
   const task = markOwnerTask(c.req.param("id"), b.done as boolean, me(c).name, (b.note as string | null | undefined) ?? null);
   if (!task) throw new HTTPException(404, { message: `There is no owner task ${c.req.param("id")}.` });
   return c.json<OwnerTaskAnswer>({ ok: true, task });

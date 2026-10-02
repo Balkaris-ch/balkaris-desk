@@ -492,8 +492,12 @@ try {
     check("  the import is kept as exported, with who did it", aisearch.lastImport("gsc-generative-ai")?.rows.length === 2 && aisearch.lastImport("gsc-generative-ai")?.importedBy === "Specimen Owner");
 
     const task = owner.ownerTasks(["owner"])[0]!;
-    a = await ask(`/owner-tasks/${task.id}`, { who: "member", method: "POST", body: { done: true, note: "Specimen note." } });
-    check("a done mark is a person's, by name", a.status === 200 && (a.json.task as { doneBy: string }).doneBy === "Specimen Member", a);
+    a = await ask(`/owner-tasks/${task.id}`, { who: "member", method: "POST", body: { done: true } });
+    check("one of the owner's own steps is his to close: a member is refused 403 { error }", a.status === 403 && typeof a.json.error === "string", a);
+    a = await ask(`/owner-tasks/${task.id}`, { who: "owner", method: "POST", body: { done: true, note: "Specimen note." } });
+    check("a done mark is a person's, by name", a.status === 200 && (a.json.task as { doneBy: string }).doneBy === "Specimen Owner", a);
+    a = await ask("/owner-tasks/gsc-request-indexing", { who: "member", method: "POST", body: { done: true } });
+    check("  a step in the owner's browser is anyone's to close", a.status === 200 && (a.json.task as { doneBy: string }).doneBy === "Specimen Member", a);
     a = await ask("/owner-tasks/no-such-task", { who: "member", method: "POST", body: { done: true } });
     check("  an unknown task is 404 { error }", a.status === 404 && typeof a.json.error === "string", a);
     a = await ask(`/owner-tasks/${task.id}`, { who: "member", method: "POST", body: { done: "yes" } });

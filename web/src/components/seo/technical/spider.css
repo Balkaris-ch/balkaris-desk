@@ -1,0 +1,784 @@
+/*
+ * SEO › Technical, the crawler's tools: Audit any page, Duplicate content and
+ * Custom extraction (SpiderAudit.tsx, SpiderDuplicates.tsx, SpiderRules.tsx,
+ * SpiderAct.tsx). Every rule sits under the page's scene class and every
+ * class starts dk-seo-technical-audit-, -dup-, -rule- or -spider; the shared
+ * pieces they use (lines, marks, h3, quiet, said, more) are tech.css's.
+ * Every value is a token from styles/tokens.css or one named here.
+ */
+
+.dk-seo-technical .dk-seo-technical-spider {
+  --dk-seo-technical-fact-w: 112px;     /* a fact's name column in the audit */
+  --dk-seo-technical-pair-w: 120px;     /* og:description, a header's name */
+  --dk-seo-technical-score-sm: 28px;    /* the audited page's score */
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit,
+.dk-seo-technical .dk-seo-technical-dups,
+.dk-seo-technical .dk-seo-technical-rules {
+  container-type: inline-size;
+}
+
+/* ---------- Audit any page ---------- */
+
+.dk-seo-technical .dk-seo-technical-audit-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--x10);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-wait,
+.dk-seo-technical .dk-seo-technical-audit-no {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin: var(--x8) 0 0;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-wait > .dk-icon,
+.dk-seo-technical .dk-seo-technical-audit-no > .dk-icon {
+  flex: none;
+  margin-top: var(--x1);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-no {
+  border-color: var(--red-edge);
+  background: var(--red-ground);
+  color: var(--red);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-no--warn {
+  border-color: var(--amber-edge);
+  background: var(--amber-ground);
+  color: var(--amber);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-no b {
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-no > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x24);
+  margin-top: var(--x12);
+  padding-top: var(--x14);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sum {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x16);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-status {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-url {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x4);
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-url > .dk-icon {
+  flex: none;
+  color: var(--ink-4);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-url:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-asked {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-score {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--x4);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-body);
+  line-height: var(--lh-tight);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-score b {
+  font-size: var(--dk-seo-technical-score-sm);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-noscore {
+  max-width: var(--action-min);
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-figs {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x10);
+  margin: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-figs > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-figs > div + div {
+  padding-left: var(--x10);
+  border-left: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-figs dt {
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-figs dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sum .dk-seo-technical-quiet {
+  margin: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-part {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-mono {
+  min-width: 0;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+/* The redirect chain: each hop's status, address and where it sends. */
+.dk-seo-technical .dk-seo-technical-audit-hops {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-hops > li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-to {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  grid-column: 2;
+  min-width: 0;
+  color: var(--ink-4);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-to > .dk-icon {
+  flex: none;
+}
+
+/* Findings, by severity. */
+.dk-seo-technical .dk-seo-technical-audit-sev + .dk-seo-technical-audit-sev {
+  margin-top: var(--x8);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sev-head {
+  margin: 0;
+  padding: var(--x6) 0 var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sev-head .dk-num {
+  color: var(--ink-4);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sev .dk-seo-technical-lines {
+  border-top: var(--x1) solid var(--line);
+}
+
+/* What the page says: a name column and the value. */
+.dk-seo-technical .dk-seo-technical-audit-facts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-fact {
+  display: grid;
+  grid-template-columns: var(--dk-seo-technical-fact-w) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-body);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-fact > dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-fact > dd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-2);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-text {
+  max-width: 100%;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-len,
+.dk-seo-technical .dk-seo-technical-audit-sub {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sub.dk-seo-technical-ink-bad {
+  color: var(--red);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-sub.dk-seo-technical-ink-warn {
+  color: var(--amber);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-none {
+  color: var(--ink-4);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  max-width: 100%;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical ol.dk-seo-technical-audit-list {
+  max-height: var(--dk-seo-technical-list-h);
+  padding-top: var(--x6);
+  overflow-y: auto;
+  list-style: decimal inside;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-list--mono {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-type {
+  font-family: var(--font-mono);
+  font-weight: var(--w-regular);
+}
+
+/* Name and value pairs inside a fact: Open Graph, hreflang, the headers. */
+.dk-seo-technical .dk-seo-technical-audit-pairs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  width: 100%;
+  margin: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-pairs > div {
+  display: grid;
+  grid-template-columns: var(--dk-seo-technical-pair-w) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--x10);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-pairs dt {
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-pairs dd {
+  min-width: 0;
+  margin: 0;
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-pairs--mono {
+  padding-top: var(--x8);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-pairs--mono dd {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* A list behind a disclosure: the subheadings, the headers. */
+.dk-seo-technical .dk-seo-technical-audit-more {
+  width: 100%;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-2);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-technical .dk-seo-technical-audit-more > summary:hover {
+  color: var(--ink);
+}
+
+.dk-seo-technical .dk-seo-technical-audit-more > summary .dk-seo-technical-h3 {
+  margin: 0;
+}
+
+/* ---------- Duplicate content ---------- */
+
+.dk-seo-technical .dk-seo-technical-dup-body {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: var(--x8);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-kind {
+  padding: var(--x12) var(--pad);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-kind + .dk-seo-technical-dup-kind {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-kind .dk-seo-technical-h3 {
+  margin-bottom: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-note {
+  margin: var(--x4) 0 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-groups {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dk-seo-technical-list-h);
+  margin-top: var(--x8);
+  overflow-y: auto;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-groups > li {
+  /* A group that wraps keeps its height inside the scrolling list. */
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-heading {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x2) var(--x14);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-pages > li {
+  display: flex;
+  max-width: 100%;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-groups > li.dk-seo-technical-dup-pair {
+  flex-direction: row;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x10);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-two {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x2) var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-dup-and {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-dup-sim {
+  flex: none;
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+/* ---------- Custom extraction ---------- */
+
+.dk-seo-technical .dk-seo-technical-rule {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding: var(--x10) var(--pad);
+  scroll-margin-top: calc(var(--top) + var(--gap));
+}
+
+.dk-seo-technical .dk-seo-technical-rule--open {
+  background: var(--card-2);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x6) var(--x10);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-title {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x8);
+  min-width: 0;
+  padding-top: var(--x2);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-name {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-rule--off .dk-seo-technical-rule-name,
+.dk-seo-technical .dk-seo-technical-rule--off .dk-seo-technical-rule-expr {
+  color: var(--ink-3);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-expr {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: var(--x3) var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-sub {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-by {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-said {
+  text-align: left;
+}
+
+/* One rule's results, under it. */
+.dk-seo-technical .dk-seo-technical-rule-results {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x8);
+  padding-top: var(--x8);
+  border-top: var(--x1) solid var(--line-2);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-results-sum {
+  margin: 0 0 var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-pages {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-page {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-page-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-page-head > .dk-seo-technical-path {
+  flex: 1;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-count {
+  flex: none;
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-ms {
+  flex: none;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-matches {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding-left: var(--x10);
+  border-left: var(--x2) solid var(--line-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-more {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-err {
+  color: var(--red);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-none {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-none > li {
+  flex: none;
+  display: flex;
+  padding: var(--x4) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-results .dk-seo-technical-more {
+  margin-bottom: 0;
+}
+
+/* Add a rule. */
+.dk-seo-technical .dk-seo-technical-rule-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-form .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-seo-technical .dk-seo-technical-rule-form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--x12);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-mono {
+  font-family: var(--font-mono);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-form-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x12);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-form-foot > .dk-seo-technical-quiet,
+.dk-seo-technical .dk-seo-technical-rule-form-foot > .dk-seo-technical-said {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  text-align: left;
+}
+
+/* The delete confirmation. */
+.dk-seo-technical .dk-seo-technical-rule-ask {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-technical .dk-seo-technical-rule-ask-said {
+  max-width: none;
+  margin-top: var(--x10);
+  text-align: left;
+}
+
+/* ---------- narrower ---------- */
+
+@container (max-width: 860px) {
+  .dk-seo-technical .dk-seo-technical-audit-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 560px) {
+  .dk-seo-technical .dk-seo-technical-audit-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-technical .dk-seo-technical-audit-form .dk-btn {
+    justify-self: start;
+  }
+
+  .dk-seo-technical .dk-seo-technical-audit-figs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--x12);
+  }
+
+  .dk-seo-technical .dk-seo-technical-audit-figs > div:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .dk-seo-technical .dk-seo-technical-audit-fact {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x4);
+  }
+
+  .dk-seo-technical .dk-seo-technical-audit-pairs > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .dk-seo-technical .dk-seo-technical-rule-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-technical .dk-seo-technical-rule-acts {
+    justify-content: flex-start;
+  }
+}

@@ -902,8 +902,9 @@ export async function act(id: string, by: Person): Promise<OpportunityRow> {
     db.prepare("UPDATE cc_seo_opps SET state = 'in-progress', state_by = ?, state_at = ?, state_note = ? WHERE id = ?").run(by.name, now(), `${action.label}: done by hand in the owner's browser.`, id);
     note("seo-action", `${action.label}: ${o.page ?? o.title}`, { tone: "info", actor: by.name, detail: "By hand, in Search Console in the owner's browser.", href: "/seo/technical#indexing", dedupe: `seo:act:${id}:${now()}` });
   } else if (action.kind === "code") {
-    db.prepare("UPDATE cc_seo_opps SET state = 'queued', state_by = ?, state_at = ?, state_note = ? WHERE id = ?").run(by.name, now(), "Handed to the website's code.", id);
-    note("seo-action", `Handed to the website's code: ${o.title}`, { tone: "info", actor: by.name, href: `/seo/opportunities?open=${encodeURIComponent(id)}`, dedupe: `seo:act:${id}:${now()}` });
+    /* Nothing is sent anywhere: it waits on the queue for a change to the website's repository, and the next crawl or engine run that no longer finds it clears it. */
+    db.prepare("UPDATE cc_seo_opps SET state = 'queued', state_by = ?, state_at = ?, state_note = ? WHERE id = ?").run(by.name, now(), "Waiting for a change to the website's code; it clears when the next run no longer finds it.", id);
+    note("seo-action", `Queued for the website's code: ${o.title}`, { tone: "info", actor: by.name, href: `/seo/opportunities?open=${encodeURIComponent(id)}`, dedupe: `seo:act:${id}:${now()}` });
   }
   return opportunity(id, view)!;
 }
