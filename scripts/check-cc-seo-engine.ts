@@ -504,9 +504,11 @@ try {
     a = await ask("/indexing/requested", { who: "member", method: "POST", body: { path: "/specimen-d", submitted: false } });
     check("the indexing queue's mark can be taken back", a.status === 200 && (a.json.opportunity as { state: { state: string } }).state.state === "open", a);
 
-    const nav = await ask<{ opportunities: number; needsYou: number; tabs: { key: string; count: number | null }[] }>("/nav", { who: "member" });
+    /* A reading: ok once the engine has run (it has, above), so a count is never a 0 that only means "not yet". */
+    const nav = await ask<{ state: string; value: { opportunities: number; needsYou: number; tabs: { key: string; count: number | null }[] } }>("/nav", { who: "member" });
     const open = count("SELECT COUNT(*) AS n FROM cc_seo_opps WHERE active = 1 AND state IN ('open', 'queued', 'in-progress')");
-    check("/nav counts the open opportunities, and the tab carries it", nav.status === 200 && nav.json.opportunities === open && nav.json.tabs.find((t) => t.key === "opportunities")?.count === open && nav.json.tabs.length === 11, nav.json);
+    const nv = nav.json.value;
+    check("/nav counts the open opportunities, and the tab carries it", nav.status === 200 && nav.json.state === "ok" && nv.opportunities === open && nv.tabs.find((t) => t.key === "opportunities")?.count === open && nv.tabs.length === 11, nav.json);
     const au = await ask<{ audit: unknown }>("/audit", { who: "member" });
     check("/audit answers { audit } before any audit", au.status === 200 && au.json.audit === null, au.json);
   }

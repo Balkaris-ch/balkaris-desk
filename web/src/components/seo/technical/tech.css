@@ -1,0 +1,1282 @@
+/*
+ * SEO › Technical (board 113, panel 7, and the panels its lines lead to).
+ * Every class starts dk-seo-technical-; every value is a token from
+ * styles/tokens.css, or one of the few sizes named here on the page's own
+ * root, measured on the board.
+ */
+
+.dk-seo-technical {
+  --dk-seo-technical-mark: 16px;        /* a check's status circle on the board */
+  --dk-seo-technical-score: 34px;       /* "86 / 100" on the board */
+  --dk-seo-technical-vital: 26px;       /* "1.3s" on the board */
+  --dk-seo-technical-stack-h: 10px;     /* the index states' bar */
+  --dk-seo-technical-swatch: 9px;       /* a state's colour square */
+  --dk-seo-technical-list-h: 340px;     /* a long list scrolls inside its panel past this */
+  --dk-seo-technical-pages-h: 560px;    /* Pages by score: about a dozen two-line rows and the heads, then it scrolls */
+  --dk-seo-technical-queue-w: 460px;    /* the Request indexing column at full width */
+
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---------- shared ---------- */
+
+/* Each panel answers to its own width: a half-width column on a laptop, the whole width on a phone. */
+.dk-seo-technical-health,
+.dk-seo-technical-checks-card,
+.dk-seo-technical-vitals,
+.dk-seo-technical-speed,
+.dk-seo-technical-index,
+.dk-seo-technical-issues-card,
+.dk-seo-technical-pages,
+.dk-seo-technical-sitemap,
+.dk-seo-technical-robots,
+.dk-seo-technical-schema,
+.dk-seo-technical-redirects,
+.dk-seo-technical-broken,
+.dk-seo-technical-opps {
+  container-type: inline-size;
+}
+
+.dk-seo-technical-pad {
+  padding: var(--x8) var(--pad) var(--pad);
+}
+
+.dk-seo-technical-pad-x {
+  padding-inline: var(--pad);
+}
+
+.dk-seo-technical-absent {
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+.dk-seo-technical-quiet {
+  margin: var(--x6) 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical-quiet-cell {
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-stampline {
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--x8) var(--pad) var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-stampline--flat {
+  padding-inline: 0;
+  border-top: 0;
+}
+
+.dk-seo-technical-ink-good {
+  color: var(--green);
+}
+
+.dk-seo-technical-ink-warn {
+  color: var(--amber);
+}
+
+.dk-seo-technical-ink-bad {
+  color: var(--red);
+}
+
+.dk-seo-technical-ink-quiet {
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-h3 {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin: 0 0 var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-technical-h3-n {
+  color: var(--ink-3);
+  font-weight: var(--w-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dk-seo-technical-subsection {
+  padding-top: var(--x12);
+  padding-bottom: var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-path--link:hover {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-technical-ext {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+}
+
+.dk-seo-technical-ext:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-technical-more {
+  margin: var(--x6) 0 var(--x8);
+}
+
+.dk-seo-technical-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  padding: var(--x4) 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-technical-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-technical-more > summary:hover {
+  color: var(--ink);
+}
+
+/* What the desk said after a button was pressed. */
+.dk-seo-technical-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-technical-said {
+  max-width: var(--tip-w);
+  color: var(--green);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-align: right;
+}
+
+.dk-seo-technical-said--bad {
+  color: var(--red);
+}
+
+/* A check's circle. */
+.dk-seo-technical-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-technical-mark);
+  height: var(--dk-seo-technical-mark);
+  border-radius: var(--r-pill);
+  color: var(--bg);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-bold);
+  line-height: 1;
+}
+
+.dk-seo-technical-mark .dk-icon {
+  stroke-width: 3;
+}
+
+.dk-seo-technical-mark--good {
+  background: var(--green);
+}
+
+.dk-seo-technical-mark--warn {
+  background: var(--amber);
+}
+
+.dk-seo-technical-mark--bad {
+  background: var(--red);
+}
+
+.dk-seo-technical-mark--info {
+  border: var(--x2) solid var(--ink-3);
+}
+
+.dk-seo-technical-mark--absent {
+  border: var(--x1) dashed var(--ink-4);
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-n {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-n--good {
+  color: var(--ink-3);
+}
+
+.dk-seo-technical-n--info {
+  color: var(--ink);
+}
+
+.dk-seo-technical-n--warn {
+  color: var(--amber);
+}
+
+.dk-seo-technical-n--bad {
+  color: var(--red);
+}
+
+.dk-seo-technical-of {
+  color: var(--ink-4);
+}
+
+/* ---------- Technical SEO Health ---------- */
+
+.dk-seo-technical-health-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  margin-inline: calc(var(--pad) * -1);
+  margin-bottom: calc(var(--pad) * -1);
+  padding-inline: var(--pad);
+}
+
+.dk-seo-technical-score {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x6);
+  margin: 0;
+  color: var(--ink);
+  line-height: var(--lh-tight);
+}
+
+.dk-seo-technical-score b {
+  font-size: var(--dk-seo-technical-score);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-technical-score-of {
+  color: var(--ink-2);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-score-delta {
+  margin-left: var(--x6);
+}
+
+.dk-seo-technical-score-bar {
+  width: 100%;
+}
+
+.dk-seo-technical-health-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x6) var(--x16);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-health-counts b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-health-when {
+  margin-left: auto;
+}
+
+.dk-seo-technical-health-index {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical-health-index span {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-technical-health-index:hover {
+  color: var(--ink);
+}
+
+.dk-seo-technical-health .dk-seo-technical-stampline {
+  margin-inline: calc(var(--pad) * -1);
+}
+
+/* ---------- the checklist ---------- */
+
+.dk-seo-technical-checks {
+  display: flex;
+  flex-direction: column;
+  padding: var(--x6) 0;
+}
+
+.dk-seo-technical-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto var(--ctl-xs);
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--table-row);
+  padding: var(--x2) var(--pad);
+  font-size: var(--t-body);
+}
+
+.dk-seo-technical-check + .dk-seo-technical-check {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-check:has(.dk-seo-technical-act .dk-btn) {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+}
+
+.dk-seo-technical-check-label {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-technical-check-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-check-text:hover {
+  color: var(--ink);
+}
+
+.dk-seo-technical-check-figure {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+.dk-seo-technical-check-change {
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-check-absent {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  cursor: help;
+}
+
+.dk-seo-technical-check-act {
+  display: inline-flex;
+  justify-content: flex-end;
+}
+
+.dk-seo-technical-chev {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-chev:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ---------- Core Web Vitals ---------- */
+
+.dk-seo-technical-vital-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--x16);
+}
+
+.dk-seo-technical-vital {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-technical-vital + .dk-seo-technical-vital {
+  padding-left: var(--x16);
+  border-left: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-vital-label {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x6);
+  margin: 0;
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-small);
+  letter-spacing: var(--track-label);
+}
+
+.dk-seo-technical-vital-none {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  letter-spacing: 0;
+  text-decoration: underline dotted;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-technical-vital-value {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--dk-seo-technical-vital);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-technical-vital-rating {
+  margin: 0;
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-vital-kind {
+  margin: 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- lists of rows ---------- */
+
+.dk-seo-technical-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical-rows > li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-scroll {
+  max-height: var(--dk-seo-technical-list-h);
+  overflow-y: auto;
+}
+
+.dk-seo-technical-speed-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--table-row);
+  padding: var(--x4) var(--pad);
+  font-size: var(--t-body);
+}
+
+.dk-seo-technical-speed-lcp {
+  font-weight: var(--w-medium);
+  text-align: right;
+}
+
+.dk-seo-technical-speed-failed {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  cursor: help;
+}
+
+.dk-seo-technical-speed-more {
+  display: inline-flex;
+  gap: var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- Google's index ---------- */
+
+.dk-seo-technical-index-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-seo-technical-index-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-technical-index-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x8);
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-figure-2);
+}
+
+.dk-seo-technical-index-figure b {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-technical-index-word {
+  color: var(--ink-3);
+  font-size: var(--t-body);
+}
+
+.dk-seo-technical-stack {
+  display: flex;
+  gap: var(--x2);
+  height: var(--dk-seo-technical-stack-h);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-seo-technical-stack-part {
+  flex-basis: 0;
+  min-width: var(--x3);
+}
+
+.dk-seo-technical-swatch {
+  flex: none;
+  width: var(--dk-seo-technical-swatch);
+  height: var(--dk-seo-technical-swatch);
+  border-radius: var(--x2);
+}
+
+.dk-seo-technical-swatch--good {
+  background: var(--green);
+}
+
+.dk-seo-technical-swatch--warn {
+  background: var(--amber);
+}
+
+.dk-seo-technical-swatch--bad {
+  background: var(--red);
+}
+
+.dk-seo-technical-swatch--quiet {
+  background: var(--grey);
+}
+
+.dk-seo-technical-index-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--dk-seo-technical-queue-w));
+  gap: var(--x24);
+  align-items: start;
+}
+
+.dk-seo-technical-cov {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-cov:last-child {
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-cov-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--table-row);
+  padding: var(--x4) 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-technical-cov-head::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-technical-cov-head:hover {
+  color: var(--ink);
+}
+
+.dk-seo-technical-cov-state {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-cov-n {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-cov-chev {
+  color: var(--ink-4);
+  transition: transform var(--fast) var(--ease);
+}
+
+details[open] > summary .dk-seo-technical-cov-chev {
+  transform: rotate(180deg);
+}
+
+.dk-seo-technical-cov-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: 0 0 var(--x12) calc(var(--dk-seo-technical-swatch) + var(--x10));
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-technical-cov-meaning,
+.dk-seo-technical-cov-fix {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.dk-seo-technical-cov-meaning b,
+.dk-seo-technical-cov-fix b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-cov-pages {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dk-seo-technical-list-h);
+  overflow-y: auto;
+}
+
+.dk-seo-technical-cov-pages li {
+  /* Never squeezed by the scrolling list: a row that wraps keeps its height. */
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--ctl-sm);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-cov-crawl {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-seo-technical-queue-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x8);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-queue-row--done .dk-seo-technical-path {
+  color: var(--ink-3);
+}
+
+/* The queue's addresses wrap: they are long, and the end of one is what tells it from the next. */
+.dk-seo-technical-queue-what .dk-seo-technical-path {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.dk-seo-technical-queue-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-technical-queue-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical-queue-sub > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- issues by rule ---------- */
+
+.dk-seo-technical-issues {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical-issue {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-issue-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--table-row);
+  padding: var(--x4) var(--pad);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-technical-issue-head::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-technical-issue-head:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-technical-sev {
+  justify-self: start;
+}
+
+.dk-seo-technical-issue-title {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-issue-area {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical-issue-n {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-technical-issue-cost {
+  min-width: var(--x24);
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-seo-technical-issue-body {
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-technical-issue-lines {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dk-seo-technical-list-h);
+  overflow-y: auto;
+}
+
+.dk-seo-technical-issue-lines li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-issue-text {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical-issue-fix {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x10);
+  padding-top: var(--x10);
+}
+
+.dk-seo-technical-issue-fix .dk-seo-technical-quiet {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+/* ---------- pages by score ---------- */
+
+.dk-seo-technical-page-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-technical-page-sub {
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+}
+
+.dk-seo-technical-page-issues {
+  display: inline-flex;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+/* The figures keep their columns and a long address ends in "…" (whole on hover), so Score and Issues stay in view in a half-width panel. */
+.dk-seo-technical-pages-table .dk-table {
+  table-layout: fixed;
+}
+
+/* One table over every page: past the first dozen rows it scrolls inside the panel, its heads staying on top, so a sort heading sorts the whole list. */
+.dk-seo-technical-pages-table--scroll {
+  max-height: var(--dk-seo-technical-pages-h);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.dk-seo-technical-pages-table--scroll thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+  box-shadow: inset 0 calc(var(--x1) * -1) 0 var(--line);
+}
+
+.dk-seo-technical-issues-sum {
+  margin-top: var(--x8);
+}
+
+/* ---------- sitemap, robots, schema ---------- */
+
+.dk-seo-technical-stackv {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-technical-lines {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-technical-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--x10);
+  padding: var(--x8) 0;
+  font-size: var(--t-body);
+}
+
+.dk-seo-technical-line + .dk-seo-technical-line {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-line > .dk-seo-technical-mark {
+  margin-top: var(--x1);
+}
+
+.dk-seo-technical-line-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-technical-line-label {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical-line-detail {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-technical-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-mini th,
+.dk-seo-technical-mini td {
+  padding: var(--x4) 0;
+  border-top: var(--x1) solid var(--line);
+  text-align: right;
+}
+
+.dk-seo-technical-mini thead th {
+  border-top: 0;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-technical-mini th:first-child {
+  color: var(--ink-2);
+  font-weight: var(--w-regular);
+  text-align: left;
+}
+
+.dk-seo-technical-mini thead th:first-child {
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-agents {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x6);
+}
+
+.dk-seo-technical-agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--ctl-sm);
+  padding: var(--x2) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-agent-name {
+  color: var(--ink);
+  font-family: var(--font-mono);
+}
+
+.dk-seo-technical-agent-family {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-robots .dk-seo-technical-subsection {
+  margin-top: var(--x8);
+}
+
+.dk-seo-technical-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  padding: var(--x8) var(--pad) var(--x12);
+}
+
+.dk-seo-technical-types li {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  padding: var(--x3) var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-type {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* ---------- redirects and links ---------- */
+
+.dk-seo-technical-redirects .dk-seo-technical-pad-x + .dk-seo-technical-rows,
+.dk-seo-technical-broken .dk-seo-technical-pad-x + .dk-seo-technical-rows {
+  margin-top: var(--x8);
+}
+
+.dk-seo-technical-redirect {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x2) var(--x10);
+  padding: var(--x6) var(--pad);
+}
+
+.dk-seo-technical-redirect-from {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x2) var(--x6);
+  min-width: 0;
+  color: var(--ink-4);
+}
+
+.dk-seo-technical-redirect-from .dk-seo-technical-path {
+  overflow: visible;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.dk-seo-technical-redirect-sub {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-link {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding: var(--x6) var(--pad);
+}
+
+.dk-seo-technical-link-target {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-technical-link-status {
+  flex: none;
+  color: var(--red);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-link-from {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical-broken .dk-seo-technical-pad-x:has(.dk-btn),
+.dk-seo-technical-redirects .dk-seo-technical-pad-x:has(.dk-btn) {
+  padding-top: var(--x4);
+  padding-bottom: var(--x8);
+}
+
+/* ---------- technical opportunities ---------- */
+
+.dk-seo-technical-opp {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x8) var(--pad);
+}
+
+.dk-seo-technical-opp-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-technical-opp-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-opp-title:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-technical-opp-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x2) var(--x10);
+  min-width: 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical-opp-sub .dk-seo-technical-path {
+  max-width: 100%;
+  font-size: var(--t-label);
+}
+
+.dk-seo-technical-opp-act {
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--x4);
+}
+
+.dk-seo-technical-opp-why {
+  max-width: var(--action-min);
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-technical-opps > .dk-card-body > .dk-seo-technical-more {
+  padding-bottom: var(--x8);
+}
+
+/* ---------- narrower ---------- */
+
+@container (max-width: 980px) {
+  .dk-seo-technical-index-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 560px) {
+  .dk-seo-technical-vital-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-technical-vital + .dk-seo-technical-vital {
+    padding-top: var(--x12);
+    padding-left: 0;
+    border-top: var(--x1) solid var(--line);
+    border-left: 0;
+  }
+
+  .dk-seo-technical-speed-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .dk-seo-technical-speed-more {
+    display: none;
+  }
+
+  .dk-seo-technical-health-when {
+    margin-left: 0;
+  }
+
+  .dk-seo-technical-opp {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dk-seo-technical-opp-state {
+    display: none;
+  }
+
+  .dk-seo-technical-opp-act {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+
+  .dk-seo-technical-issue-head {
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+  }
+
+  .dk-seo-technical-issue-cost {
+    display: none;
+  }
+
+  .dk-seo-technical-issue-area {
+    display: none;
+  }
+
+  .dk-seo-technical-issue-title,
+  .dk-seo-technical-opp-title {
+    white-space: normal;
+  }
+
+  .dk-seo-technical-queue-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .dk-seo-technical-queue-row > .dk-seo-technical-act {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+  }
+
+  /* The address wraps whole and Google's crawl date goes under it: the date is the evidence that a noindex record is stale. */
+  .dk-seo-technical-cov-pages li {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    row-gap: var(--x2);
+    padding: var(--x6) 0;
+  }
+
+  .dk-seo-technical-cov-pages li > .dk-seo-technical-path {
+    grid-column: 1;
+    grid-row: 1;
+    overflow: visible;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .dk-seo-technical-cov-pages li > .dk-seo-technical-cov-crawl {
+    grid-column: 1;
+    grid-row: 2;
+    white-space: normal;
+  }
+
+  .dk-seo-technical-cov-pages li > :not(.dk-seo-technical-path, .dk-seo-technical-cov-crawl) {
+    grid-row: 1 / span 2;
+  }
+
+  .dk-seo-technical-agent {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .dk-seo-technical-agent-family {
+    display: none;
+  }
+}

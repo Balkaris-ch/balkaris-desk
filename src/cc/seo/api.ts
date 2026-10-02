@@ -4,6 +4,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { me, requireOwner, type Vars } from "../access.ts";
 import { body, nav } from "../routes/seo/shared.ts";
+import { ok, since, waiting } from "../store.ts";
+import type { Reading } from "../../../web/src/contract/common.ts";
 import type { NewAiCheck } from "../../../web/src/contract/seo/ai-search.ts";
 import type { AuditAnswer, AuditRun, ImportAnswer, OpportunityAnswer, OwnerTaskAnswer, SeoNav } from "../../../web/src/contract/seo/common.ts";
 import { addCheck, checkRefusal, IMPORT_KINDS, importManual, type ImportKind } from "./aisearch.ts";
@@ -43,7 +45,12 @@ const bad = (message: string): never => {
   throw new HTTPException(400, { message });
 };
 
-engineApi.get("/nav", (c) => c.json<SeoNav>(nav()));
+/* Before the opportunity engine's first run there is no count to give: a 0
+   would tell the owner there is nothing to fix. The layout draws the chip
+   only from an ok reading. */
+engineApi.get("/nav", (c) =>
+  c.json<Reading<SeoNav>>(since("seo.opps.open") ? ok(nav(), "desk", Date.now()) : waiting("desk", "The opportunity engine has not run yet.")),
+);
 
 engineApi.get("/audit", (c) => {
   let audit: AuditRun | null = null;

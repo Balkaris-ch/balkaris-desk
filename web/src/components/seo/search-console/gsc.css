@@ -1,0 +1,763 @@
+/* SEO › Search Console (board 113, panel 8). Every value is a token; every
+   class is dk-seo-gsc-…, so nothing here can style another screen. The
+   breakpoints are the screen's own width (a container), in px because a
+   container query cannot read a custom property. */
+
+:root {
+  --dk-seo-gsc-search-w: 260px;    /* "Query contains…" */
+  --dk-seo-gsc-filter-w: 172px;    /* a filter's select */
+  --dk-seo-gsc-page-w: 236px;      /* the page filter: an address is longer */
+  --dk-seo-gsc-key-w: 340px;       /* the first column at most, before it wraps */
+  --dk-seo-gsc-top-w: 260px;       /* the top page or query */
+  --dk-seo-gsc-table-min: 760px;   /* under this the table scrolls in its panel */
+  --dk-seo-gsc-itable-min: 720px;
+  --dk-seo-gsc-iaddr-w: 250px;     /* an address in the inspection table, before it is cut short */
+  --dk-seo-gsc-istate-w: 230px;    /* Google's words for its state */
+  --dk-seo-gsc-pos-h: 200px;       /* the position plot, labels included */
+  --dk-seo-gsc-side-w: 380px;      /* the sitemaps and the copy beside the inspection */
+}
+
+.dk-seo-gsc {
+  container: dk-seo-gsc / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---------- the filters ------------------------------------------------------------------- */
+.dk-seo-gsc-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-gsc-filters-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-gsc-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1 1 var(--dk-seo-gsc-search-w);
+  max-width: var(--dk-seo-gsc-search-w);
+  min-width: 0;
+}
+
+.dk-seo-gsc-search-icon {
+  position: absolute;
+  left: var(--x12);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.dk-seo-gsc-search-input {
+  width: 100%;
+  height: var(--ctl);
+  padding: 0 var(--x12) 0 var(--x32);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-body);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-search-input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-gsc-search-input:hover {
+  border-color: var(--pop-edge);
+}
+
+.dk-seo-gsc-search-input:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-seo-gsc-filter select {
+  width: var(--dk-seo-gsc-filter-w);
+}
+
+.dk-seo-gsc-filter--page select {
+  width: var(--dk-seo-gsc-page-w);
+}
+
+.dk-seo-gsc-filter-space {
+  display: inline-block;
+  width: var(--dk-seo-gsc-filter-w);
+  height: var(--ctl);
+}
+
+.dk-seo-gsc-filter-space.dk-seo-gsc-filter--page {
+  width: var(--dk-seo-gsc-page-w);
+}
+
+.dk-seo-gsc-clear {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--ctl);
+  padding: 0 var(--x10);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-clear:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-filters-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  border-bottom: var(--x1) dotted var(--ink-4);
+  color: var(--ink-2);
+  cursor: help;
+}
+
+.dk-seo-gsc-source .dk-icon {
+  color: var(--ink-3);
+}
+
+.dk-seo-gsc-source--live .dk-icon {
+  color: var(--amber);
+}
+
+/* ---------- the chart ----------------------------------------------------------------------- */
+.dk-seo-gsc-switch {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--x2);
+  padding: var(--x2);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+}
+
+.dk-seo-gsc-switch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: calc(var(--ctl-sm) - var(--x6));
+  padding: 0 var(--x10);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-switch-item:hover {
+  color: var(--ink);
+}
+
+.dk-seo-gsc-switch-item--on,
+.dk-seo-gsc-switch-item--on:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-switch-count {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-gsc-switch-item--on .dk-seo-gsc-switch-count {
+  color: var(--ink-3);
+}
+
+.dk-seo-gsc-chart-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-gsc-chart-plot {
+  min-width: 0;
+}
+
+.dk-seo-gsc-chart-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+}
+
+.dk-seo-gsc-chart-said,
+.dk-seo-gsc-chart-none {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-chart-none {
+  padding: var(--x24) 0;
+  text-align: center;
+}
+
+/* Google's average position, 1 at the top */
+.dk-seo-gsc-pos {
+  position: relative;
+  height: var(--dk-seo-gsc-pos-h);
+  padding: var(--x8) var(--x8) var(--x20) var(--x32);
+}
+
+.dk-seo-gsc-pos-plot {
+  position: relative;
+  height: 100%;
+}
+
+.dk-seo-gsc-pos-plot svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dk-seo-gsc-pos-grid {
+  stroke: var(--chart-grid);
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-seo-gsc-pos-line {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: var(--chart-line);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-seo-gsc-pos-dot {
+  position: absolute;
+  width: var(--chart-dot);
+  height: var(--chart-dot);
+  border: var(--chart-line) solid var(--green);
+  border-radius: var(--r-pill);
+  background: var(--card);
+  transform: translate(-50%, -50%);
+}
+
+.dk-seo-gsc-pos-y,
+.dk-seo-gsc-pos-x {
+  position: absolute;
+  color: var(--ink-4);
+  font-size: var(--t-tiny);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-pos-y {
+  right: calc(100% + var(--x8));
+  transform: translateY(-50%);
+}
+
+.dk-seo-gsc-pos-x {
+  top: calc(100% + var(--x8));
+  transform: translateX(-50%);
+}
+
+.dk-seo-gsc-pos-x[data-edge="start"] {
+  transform: none;
+}
+
+.dk-seo-gsc-pos-x[data-edge="end"] {
+  transform: translateX(-100%);
+}
+
+/* ---------- the explorer ------------------------------------------------------------------ */
+.dk-seo-gsc-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10) var(--x16);
+  padding: var(--pad) var(--pad) var(--x14);
+}
+
+.dk-seo-gsc-dims {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+/* The board's dimension tabs: pills, the one showing filled green. */
+.dk-seo-gsc-dim {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-sm);
+  padding: 0 var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-dim:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-dim--on,
+.dk-seo-gsc-dim--on:hover {
+  border-color: var(--green-2);
+  background: var(--green-2);
+  color: var(--ink-on-green);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-gsc-bar-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-gsc-early {
+  margin: 0 var(--pad) var(--x10);
+}
+
+.dk-seo-gsc-explorer-absent {
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-gsc-table {
+  min-width: var(--dk-seo-gsc-table-min);
+}
+
+.dk-seo-gsc-itable {
+  min-width: var(--dk-seo-gsc-itable-min);
+}
+
+.dk-seo-gsc-sort {
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: var(--dk-seo-gsc-key-w);
+  min-width: 0;
+}
+
+.dk-seo-gsc-key-link,
+.dk-seo-gsc-key-text {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-key-link {
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-key-link:hover {
+  color: var(--green);
+}
+
+.dk-seo-gsc-key-go {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--x20);
+  height: var(--x20);
+  border-radius: var(--r-chip);
+  color: var(--ink-4);
+  transition: color var(--fast) var(--ease), background-color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-key-go:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-pos-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+.dk-seo-gsc-none {
+  color: var(--ink-4);
+}
+
+.dk-seo-gsc-top {
+  max-width: var(--dk-seo-gsc-top-w);
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10) var(--x16);
+  padding: var(--x12) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gsc-foot-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-seo-gsc-note {
+  padding: 0 var(--pad) var(--pad);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gsc-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x16);
+}
+
+.dk-seo-gsc-showing {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-gsc-pg {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  padding: 0 var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+a.dk-seo-gsc-pg:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-pg--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-gsc-pg--off {
+  color: var(--ink-4);
+  opacity: 0.5;
+}
+
+.dk-seo-gsc-pg--gap {
+  border-color: transparent;
+  color: var(--ink-4);
+}
+
+/* ---------- the inspection, the sitemaps and the copy ------------------------------------ */
+.dk-seo-gsc-lower {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
+.dk-seo-gsc-lower > * {
+  min-width: 0;
+}
+
+.dk-seo-gsc-side {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+}
+
+@container dk-seo-gsc (min-width: 760px) {
+  .dk-seo-gsc-side {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container dk-seo-gsc (min-width: 1240px) {
+  .dk-seo-gsc-lower {
+    grid-template-columns: minmax(0, 1fr) var(--dk-seo-gsc-side-w);
+  }
+
+  .dk-seo-gsc-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-gsc-inspect .dk-card-body {
+  padding-left: 0;
+  padding-right: 0;
+  padding-bottom: 0;
+}
+
+.dk-seo-gsc-inspect-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-gsc-inspect-body > .dk-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-gsc-states {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6) var(--x14);
+  padding: 0 var(--pad) var(--x12);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-states-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-gsc-states-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--amber);
+}
+
+.dk-seo-gsc-states-item--yes .dk-seo-gsc-states-dot {
+  background: var(--green);
+}
+
+.dk-seo-gsc-states-n {
+  color: var(--ink-3);
+}
+
+.dk-seo-gsc-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+  color: var(--ink-2);
+  cursor: help;
+}
+
+.dk-seo-gsc-state > span:not(.dk-sr) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-state--yes .dk-icon {
+  flex: none;
+  color: var(--green);
+}
+
+.dk-seo-gsc-state--no .dk-icon {
+  flex: none;
+  color: var(--amber);
+}
+
+.dk-seo-gsc-canon {
+  color: var(--ink-3);
+}
+
+.dk-seo-gsc-canon--no {
+  color: var(--amber);
+}
+
+.dk-seo-gsc-queue {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-queue--open {
+  color: var(--amber);
+}
+
+.dk-seo-gsc-queue--done {
+  color: var(--green);
+}
+
+.dk-seo-gsc-queue--out {
+  color: var(--ink-4);
+}
+
+.dk-seo-gsc-iaddr .dk-seo-gsc-key-link {
+  display: block;
+  max-width: var(--dk-seo-gsc-iaddr-w);
+}
+
+.dk-seo-gsc-istate .dk-seo-gsc-state {
+  max-width: var(--dk-seo-gsc-istate-w);
+}
+
+.dk-seo-gsc-queue-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-mark {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+}
+
+.dk-seo-gsc-mark-said {
+  max-width: var(--dk-seo-gsc-top-w);
+  color: var(--red);
+  font-size: var(--t-label);
+  white-space: normal;
+}
+
+.dk-seo-gsc-maps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-seo-gsc-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+}
+
+.dk-seo-gsc-map-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-gsc-map-path {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-facts {
+  display: grid;
+  gap: var(--x8);
+  margin: 0;
+}
+
+.dk-seo-gsc-facts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding-bottom: var(--x8);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-gsc-facts > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.dk-seo-gsc-facts dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-facts dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-seo-gsc-facts-of {
+  color: var(--ink-3);
+}
+
+/* ---------- a phone ------------------------------------------------------------------------ */
+@container dk-seo-gsc (max-width: 560px) {
+  .dk-seo-gsc-search {
+    flex-basis: 100%;
+    max-width: none;
+  }
+
+  .dk-seo-gsc-filters-row > .dk-select,
+  .dk-seo-gsc-filter-space {
+    flex: 1 1 calc(50% - var(--x8));
+  }
+
+  .dk-seo-gsc-filter select,
+  .dk-seo-gsc-filter--page select {
+    width: 100%;
+  }
+
+  .dk-seo-gsc-filter--page,
+  .dk-seo-gsc-filter-space.dk-seo-gsc-filter--page {
+    flex-basis: 100%;
+  }
+
+  .dk-seo-gsc-bar-tools {
+    width: 100%;
+  }
+
+  /* On a phone an address gives up room so Google's word for it starts on the first screen. */
+  .dk-seo-gsc-iaddr .dk-seo-gsc-key-link,
+  .dk-seo-gsc-key {
+    max-width: calc(var(--dk-seo-gsc-iaddr-w) * 0.7);
+  }
+}

@@ -216,6 +216,8 @@ interface Serp {
   searches?: {
     query: string;
     lang?: string;
+    /** Balkaris's own organic position as the audit counted it; null or absent when the notes do not record it. */
+    balkaris?: number | null;
     organic?: { position: number; domain: string; url?: string }[];
     localPack?: { position: number; name: string; domain: string | null; note?: string }[];
     aioNamed?: { name: string; domain: string | null }[];
@@ -226,6 +228,23 @@ interface Serp {
 /** How many of a query's top organic results have their page read. */
 const READ_TOP = 5;
 
+/** The site's own host as a sighting's domain (domainKey's form). */
+const OWN_DOMAIN = "balkaris.ch";
+
+/**
+ * Balkaris's own position in a captured search, kept beside the others' so a
+ * page can set a competitor's position against ours for the same search and
+ * day. It is a sighting of our own host and never a competitor: it is not
+ * added to cc_seo_competitors, and its page is not read. Returns whether it
+ * was new.
+ */
+function addOwnSighting(s: { query: string; lang: string | null; cluster: string | null; position: number; day: string; by: string }): boolean {
+  const r = db
+    .prepare("INSERT OR IGNORE INTO cc_seo_sightings (domain, name, engine, kind, query, lang, cluster, position, day, by, note) VALUES (?, ?, 'google', 'organic', ?, ?, ?, ?, ?, ?, ?)")
+    .run(OWN_DOMAIN, "Balkaris", s.query, s.lang, s.cluster, s.position, s.day, s.by, "our own position, as the capture counted it");
+  return r.changes > 0;
+}
+
 export function importSerp(json: Serp): string {
   const s = count();
   const pages = count();
@@ -235,6 +254,7 @@ export function importSerp(json: Serp): string {
   for (const q of json.searches ?? []) {
     const cluster = (clusterOf.get(normal(q.query)) as { cluster: string | null } | undefined)?.cluster ?? null;
     const lang = q.lang ?? null;
+    if (typeof q.balkaris === "number" && Number.isInteger(q.balkaris) && q.balkaris > 0) tallied(s, addOwnSighting({ query: q.query, lang, cluster, position: q.balkaris, day, by }));
     for (const o of q.organic ?? []) {
       const domain = domainKey(o.domain);
       if (!domain) continue;

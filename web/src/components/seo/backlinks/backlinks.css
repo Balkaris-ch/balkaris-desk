@@ -1,0 +1,708 @@
+/*
+ * SEO › Backlinks. Laid out on design/boards/seo/113.webp, panel 6 (the
+ * sheet's 1672×941 at about a quarter scale, enlarged to read it): five tiles,
+ * then the linking-sites table with its search, selects and Export, as wide
+ * as the board's; beside it, where the board has no panel, the pages Bing
+ * knows links to. Under them the profiles and listings and, last, the name,
+ * address and phone side by side with the steps that need the owner.
+ *
+ * Every value is a token; the measures this page needs are named here, the
+ * class names all begin dk-seo-bl-.
+ */
+:root {
+  --dk-seo-bl-mono: 26px;          /* a site's letter square in a row */
+  --dk-seo-bl-clip: 30ch;          /* an anchor text or a page address in a cell */
+  --dk-seo-bl-nap-w: 24ch;         /* a name, address or phone in the registry */
+  --dk-seo-bl-step-w: 22ch;        /* an owner step's title in the registry */
+  --dk-seo-bl-name-w: 30ch;        /* a profile's name in the registry */
+  --dk-seo-bl-said-w: 34ch;        /* a button's sentence */
+  --dk-seo-bl-spark-h: 44px;       /* Bing's daily count under its total */
+  --dk-seo-bl-side: 360px;         /* the column beside the table, at its widest */
+}
+
+.dk-seo-bl {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* The table and, beside it, Bing's pages; one column on a narrower page. */
+.dk-seo-bl-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--dk-seo-bl-side));
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+/* As tall as Bing's panel beside it: the table at the top, its sources at the foot. */
+.dk-seo-bl-sites > .dk-card-body {
+  flex: 1;
+}
+
+.dk-seo-bl-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+/* Beside each other while the table has its width (the page at 1672 and more); one under the other below it. */
+@container (max-width: 1300px) {
+  .dk-seo-bl-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* The registry keeps its columns in view a little longer: shorter values, the rest on hover. */
+  .dk-seo-bl-profiles {
+    --dk-seo-bl-nap-w: 17ch;
+    --dk-seo-bl-name-w: 22ch;
+    --dk-seo-bl-step-w: 15ch;
+  }
+}
+
+@container (max-width: 1000px) {
+  .dk-seo-bl-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- small things every panel uses ---------- */
+
+.dk-seo-bl-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-bl-good {
+  color: var(--green);
+  font-size: var(--t-label);
+}
+
+.dk-seo-bl-bad {
+  color: var(--red);
+  font-size: var(--t-label);
+}
+
+.dk-seo-bl-link {
+  color: var(--green);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-bl-link:hover {
+  text-decoration: underline;
+}
+
+.dk-seo-bl-clip {
+  display: inline-block;
+  max-width: var(--dk-seo-bl-clip);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.dk-seo-bl-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-bl-note {
+  margin-top: var(--x14);
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-bl-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x20);
+}
+
+.dk-seo-bl-foot-part {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-bl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+/* A button and, under it, the desk's sentence about what it did. */
+.dk-seo-bl-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+  max-width: 100%;
+}
+
+.dk-seo-bl-said {
+  max-width: var(--dk-seo-bl-said-w);
+  color: var(--green);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-align: right;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-bl-said--bad {
+  color: var(--red);
+}
+
+/* A link that leads to the owner's step, under a panel's figures. */
+.dk-seo-bl-decision {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  margin-top: var(--x12);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-seo-bl-decision > .dk-icon:first-child {
+  flex: none;
+  color: var(--amber);
+}
+
+.dk-seo-bl-decision > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-bl-decision b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-bl-decision:hover {
+  border-color: var(--amber);
+}
+
+/* ---------- the linking-sites table ---------- */
+
+.dk-seo-bl-sites {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.dk-seo-bl-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
+  gap: var(--x8);
+  padding: var(--x4) var(--pad) var(--x14);
+}
+
+.dk-seo-bl-filters .dk-select {
+  min-width: 0;
+}
+
+.dk-seo-bl-filters .dk-select select {
+  width: 100%;
+}
+
+@container (max-width: 620px) {
+  .dk-seo-bl-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-bl-find {
+    grid-column: 1 / -1;
+  }
+}
+
+.dk-seo-bl-find {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-bl-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-bl-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-bl-find input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-bl-table {
+  border-top: var(--x1) solid var(--line);
+}
+
+/* A site: its letter square, its address and, under it, what it is. */
+.dk-seo-bl-site {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-bl-site-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-bl-host {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+a.dk-seo-bl-host:hover {
+  color: var(--green);
+}
+
+.dk-seo-bl-host--none {
+  color: var(--ink-2);
+}
+
+.dk-seo-bl-ptable .dk-seo-bl-host {
+  max-width: var(--dk-seo-bl-name-w);
+  white-space: nowrap;
+}
+
+.dk-seo-bl-host--out {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-bl-host--out > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-seo-bl-host--out > .dk-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* Under a table of a few rows: where more rows come from. */
+.dk-seo-bl-few {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin: var(--x14) var(--pad) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-bl-few > .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+/* The board's coloured squares: a letter, never another site's own logo (asking for it would tell that site who looks). */
+.dk-seo-bl-mono {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--dk-seo-bl-mono);
+  height: var(--dk-seo-bl-mono);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-bl-mono--ai {
+  border-color: var(--violet-edge);
+  background: var(--violet-ground);
+  color: var(--violet);
+}
+
+.dk-seo-bl-mono--profile {
+  border-color: var(--blue-edge);
+  background: var(--blue-ground);
+  color: var(--blue);
+}
+
+.dk-seo-bl-kind {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--dk-seo-bl-mono);
+  height: var(--dk-seo-bl-mono);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-bl-page,
+.dk-seo-bl-first,
+.dk-seo-bl-state {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-bl-state {
+  align-items: flex-start;
+}
+
+.dk-seo-bl-path {
+  color: var(--ink-2);
+}
+
+.dk-seo-bl-path:hover {
+  color: var(--green);
+}
+
+.dk-seo-bl-figure {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x2);
+  color: var(--ink);
+}
+
+/* ---------- Bing's pages ---------- */
+
+.dk-seo-bl-bing {
+  min-width: 0;
+}
+
+.dk-seo-bl-bing-total {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-bl-bing-total b {
+  margin-right: var(--x4);
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-bl-bing-spark {
+  height: var(--dk-seo-bl-spark-h);
+  margin-top: var(--x10);
+}
+
+.dk-seo-bl-bing-pages {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x12);
+}
+
+.dk-seo-bl-bing-pages li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--table-row);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-bl-bing-pages li .dk-num {
+  color: var(--ink);
+}
+
+/* ---------- profiles and listings ---------- */
+
+.dk-seo-bl-profiles {
+  min-width: 0;
+}
+
+/* A field as a profile states it: its variant letter, the value, and "audit" when it is what the audit saw. */
+.dk-seo-bl-nap {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.dk-seo-bl-nap-value {
+  max-width: var(--dk-seo-bl-nap-w);
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-bl-variant {
+  flex: none;
+  min-width: var(--x20);
+  justify-content: center;
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-bl-seen {
+  flex: none;
+  padding: 0 var(--x4);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-bl-step {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+.dk-seo-bl-step .dk-seo-bl-clip {
+  max-width: var(--dk-seo-bl-step-w);
+  color: var(--ink-2);
+}
+
+.dk-seo-bl-step:hover .dk-seo-bl-clip {
+  color: var(--green);
+}
+
+/* ---------- name, address, phone ---------- */
+
+.dk-seo-bl-napcard {
+  min-width: 0;
+}
+
+.dk-seo-bl-napgrid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-seo-bl-napfield {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-bl-napfield + .dk-seo-bl-napfield {
+  padding-top: var(--x14);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-bl-napfield-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x12);
+}
+
+.dk-seo-bl-napfield-head h3 {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-bl-variants {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-seo-bl-variants li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+}
+
+.dk-seo-bl-variant-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-bl-variant-value {
+  color: var(--ink);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- needs you ---------- */
+
+.dk-seo-bl-needs {
+  min-width: 0;
+}
+
+.dk-seo-bl-needlist {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-bl-need {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--x12);
+  padding-block: var(--x6);
+  border-top: var(--x1) solid var(--line);
+  scroll-margin-top: calc(var(--top) + var(--x16));
+}
+
+.dk-seo-bl-need:first-child {
+  border-top: 0;
+}
+
+.dk-seo-bl-need > .dk-seo-bl-act {
+  padding-top: var(--x4);
+}
+
+.dk-seo-bl-need-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--table-row);
+  color: var(--ink);
+  font-size: var(--t-small);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-bl-need-row::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-bl-need-row:hover .dk-seo-bl-need-title {
+  color: var(--green);
+}
+
+.dk-seo-bl-need-row:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+  border-radius: var(--r-chip);
+}
+
+.dk-seo-bl-need-chev {
+  color: var(--ink-3);
+  transition: transform var(--fast) var(--ease);
+}
+
+details[open] > .dk-seo-bl-need-row .dk-seo-bl-need-chev {
+  transform: rotate(90deg);
+}
+
+.dk-seo-bl-need-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+details[open] > .dk-seo-bl-need-row .dk-seo-bl-need-title {
+  white-space: normal;
+}
+
+.dk-seo-bl-need-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  white-space: nowrap;
+}
+
+.dk-seo-bl-need--done .dk-seo-bl-need-title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.dk-seo-bl-need-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x4) 0 var(--x10) var(--x20);
+}
+
+.dk-seo-bl-need-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-bl-need-why {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* ---------- a phone ---------- */
+
+@media (max-width: 760px) {
+  .dk-seo-bl-need {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-bl-need > .dk-seo-bl-act {
+    align-items: flex-start;
+    padding: 0 0 var(--x6) var(--x20);
+  }
+
+  .dk-seo-bl-need-row {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dk-seo-bl-need-meta {
+    grid-column: 2;
+  }
+
+  .dk-seo-bl-tools {
+    justify-content: flex-start;
+  }
+
+  .dk-seo-bl-act--head {
+    align-items: flex-start;
+  }
+
+  .dk-seo-bl-act--head .dk-seo-bl-said {
+    text-align: left;
+  }
+}

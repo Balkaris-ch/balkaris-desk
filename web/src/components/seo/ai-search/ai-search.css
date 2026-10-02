@@ -1,0 +1,1192 @@
+/*
+ * SEO › AI Search. No board of its own: drawn in the SEO boards' language
+ * (tiles, panels, label-head tables, the Opportunities board's table with
+ * its detail beside it). Every class starts dk-seo-ai-search-; every value
+ * is a token.
+ */
+
+.dk-seo-ai-search {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* Each panel answers to its own width. */
+.dk-seo-ai-search-panel {
+  container-type: inline-size;
+}
+
+/* ---------- words and small marks ---------- */
+
+.dk-seo-ai-search-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-strong {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-ai-search-bad {
+  color: var(--red);
+}
+
+.dk-seo-ai-search-good {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-zero b,
+.dk-seo-ai-search-zero {
+  color: var(--red);
+}
+
+.dk-seo-ai-search-link {
+  color: var(--green);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-decoration-color: var(--green-4);
+  text-underline-offset: var(--x2);
+}
+
+.dk-seo-ai-search-link:hover {
+  text-decoration-color: var(--green);
+}
+
+.dk-seo-ai-search-sublabel {
+  margin-top: var(--x14);
+  margin-bottom: var(--x6);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-ai-search-sublabel:first-child {
+  margin-top: 0;
+}
+
+.dk-seo-ai-search-line {
+  margin-top: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-ai-search-headnote {
+  font-size: var(--t-label);
+}
+
+.dk-seo-ai-search-pad {
+  padding: var(--x10) var(--pad) var(--pad);
+}
+
+.dk-seo-ai-search-pad-x {
+  padding-right: var(--pad);
+  padding-left: var(--pad);
+}
+
+.dk-seo-ai-search-stampline {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--x10);
+}
+
+.dk-seo-ai-search-clip {
+  max-width: calc(var(--x56) * 4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-dot {
+  flex: none;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+.dk-seo-ai-search-tile-under {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+/* The figures' labels are sentences here ("Named without being asked"): they wrap rather than cut. */
+.dk-seo-ai-search-tiles .dk-tile-label-text {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+/* ---------- filter chips (Answers, pages) ---------- */
+
+.dk-seo-ai-search-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-bottom: var(--x12);
+}
+
+.dk-seo-ai-search-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-ai-search-filter:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-ai-search-filter--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-ai-search-filter-n {
+  min-width: var(--x16);
+  padding: 0 var(--x4);
+  border-radius: var(--x4);
+  background: var(--card-3);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--x16);
+  text-align: center;
+}
+
+.dk-seo-ai-search-filter--on .dk-seo-ai-search-filter-n {
+  background: var(--green-4);
+  color: var(--green);
+}
+
+.dk-seo-ai-search-filter:focus-visible,
+.dk-seo-ai-search-qa-open:focus-visible,
+.dk-seo-ai-search-more:focus-visible,
+.dk-seo-ai-search-lever-text > summary:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+/* ---------- What moves the share ---------- */
+
+.dk-seo-ai-search-levers {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-ai-search-lever {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--x12);
+  align-items: start;
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-ai-search-lever:first-child {
+  border-top: 0;
+  padding-top: var(--x2);
+}
+
+.dk-seo-ai-search-lever-text > summary {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  border-radius: var(--r-row);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-ai-search-lever-text > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-ai-search-lever-mark {
+  flex: none;
+  display: inline-flex;
+  padding-top: var(--x2);
+  color: var(--tone);
+}
+
+.dk-seo-ai-search-lever-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-ai-search-lever-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-ai-search-lever-figure {
+  color: var(--tone);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-lever-figure.dk-tone-quiet {
+  color: var(--ink-3);
+}
+
+.dk-seo-ai-search-lever-chev {
+  flex: none;
+  margin-top: var(--x3);
+  margin-left: auto;
+  color: var(--ink-4);
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-seo-ai-search-lever-text[open] .dk-seo-ai-search-lever-chev {
+  transform: rotate(180deg);
+}
+
+.dk-seo-ai-search-lever-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  margin: var(--x8) 0 var(--x2) calc(var(--x16) + var(--x10));
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-ai-search-lever-why {
+  color: var(--ink-2);
+}
+
+.dk-seo-ai-search-lever-detail {
+  color: var(--ink-3);
+}
+
+.dk-seo-ai-search-lever-step,
+.dk-seo-ai-search-check-fix {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-ai-search-lever-step .dk-icon,
+.dk-seo-ai-search-check-fix .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--green);
+}
+
+.dk-seo-ai-search-lever-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--x6) var(--x8);
+  max-width: calc(var(--x56) * 5);
+}
+
+.dk-seo-ai-search-lever-act .dk-seo-overview-act {
+  align-items: flex-end;
+}
+
+.dk-seo-ai-search-lever-act .dk-chip,
+.dk-seo-ai-search-lever-more {
+  margin-top: var(--x4);
+}
+
+.dk-seo-ai-search-lever-more {
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+/* ---------- Answers by assistant ---------- */
+
+.dk-seo-ai-search-engines td {
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-engine-bar {
+  width: calc(var(--x56) + var(--x40));
+}
+
+.dk-seo-ai-search-engine-bar .dk-hbar {
+  display: block;
+  width: 100%;
+}
+
+/* The rounds by share: the day, the bar (a full bar is every answer), the counts beside it. */
+.dk-seo-ai-search-round-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-round-list li {
+  display: grid;
+  grid-template-columns: calc(var(--x56) + var(--x40)) minmax(var(--x56), 1fr) auto auto;
+  gap: var(--x12);
+  align-items: center;
+}
+
+.dk-seo-ai-search-round-share .dk-hbar {
+  display: block;
+  width: 100%;
+}
+
+.dk-seo-ai-search-round-n {
+  white-space: nowrap;
+}
+
+/* Each assistant on two lines, for a phone (shown by the narrow-panel rule at the end). */
+.dk-seo-ai-search-engine-list {
+  flex-direction: column;
+}
+
+.dk-seo-ai-search-engine-list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-engine-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dk-seo-ai-search-engine-list-head,
+.dk-seo-ai-search-engine-list-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x2) var(--x12);
+}
+
+.dk-seo-ai-search-engine-list-figures {
+  justify-content: flex-start;
+  color: var(--ink-2);
+}
+
+/* ---------- Questions and what each assistant said ---------- */
+
+.dk-seo-ai-search-qa {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+@container (max-width: 1000px) {
+  .dk-seo-ai-search-qa {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-ai-search-qa-row {
+  cursor: pointer;
+}
+
+.dk-seo-ai-search-qa-q {
+  max-width: 0;
+  width: 100%;
+  min-width: calc(var(--x56) * 4);
+}
+
+.dk-seo-ai-search .dk-table tbody td.dk-seo-ai-search-qa-q {
+  padding-top: var(--x6);
+  padding-bottom: var(--x6);
+}
+
+.dk-seo-ai-search-qa-open {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dk-seo-ai-search-qa-text {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-qa-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-ai-search-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x3);
+  color: var(--tone);
+  font-size: var(--t-label);
+}
+
+.dk-seo-ai-search-cell--none {
+  color: var(--ink-4);
+}
+
+.dk-seo-ai-search-qa-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+  max-height: calc(var(--x56) * 10);
+  overflow-y: auto;
+  padding: var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--card-2);
+  scrollbar-color: var(--line-2) transparent;
+  scrollbar-width: thin;
+}
+
+/* One under the other, the answers take the room they need. */
+@container (max-width: 1000px) {
+  .dk-seo-ai-search-qa-detail {
+    max-height: none;
+  }
+}
+
+.dk-seo-ai-search-qa-title {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-said {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  margin-top: var(--x4);
+}
+
+.dk-seo-ai-search-said-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line-2);
+}
+
+.dk-seo-ai-search-said-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+}
+
+.dk-seo-ai-search-said-line {
+  display: grid;
+  grid-template-columns: calc(var(--x40) + var(--x8)) minmax(0, 1fr);
+  gap: var(--x8);
+  align-items: start;
+}
+
+.dk-seo-ai-search-said-label {
+  padding-top: var(--x3);
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-ai-search-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-ai-search-name,
+.dk-seo-ai-search-source {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  max-width: 100%;
+  padding: var(--x2) var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-ai-search-name--us,
+.dk-seo-ai-search-source--us {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-ai-search-source--bad {
+  border-color: var(--red-edge);
+}
+
+.dk-seo-ai-search-source--warn {
+  border-color: var(--amber-edge);
+}
+
+.dk-seo-ai-search-source--good {
+  border-color: var(--green-4);
+}
+
+.dk-seo-ai-search-source-dot {
+  flex: none;
+  display: inline-block;
+  width: var(--x6);
+  height: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+.dk-seo-ai-search-said-text {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-ai-search-said-by,
+.dk-seo-ai-search-said-note {
+  font-size: var(--t-label);
+}
+
+.dk-seo-ai-search-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  padding-top: var(--x8);
+  border-top: var(--x1) solid var(--line-2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-ai-search-legend .dk-seo-ai-search-source-dot {
+  margin-left: var(--x4);
+}
+
+/* ---------- Where the answers look, Named instead ---------- */
+
+.dk-seo-ai-search-dir {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--x2);
+  max-width: calc(var(--x56) * 4);
+}
+
+.dk-seo-ai-search-dir .dk-seo-ai-search-quiet {
+  overflow: hidden;
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search .dk-table tbody td .dk-seo-ai-search-dir {
+  padding: var(--x4) 0;
+}
+
+.dk-seo-ai-search-tasks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x12) var(--pad) 0;
+}
+
+.dk-seo-ai-search-task {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search .dk-table td.dk-seo-ai-search-wrap {
+  min-width: calc(var(--x56) * 2);
+  font-size: var(--t-label);
+  white-space: normal;
+}
+
+/* ---------- Answers by kind and language ---------- */
+
+.dk-seo-ai-search-kinds {
+  margin-top: var(--x16);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x20);
+}
+
+@container (max-width: 520px) {
+  .dk-seo-ai-search-kinds {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-ai-search-kind-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-kind-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--x4) var(--x10);
+  align-items: center;
+}
+
+.dk-seo-ai-search-kind-list .dk-hbar {
+  grid-column: 1 / -1;
+  display: block;
+  width: 100%;
+}
+
+/* ---------- visits and crawlers ---------- */
+
+.dk-seo-ai-search-traffic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-ai-search-figure-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-seo-ai-search-big {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-ai-search-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x20);
+}
+
+@container (max-width: 520px) {
+  .dk-seo-ai-search-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-ai-search-landing,
+.dk-seo-ai-search-agents {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-landing li,
+.dk-seo-ai-search-agents li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-ai-search-agents li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.dk-seo-ai-search-path {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-seo-ai-search-path:hover {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-robots {
+  margin-top: var(--x14);
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-ai-search-robot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+  margin-bottom: var(--x8);
+}
+
+/* ---------- readiness ---------- */
+
+.dk-seo-ai-search-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-ai-search-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--x10);
+  align-items: start;
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-check:first-child {
+  border-top: 0;
+  padding-top: var(--x2);
+}
+
+.dk-seo-ai-search-check-mark {
+  display: inline-flex;
+  padding-top: var(--x1);
+  color: var(--tone);
+}
+
+.dk-seo-ai-search-check-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  min-width: 0;
+}
+
+.dk-seo-ai-search-tally-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+}
+
+.dk-seo-ai-search-tally-bar {
+  width: 30%;
+}
+
+.dk-seo-ai-search-tally-bar .dk-hbar {
+  display: block;
+  width: 100%;
+}
+
+.dk-seo-ai-search-pages {
+  min-width: calc(var(--x56) * 14);
+}
+
+.dk-seo-ai-search-page {
+  max-width: 0;
+  width: 100%;
+  min-width: calc(var(--x56) * 4);
+}
+
+.dk-seo-ai-search .dk-table tbody td.dk-seo-ai-search-page {
+  padding-top: var(--x4);
+  padding-bottom: var(--x4);
+}
+
+.dk-seo-ai-search-page-link {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-ai-search-page-title {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-page-link:hover .dk-seo-ai-search-page-title {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-page-link .dk-seo-ai-search-quiet {
+  overflow: hidden;
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-page-open {
+  width: var(--x40);
+}
+
+.dk-seo-ai-search-page-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  padding: 0;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-3);
+  cursor: pointer;
+}
+
+.dk-seo-ai-search-page-toggle:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-ai-search-page-toggle:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-seo-ai-search .dk-table tbody tr.dk-seo-ai-search-page-more,
+.dk-seo-ai-search .dk-table tbody tr.dk-seo-ai-search-page-more:hover {
+  background: var(--card-2);
+}
+
+.dk-seo-ai-search .dk-table tbody tr.dk-seo-ai-search-page-more td {
+  height: auto;
+  white-space: normal;
+}
+
+.dk-seo-ai-search-page-detail {
+  /* The row is as wide as the table scrolls; the reading stays as wide as the panel. */
+  position: sticky;
+  left: var(--pad);
+  max-width: calc(var(--x56) * 12);
+  padding: var(--x10) 0 var(--x12);
+}
+
+.dk-seo-ai-search-page-checks .dk-seo-ai-search-check {
+  padding: var(--x8) 0;
+}
+
+.dk-seo-ai-search-page-checks-foot {
+  margin-top: var(--x8);
+}
+
+.dk-seo-ai-search-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x6);
+  width: 100%;
+  padding: var(--x10) var(--pad);
+  border: 0;
+  border-top: var(--x1) solid var(--line);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  background: none;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.dk-seo-ai-search-more:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ---------- What to change on the site ---------- */
+
+.dk-seo-ai-search-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  margin-bottom: var(--x12);
+}
+
+.dk-seo-ai-search-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-type:hover {
+  color: var(--ink);
+}
+
+.dk-seo-ai-search-opp {
+  max-width: 0;
+  width: 100%;
+  min-width: calc(var(--x56) * 4);
+}
+
+.dk-seo-ai-search .dk-table tbody td.dk-seo-ai-search-opp {
+  padding-top: var(--x6);
+  padding-bottom: var(--x6);
+}
+
+.dk-seo-ai-search-opp > .dk-seo-ai-search-dot {
+  display: inline-block;
+  margin-right: var(--x8);
+  vertical-align: top;
+  margin-top: var(--x6);
+}
+
+.dk-seo-ai-search-opp-text {
+  display: inline-flex;
+  flex-direction: column;
+  max-width: calc(100% - var(--x16));
+  vertical-align: top;
+}
+
+.dk-seo-ai-search-opp-title {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-opp-text:hover .dk-seo-ai-search-opp-title {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-opp-text .dk-seo-ai-search-quiet {
+  overflow: hidden;
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-ai-search-opp-act {
+  white-space: nowrap;
+}
+
+/* Each opportunity a card, for a phone (shown by the narrow-panel rule at the end). */
+.dk-seo-ai-search-opp-cards {
+  flex-direction: column;
+}
+
+.dk-seo-ai-search-opp-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x10) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-ai-search-opp-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-ai-search-opp-card-title {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-opp-card-title .dk-seo-ai-search-dot {
+  margin-top: var(--x6);
+}
+
+.dk-seo-ai-search-opp-card-text:hover .dk-seo-ai-search-opp-card-title {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-opp-card-text .dk-seo-ai-search-quiet {
+  padding-left: var(--x16);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-ai-search-opp-card-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding-left: var(--x16);
+}
+
+/* Each question a card, for a phone (shown by the narrow-panel rule at the end). */
+.dk-seo-ai-search-qa-cards {
+  flex-direction: column;
+}
+
+.dk-seo-ai-search-qa-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-ai-search-qa-card:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dk-seo-ai-search-qa-card-text {
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-qa-card-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x12);
+}
+
+.dk-seo-ai-search-qa-card-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-ai-search-qa-card-mark .dk-seo-ai-search-quiet {
+  font-size: var(--t-label);
+}
+
+.dk-seo-ai-search-qa-card--open .dk-seo-ai-search-qa-card-text {
+  color: var(--green);
+}
+
+/* ---------- imports ---------- */
+
+.dk-seo-ai-search-import {
+  max-height: calc(var(--table-row) * 11);
+  overflow: auto;
+}
+
+.dk-seo-ai-search-howto {
+  margin-top: var(--x12);
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+/* ---------- the forms in a dialog ---------- */
+
+.dk-seo-ai-search-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+/* The form spaces its fields with its gap, side by side or one under another. */
+.dk-seo-ai-search-form .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-seo-ai-search-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--x12);
+}
+
+@media (max-width: 560px) {
+  .dk-seo-ai-search-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- narrow panels ---------- */
+
+@container (max-width: 520px) {
+  .dk-seo-ai-search-lever {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-ai-search-lever-act {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 0;
+    margin-left: calc(var(--x16) + var(--x10));
+  }
+
+  .dk-seo-ai-search-check {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .dk-seo-ai-search-check > .dk-chip {
+    grid-column: 2;
+    justify-self: start;
+  }
+
+  .dk-seo-ai-search-round-list li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--x2) var(--x12);
+  }
+
+  .dk-seo-ai-search-round-share {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* ---------- a phone: tables whose key columns would scroll away become cards ---------- */
+
+/* The card forms are drawn only in a narrow panel; the tables only in a wide one. */
+.dk-seo-ai-search-narrow {
+  display: none;
+}
+
+@container (max-width: 560px) {
+  .dk-seo-ai-search-wide {
+    display: none;
+  }
+
+  .dk-seo-ai-search-narrow {
+    display: flex;
+  }
+}

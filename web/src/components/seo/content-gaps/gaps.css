@@ -1,0 +1,1310 @@
+/*
+ * SEO › Content Gaps. Measured on design/boards/seo/113.webp, panel 5
+ * (1672×941): the view switch under the tabs; the coverage list on the left
+ * (a name, a bar, a share); the open group on the right with its button,
+ * its three tables and the board's "Missing topics · Low coverage ·
+ * Suggested" as tabs. Above them, added for the owner's brief, one low band
+ * with the two largest gaps (German, price questions), kept to about 200px
+ * so the switch, the list and the open group still begin on the first
+ * screen; the whole table's coverage sits beside the switch.
+ *
+ * Every value is a token; the measures this page needs are named here, the
+ * class names all begin dk-seo-gaps-.
+ */
+:root {
+  --dk-seo-gaps-list-min: 288px;      /* the coverage list, before it goes above the panel */
+  --dk-seo-gaps-list-h: 860px;        /* the coverage list scrolls past this */
+  --dk-seo-gaps-split-h: 8px;         /* the two-part bar of a large card */
+  --dk-seo-gaps-bar-min: 160px;       /* the two-part bar, before its key goes under it */
+  --dk-seo-gaps-phrases-min: 620px;   /* a phrase table, before it scrolls sideways (a phone hides two columns instead) */
+  --dk-seo-gaps-figure: 40px;         /* a large card's figure: the gap must be seen first */
+  --dk-seo-gaps-said-w: 34ch;         /* a button's sentence */
+  --dk-seo-gaps-note-w: 96ch;         /* a panel's note */
+  --dk-seo-gaps-name-w: 24ch;         /* a cluster's name in a pill */
+  --dk-seo-gaps-cell-w: 22ch;         /* a clipped cell */
+}
+
+.dk-seo-gaps {
+  container: dk-seo-gaps / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-gaps-pad {
+  padding: var(--x14) var(--pad) var(--pad);
+}
+
+.dk-seo-gaps-none {
+  padding: var(--x16) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-quiet {
+  color: var(--ink-4);
+}
+
+.dk-seo-gaps-nowrap {
+  white-space: nowrap;
+}
+
+/* ---------- the two largest gaps ---------- */
+
+/* One low band: the board's switch, list and open group must still begin on the first screen. */
+.dk-seo-gaps-headline {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* A large card answers to its own width: "The site" goes under the figure when it is narrow. */
+.dk-seo-gaps-big {
+  container: dk-seo-gaps-card / inline-size;
+  gap: var(--x10);
+  padding: var(--x12) var(--pad) var(--x14);
+}
+
+.dk-seo-gaps-big-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x6) var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-gaps-big-eyebrow {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x8);
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-big--german .dk-seo-gaps-big-eyebrow > .dk-icon {
+  color: var(--violet);
+}
+
+.dk-seo-gaps-big--price .dk-seo-gaps-big-eyebrow > .dk-icon {
+  color: var(--amber);
+}
+
+.dk-seo-gaps-big-name {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-title);
+}
+
+.dk-seo-gaps-big-links {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-seo-gaps-big-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-gaps-big-figures {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: var(--x8) var(--x16);
+}
+
+.dk-seo-gaps-big-figure {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--x12);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-tight);
+}
+
+.dk-seo-gaps-big-figure > b {
+  color: var(--ink);
+  font-size: var(--dk-seo-gaps-figure);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: 1;
+}
+
+.dk-seo-gaps-big--german .dk-seo-gaps-big-figure > b {
+  color: var(--violet);
+}
+
+.dk-seo-gaps-big--price .dk-seo-gaps-big-figure > b {
+  color: var(--amber);
+}
+
+.dk-seo-gaps-big-figure > span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding-bottom: var(--x2);
+}
+
+.dk-seo-gaps-big-figure small {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* "The site": a label, then the figure and its words on one line. */
+.dk-seo-gaps-big-side {
+  display: grid;
+  grid-template-columns: auto auto;
+  justify-content: end;
+  align-items: baseline;
+  gap: var(--x2) var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-seo-gaps-big-side-label {
+  grid-column: 1 / -1;
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-gaps-big-side > b {
+  color: var(--red);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-big-side > b small {
+  color: var(--ink-3);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+}
+
+/* A laptop's or a phone's card: "The site" goes under the figure on one line, its label first; the start's count is in its title. */
+@container dk-seo-gaps-card (max-width: 560px) {
+  .dk-seo-gaps-big-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-gaps-big-side {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    align-items: baseline;
+    gap: var(--x2) var(--x8);
+    text-align: left;
+  }
+
+  .dk-seo-gaps-start-meta {
+    display: none;
+  }
+}
+
+/* The bar and its key on one line. */
+.dk-seo-gaps-split {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x14);
+}
+
+.dk-seo-gaps-split-bar {
+  display: flex;
+  flex: 1 1 var(--dk-seo-gaps-bar-min);
+  gap: var(--x2);
+  height: var(--dk-seo-gaps-split-h);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.dk-seo-gaps-split-part {
+  flex-basis: 0;
+  background: var(--tone);
+}
+
+.dk-seo-gaps-split-part.dk-tone-quiet {
+  background: var(--ink-4);
+}
+
+.dk-seo-gaps-split-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x14);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-split-key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-split-key b {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-gaps-split-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+.dk-seo-gaps-big-line {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-big-line b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+/* Where to start, the owner's part and the audit's steps, behind a hairline. */
+.dk-seo-gaps-big-act {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x12);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-start {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x8);
+  min-width: 0;
+  margin-right: auto;
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-start-label {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-gaps-start-name {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-gaps-start-name:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-start-meta {
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-owner-link {
+  display: inline-flex;
+}
+
+.dk-seo-gaps-owner-link:hover .dk-chip {
+  color: var(--ink);
+}
+
+.dk-seo-gaps-owner-step summary,
+.dk-seo-gaps-steps summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-gaps-owner-step summary::-webkit-details-marker,
+.dk-seo-gaps-steps summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-gaps-owner-step summary:hover,
+.dk-seo-gaps-steps summary:hover {
+  color: var(--ink);
+}
+
+.dk-seo-gaps-steps[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+/* Open, the steps take the band's whole width, under the line. */
+.dk-seo-gaps-steps[open] {
+  flex-basis: 100%;
+  order: 9;
+}
+
+.dk-seo-gaps-owner-step p {
+  margin-top: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-owner-why {
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-steps-list {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x8);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-step {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-step-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-gaps-step-title {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-step-meta,
+.dk-seo-gaps-step-state {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+a.dk-seo-gaps-step-state {
+  flex: none;
+  color: var(--ink-3);
+}
+
+a.dk-seo-gaps-step-state:hover {
+  color: var(--green);
+}
+
+/* The whole keyword table's coverage, beside the view switch. */
+.dk-seo-gaps-table {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-table b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+@container dk-seo-gaps (max-width: 900px) {
+  .dk-seo-gaps-headline {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- the view switch ---------- */
+
+.dk-seo-gaps-explore {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-gaps-switchrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+  min-width: 0;
+}
+
+.dk-seo-gaps-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-gaps-switch-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl);
+  padding: 0 var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-gaps-switch-item:hover {
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.dk-seo-gaps-switch-item--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-gaps-switch-count {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-switch-item--on .dk-seo-gaps-switch-count {
+  color: var(--green);
+}
+
+/* ---------- the list and the open group ---------- */
+
+.dk-seo-gaps-main {
+  display: grid;
+  grid-template-columns: minmax(var(--dk-seo-gaps-list-min), 1fr) minmax(0, 2.6fr);
+  align-items: start;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-gaps-list {
+  max-height: var(--dk-seo-gaps-list-h);
+  overflow: hidden;
+}
+
+.dk-seo-gaps-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding: var(--x14) var(--pad) var(--x10);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-list-title {
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-gaps-list-filters,
+.dk-seo-gaps-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-gaps-list-filter {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-list-filter:hover {
+  color: var(--ink);
+}
+
+.dk-seo-gaps-list-filter--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-gaps-list-rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dk-seo-gaps-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) var(--pad) var(--x10) calc(var(--pad) - var(--x2));
+  border-left: var(--x2) solid transparent;
+  border-bottom: var(--x1) solid var(--line);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-gaps-group:hover {
+  background: var(--hover);
+}
+
+.dk-seo-gaps-group--on {
+  border-left-color: var(--green);
+  background: var(--card-2);
+}
+
+.dk-seo-gaps-group-top {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-gaps-group-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-group-langs {
+  display: inline-flex;
+  gap: var(--x4);
+}
+
+.dk-seo-gaps-group-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x2);
+}
+
+.dk-seo-gaps-group-lang--gap {
+  color: var(--red);
+}
+
+.dk-seo-gaps-group-lang--ok {
+  color: var(--green);
+}
+
+.dk-seo-gaps-group-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-group-figure b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-gaps-group-meta {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-group-price {
+  color: var(--amber);
+}
+
+.dk-seo-gaps-group--on .dk-bar,
+.dk-seo-gaps-group .dk-bar {
+  height: var(--x6);
+}
+
+/* The open group: board 113's right panel. */
+.dk-seo-gaps-panel {
+  min-width: 0;
+}
+
+.dk-seo-gaps-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x14) var(--pad) var(--x10);
+}
+
+.dk-seo-gaps-panel-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-gaps-panel-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+  line-height: var(--x20);
+}
+
+.dk-seo-gaps-panel-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-back:hover {
+  color: var(--ink);
+}
+
+.dk-seo-gaps-clusters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-gaps-cluster {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+  padding: var(--x3) var(--x8);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-cluster--more {
+  border-color: var(--line-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-cluster--more:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-cluster--gap {
+  border-color: var(--red-edge);
+}
+
+.dk-seo-gaps-cluster-name {
+  max-width: var(--dk-seo-gaps-name-w);
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-cluster-name:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-cluster-page {
+  max-width: var(--dk-seo-gaps-name-w);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-cluster--gap .dk-seo-gaps-cluster-page {
+  color: var(--red);
+}
+
+.dk-seo-gaps-cluster-n {
+  color: var(--ink-4);
+}
+
+.dk-seo-gaps-tabs {
+  padding: 0 var(--pad);
+}
+
+.dk-seo-gaps-panel-body {
+  min-width: 0;
+}
+
+.dk-seo-gaps-panel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+  padding: var(--x10) var(--pad) var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-panel-note {
+  max-width: var(--dk-seo-gaps-note-w);
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* The table as a form, with its bar. */
+.dk-seo-gaps-formbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x12);
+  padding: var(--x10) var(--pad);
+}
+
+.dk-seo-gaps-formbar-text {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-formbar-end {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x8);
+  margin-left: auto;
+}
+
+.dk-seo-gaps-phrase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  padding: var(--x4) 0;
+}
+
+.dk-seo-gaps-phrase-text {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-seo-gaps-phrase-text:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-phrase-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x6);
+  min-width: 0;
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-phrase-cluster {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-phrases > .dk-table {
+  min-width: var(--dk-seo-gaps-phrases-min);
+}
+
+/* A phrase's impressions under it: only on a phone, where their column gives way. */
+.dk-seo-gaps-phrase-imp {
+  display: none;
+}
+
+.dk-seo-gaps-cell-clip {
+  display: block;
+  max-width: var(--dk-seo-gaps-cell-w);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- small marks ---------- */
+
+.dk-seo-gaps-lang {
+  flex: none;
+  padding: 0 var(--x4);
+  border: var(--x1) solid var(--blue-edge);
+  border-radius: var(--x4);
+  color: var(--blue);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-chip);
+  line-height: var(--x14);
+}
+
+.dk-seo-gaps-lang--de {
+  border-color: var(--violet-edge);
+  color: var(--violet);
+}
+
+.dk-seo-gaps-prio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--tone);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-gaps-prio.dk-tone-quiet {
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-prio-dot {
+  flex: none;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+.dk-seo-gaps-flag {
+  padding: 0 var(--x4);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--x14);
+}
+
+.dk-seo-gaps-flag--price {
+  border-color: var(--amber-edge);
+  color: var(--amber);
+}
+
+.dk-seo-gaps-intent {
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-sources {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-gaps-source {
+  padding: 0 var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--x16);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-source--autocomplete {
+  border-color: var(--green-4);
+  color: var(--green);
+}
+
+.dk-seo-gaps-source--gsc {
+  border-color: var(--blue-edge);
+  color: var(--blue);
+}
+
+.dk-seo-gaps-brief {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-brief--busy {
+  color: var(--blue);
+}
+
+.dk-seo-gaps-brief--done {
+  color: var(--green);
+}
+
+.dk-seo-gaps-brief--bad {
+  color: var(--red);
+}
+
+.dk-seo-gaps-brief--quiet {
+  color: var(--ink-4);
+}
+
+.dk-seo-gaps-act {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6) var(--x8);
+}
+
+.dk-seo-gaps-act--under {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dk-seo-gaps-said {
+  max-width: var(--dk-seo-gaps-said-w);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-said--under {
+  text-align: right;
+}
+
+.dk-seo-gaps-said--bad {
+  color: var(--red);
+}
+
+.dk-seo-gaps-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x14);
+  padding: var(--x10) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-pager-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-2);
+}
+
+.dk-seo-gaps-pager-link:hover {
+  color: var(--green);
+}
+
+/* ---------- suggested pages ---------- */
+
+.dk-seo-gaps-suggest-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--x16);
+  padding: var(--x14) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-suggest-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+/* The audit's sentence, whole in its title, two lines here. */
+.dk-seo-gaps-suggest-page {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-body);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.dk-seo-gaps-suggest-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-suggest-link {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-gaps-suggest-link:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-suggest-examples {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+/* ---------- one cluster ---------- */
+
+.dk-seo-gaps-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+  padding-bottom: var(--pad);
+}
+
+.dk-seo-gaps-said-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding: 0 var(--pad);
+}
+
+.dk-seo-gaps-said-list dt,
+.dk-seo-gaps-method dt {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-gaps-said-list dd,
+.dk-seo-gaps-method dd {
+  margin-bottom: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-more {
+  padding: 0 var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-more a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-gaps-more a:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-seen {
+  padding: 0 var(--pad);
+}
+
+.dk-seo-gaps-sub-title {
+  margin-bottom: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-gaps-seen li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x8);
+  padding: var(--x4) 0;
+  border-bottom: var(--x1) solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-stamp {
+  padding: 0 var(--pad);
+}
+
+/* ---------- the keyword and competitor views ---------- */
+
+.dk-seo-gaps-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x20);
+  padding: 0 var(--pad) var(--x10);
+}
+
+.dk-seo-gaps-wide-body {
+  min-width: 0;
+}
+
+.dk-seo-gaps-comp-block {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-comp-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x10);
+  padding: var(--x12) var(--pad) var(--x6);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-gaps-comp-title a:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-comp-n {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+}
+
+/* ---------- needs you and the method ---------- */
+
+.dk-seo-gaps-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--gap);
+}
+
+.dk-seo-gaps-needs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-gaps-need {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gaps-need:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dk-seo-gaps-need-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-need-title {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  color: var(--ink);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-gaps-need--done .dk-seo-gaps-need-title {
+  color: var(--ink-3);
+}
+
+/* ---------- narrower ---------- */
+
+/* The list goes above the open group only when the table would be crushed beside it: a laptop keeps the board's two columns. */
+@container dk-seo-gaps (max-width: 900px) {
+  .dk-seo-gaps-main,
+  .dk-seo-gaps-lower {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-gaps-list {
+    max-height: none;
+  }
+
+  .dk-seo-gaps-list-rows {
+    max-height: calc(var(--dk-seo-gaps-list-h) / 2);
+  }
+}
+
+@media (max-width: 640px) {
+  .dk-seo-gaps-switch {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--x4);
+  }
+
+  .dk-seo-gaps-big-figures {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-gaps-big-side {
+    justify-content: start;
+    text-align: left;
+  }
+
+  .dk-seo-gaps-step,
+  .dk-seo-gaps-need {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  /* A phrase table keeps the phrase, the tick and the action in sight: impressions go under the phrase, "Found in" and "Intent" give way. */
+  .dk-seo-gaps-phrases > .dk-table {
+    min-width: 0;
+  }
+
+  .dk-seo-gaps-phrases th:nth-child(3),
+  .dk-seo-gaps-phrases td:nth-child(3),
+  .dk-seo-gaps-phrases th:nth-child(4),
+  .dk-seo-gaps-phrases td:nth-child(4),
+  .dk-seo-gaps-phrases th:nth-child(5),
+  .dk-seo-gaps-phrases td:nth-child(5) {
+    display: none;
+  }
+
+  .dk-seo-gaps-phrases .dk-seo-gaps-phrase-text {
+    white-space: normal;
+  }
+
+  .dk-seo-gaps-phrase-imp {
+    display: inline;
+  }
+
+  .dk-seo-gaps-act--under {
+    align-items: flex-start;
+  }
+
+  .dk-seo-gaps-suggest-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

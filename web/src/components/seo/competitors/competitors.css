@@ -1,0 +1,1214 @@
+/*
+ * SEO › Competitors. No board of its own: drawn in the SEO boards' manner
+ * (design/boards/seo/109, 111, 113): five tiles; the list with its chips and
+ * filters on the left, the chosen competitor in detail beside it; what they
+ * have that we lack, the directories in the results and the weekly read
+ * under them; our clusters against who ranks across the page.
+ *
+ * Every value is a token; the measures this page needs are named here, and
+ * every class name begins dk-seo-competitors-.
+ */
+:root {
+  --dk-seo-competitors-mark: 26px;        /* a competitor's initial in the list */
+  --dk-seo-competitors-name-w: 26ch;      /* a name or a host in the list */
+  --dk-seo-competitors-mini-h: 18px;      /* a small mark: DE, CHF, FAQ */
+  --dk-seo-competitors-page: 28px;        /* a pager button */
+  --dk-seo-competitors-said-w: 34ch;      /* a button's answer */
+  --dk-seo-competitors-beside-what: 132px; /* "Beside Balkaris": the label column */
+  --dk-seo-competitors-lack-what: 188px;  /* "What they have that we lack": the label column */
+  --dk-seo-competitors-pos-w: 28px;       /* "#1" before a rival */
+  --dk-seo-competitors-head-min: 260px;   /* the list's title and line, before its select goes under them */
+  --dk-seo-competitors-detail-min: 640px; /* the detail beside a short list */
+}
+
+.dk-seo-competitors {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---------- the list and the detail beside it ---------- */
+.dk-seo-competitors-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.05fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+.dk-seo-competitors-area-list,
+.dk-seo-competitors-area-detail {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-competitors-area-list > .dk-card,
+.dk-seo-competitors-area-detail > .dk-card {
+  flex: 1;
+}
+
+/*
+ * Beside the list, the detail is exactly as tall as the list (board 111) and
+ * scrolls inside itself below its head; the list decides the row's height.
+ */
+.dk-seo-competitors-area-detail {
+  position: relative;
+  min-height: var(--dk-seo-competitors-detail-min);
+}
+
+.dk-seo-competitors-area-detail > .dk-seo-competitors-detail {
+  position: absolute;
+  inset: 0;
+}
+
+.dk-seo-competitors-detail > .dk-card-body {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-2) transparent;
+}
+
+.dk-seo-competitors-under {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: stretch;
+}
+
+.dk-seo-competitors-under-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-seo-competitors-under-side > .dk-seo-competitors-dirs {
+  flex: 1;
+}
+
+@container (max-width: 1180px) {
+  .dk-seo-competitors-main-grid,
+  .dk-seo-competitors-under {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* One column: the detail comes after the list at its own height. */
+  .dk-seo-competitors-area-detail {
+    min-height: 0;
+  }
+
+  .dk-seo-competitors-area-detail > .dk-seo-competitors-detail {
+    position: static;
+  }
+
+  .dk-seo-competitors-detail > .dk-card-body {
+    overflow: visible;
+  }
+}
+
+/* ---------- small things every part uses ---------- */
+.dk-seo-competitors-quiet {
+  color: var(--ink-3);
+}
+
+.dk-seo-competitors-none {
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+.dk-seo-competitors-small {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-competitors-note {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
+}
+
+.dk-seo-competitors-pad {
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-competitors-sr {
+  position: absolute;
+  width: var(--x1);
+  height: var(--x1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-chip.dk-seo-competitors-mini {
+  height: var(--dk-seo-competitors-mini-h);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-price {
+  color: var(--green);
+}
+
+.dk-seo-competitors-ext {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-2);
+}
+
+.dk-seo-competitors-ext:hover {
+  color: var(--green);
+}
+
+.dk-seo-competitors-task {
+  display: -webkit-box;
+  margin-top: var(--x4);
+  overflow: hidden;
+  color: var(--amber);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.dk-seo-competitors-task-link {
+  color: var(--amber);
+  font-size: var(--t-label);
+  text-decoration: underline;
+  text-decoration-color: var(--amber-edge);
+  text-underline-offset: var(--x2);
+}
+
+.dk-seo-competitors-task-link:hover {
+  text-decoration-color: var(--amber);
+}
+
+/* A button and the server's sentence about it. */
+.dk-seo-competitors-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+}
+
+.dk-seo-competitors-said {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--x4);
+  max-width: var(--dk-seo-competitors-said-w);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-competitors-said .dk-icon {
+  flex: none;
+  margin-top: var(--x1);
+  color: var(--green);
+}
+
+.dk-seo-competitors-said--bad,
+.dk-seo-competitors-said--bad .dk-icon {
+  color: var(--red);
+}
+
+.dk-seo-competitors-said-link {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+/* ---------- the list ---------- */
+.dk-seo-competitors-list {
+  container-type: inline-size;
+}
+
+.dk-seo-competitors-list > .dk-card-head {
+  flex-wrap: wrap;
+}
+
+.dk-seo-competitors-list > .dk-card-head > .dk-card-heading {
+  flex: 1 1 var(--dk-seo-competitors-head-min);
+}
+
+.dk-seo-competitors-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  padding: var(--x4) var(--pad) 0;
+}
+
+.dk-seo-competitors-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x8) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-competitors-chip:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-competitors-chip--on,
+.dk-seo-competitors-chip--on:hover {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-seo-competitors-chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x20);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  background: var(--card-3);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-competitors-chip--on .dk-seo-competitors-chip-n {
+  background: var(--green);
+  color: var(--bg);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-competitors-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--x8);
+  padding: var(--x12) var(--pad) var(--x14);
+}
+
+.dk-seo-competitors-filters .dk-select {
+  min-width: 0;
+}
+
+.dk-seo-competitors-filters .dk-select select {
+  width: 100%;
+}
+
+.dk-seo-competitors-find {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-competitors-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-competitors-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-competitors-find input::placeholder {
+  color: var(--ink-4);
+}
+
+@container (max-width: 640px) {
+  .dk-seo-competitors-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-competitors-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-competitors-table {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-table th,
+.dk-seo-competitors-table td {
+  padding-inline: var(--x8);
+}
+
+/* The row in detail is lit, with the accent along its edge. */
+.dk-seo-competitors-table tr:has([data-comp-on]) td {
+  background: var(--card-2);
+}
+
+.dk-seo-competitors-table tr:has([data-comp-on]) td:first-child {
+  box-shadow: inset var(--x2) 0 0 var(--green);
+}
+
+.dk-seo-competitors-who {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-competitors-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-competitors-mark);
+  height: var(--dk-seo-competitors-mark);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-competitors-who-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  max-width: var(--dk-seo-competitors-name-w);
+}
+
+.dk-seo-competitors-name {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-table .dk-table-go:hover .dk-seo-competitors-name {
+  color: var(--green);
+}
+
+.dk-seo-competitors-host {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+/* Text inside a flex row cannot take an ellipsis itself: it gets its own box that can. */
+.dk-seo-competitors-host-text {
+  display: block;
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-host .dk-seo-competitors-mini {
+  flex: none;
+}
+
+.dk-seo-competitors-pos {
+  color: var(--ink);
+}
+
+.dk-seo-competitors-ai {
+  display: inline-flex;
+  gap: var(--x8);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-shows {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+/* ---------- the pager ---------- */
+.dk-seo-competitors-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10);
+  padding: var(--x10) var(--pad);
+  font-size: var(--t-small);
+}
+
+.dk-seo-competitors-pages {
+  display: inline-flex;
+  gap: var(--x4);
+}
+
+.dk-seo-competitors-page {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-competitors-page);
+  height: var(--dk-seo-competitors-page);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+}
+
+a.dk-seo-competitors-page:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-competitors-page--off {
+  opacity: 0.35;
+}
+
+/* ---------- the detail ---------- */
+.dk-seo-competitors-detail-sub {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x8);
+}
+
+.dk-seo-competitors-facts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--x8);
+  padding: var(--x10) 0 var(--x14);
+}
+
+.dk-seo-competitors-fact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-competitors-fact-v {
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-figure);
+}
+
+.dk-seo-competitors-fact-l {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x14) 0 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-section + .dk-seo-competitors-section {
+  margin-top: var(--x14);
+}
+
+.dk-seo-competitors-h {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-competitors-beside {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-competitors-beside-head,
+.dk-seo-competitors-beside-row {
+  display: grid;
+  grid-template-columns: var(--dk-seo-competitors-beside-what) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x10);
+  padding: var(--x8) 0;
+}
+
+.dk-seo-competitors-beside-head {
+  padding-top: 0;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-competitors-beside-row {
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-competitors-beside-label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+  color: var(--ink-2);
+}
+
+.dk-seo-competitors-beside-label .dk-badge {
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-beside-them {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-competitors-beside-us {
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-competitors-beside-row--lack .dk-seo-competitors-beside-us {
+  color: var(--ink-2);
+}
+
+.dk-seo-competitors-seen {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.dk-seo-competitors-seen-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-seen-row:first-child {
+  border-top: 0;
+}
+
+.dk-seo-competitors-seen-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-chip);
+  background: var(--tone-ground);
+  color: var(--tone);
+}
+
+.dk-seo-competitors-seen-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-competitors-seen-q {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-seen-meta {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-seen-pos {
+  color: var(--ink);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  padding: var(--x6) 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  list-style: none;
+  cursor: pointer;
+}
+
+.dk-seo-competitors-more > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-competitors-more > summary:hover {
+  color: var(--green);
+}
+
+.dk-seo-competitors-more[open] > summary .dk-icon {
+  transform: rotate(180deg);
+}
+
+.dk-seo-competitors-more > .dk-seo-competitors-seen > .dk-seo-competitors-seen-row:first-child {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-pagelist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  list-style: none;
+}
+
+.dk-seo-competitors-pageitem {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-competitors-pageitem-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-competitors-pageurl {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-pagetitle {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-pagefacts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-competitors-schema {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-competitors-schema-t {
+  padding: var(--x1) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-tiny);
+}
+
+/* ---------- what they have that we lack ---------- */
+.dk-seo-competitors-lacks {
+  container-type: inline-size;
+}
+
+.dk-seo-competitors-lack-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-competitors-lack-head,
+.dk-seo-competitors-lack-row {
+  display: grid;
+  grid-template-columns: var(--dk-seo-competitors-lack-what) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x16);
+  padding: var(--x10) 0;
+}
+
+.dk-seo-competitors-lack-head {
+  padding-top: 0;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-competitors-lack-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-lack-what {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+}
+
+.dk-seo-competitors-lack-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-competitors-lack-what .dk-badge {
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-lack-them,
+.dk-seo-competitors-lack-us {
+  min-width: 0;
+}
+
+.dk-seo-competitors-lack-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-competitors-lack-fig {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-competitors-lack-line {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-wrap: pretty;
+}
+
+@container (max-width: 560px) {
+  .dk-seo-competitors-lack-head {
+    display: none;
+  }
+
+  .dk-seo-competitors-lack-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--x8) var(--x12);
+  }
+
+  .dk-seo-competitors-lack-what {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .dk-seo-competitors-lack-them::before,
+  .dk-seo-competitors-lack-us::before {
+    display: block;
+    margin-bottom: var(--x4);
+    color: var(--ink-4);
+    font-family: var(--font-label);
+    font-size: var(--t-tiny);
+    font-weight: var(--w-semi);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+
+  .dk-seo-competitors-lack-them::before {
+    content: "Them";
+  }
+
+  .dk-seo-competitors-lack-us::before {
+    content: "Balkaris";
+  }
+}
+
+/* ---------- directories in the results, and the weekly read ---------- */
+.dk-seo-competitors-dir-list {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+}
+
+.dk-seo-competitors-dir {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-dir:first-child {
+  border-top: 0;
+}
+
+.dk-seo-competitors-dir-who {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+/* Where it was seen: one line with an ellipsis (its tooltip holds every observation)… */
+.dk-seo-competitors-dir-seen {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* …and on a phone, which has no hover, the whole line, wrapped. */
+@container (max-width: 560px) {
+  .dk-seo-competitors-dir-seen {
+    overflow: visible;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+.dk-seo-competitors-dir-ours {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+}
+
+.dk-seo-competitors-dir-ours .dk-badge {
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-refresh .dk-card-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x10);
+}
+
+.dk-seo-competitors-refresh-line {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* ---------- our clusters against who ranks ---------- */
+.dk-seo-competitors-clusters {
+  container-type: inline-size;
+}
+
+.dk-seo-competitors-cl {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-competitors-cl-head,
+.dk-seo-competitors-cl-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.95fr) auto;
+  gap: var(--x16);
+  padding: var(--x12) var(--pad);
+}
+
+.dk-seo-competitors-cl-head {
+  padding-top: var(--x10);
+  padding-bottom: var(--x10);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-competitors-cl-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-cl-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+  min-width: 0;
+  font-size: var(--t-small);
+}
+
+/* Each cell's label is the head's, until the head goes. */
+.dk-seo-competitors-cl-label {
+  display: none;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-competitors-cl-title {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-competitors-cl-title:hover {
+  color: var(--green);
+}
+
+.dk-seo-competitors-cl-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  font-size: var(--t-label);
+}
+
+.dk-seo-competitors-cl-chips .dk-badge {
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-cl-queries {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dk-seo-competitors-q {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-cl-fig {
+  color: var(--ink-3);
+}
+
+.dk-seo-competitors-cl-fig b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-competitors-cl-act {
+  align-items: flex-end;
+}
+
+.dk-seo-competitors-rivals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  width: 100%;
+  list-style: none;
+}
+
+.dk-seo-competitors-rival {
+  display: grid;
+  grid-template-columns: var(--dk-seo-competitors-pos-w) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--x4);
+}
+
+.dk-seo-competitors-rival-pos {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-competitors-rival-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x2) var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-competitors-rival-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-rival-name:hover {
+  color: var(--green);
+}
+
+/* Balkaris in its place among who ranks: the same row, marked as ours. */
+.dk-seo-competitors-rival--us {
+  margin: 0 calc(var(--x4) * -1);
+  padding: var(--x2) var(--x4);
+  background: var(--green-3);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-chip);
+}
+
+.dk-seo-competitors-rival--us .dk-seo-competitors-rival-pos,
+.dk-seo-competitors-us {
+  color: var(--green);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-competitors-us:hover {
+  color: var(--green);
+}
+
+.dk-seo-competitors-rival-facts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-competitors-ourpath {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-ourpath:hover {
+  color: var(--green);
+}
+
+.dk-seo-competitors-gap {
+  color: var(--red);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+/* Narrower: the head goes and each cluster lays its cells out in two columns, labelled; then in one. */
+@container (max-width: 1080px) {
+  .dk-seo-competitors-cl-head {
+    display: none;
+  }
+
+  .dk-seo-competitors-cl-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--x14) var(--x16);
+  }
+
+  .dk-seo-competitors-cl-name {
+    grid-column: 1 / -1;
+  }
+
+  .dk-seo-competitors-cl-label {
+    display: block;
+  }
+
+  .dk-seo-competitors-cl-act {
+    grid-column: 1 / -1;
+    align-items: flex-start;
+  }
+}
+
+@container (max-width: 560px) {
+  .dk-seo-competitors-cl-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- a phone ---------- */
+@container (max-width: 560px) {
+  .dk-seo-competitors-facts {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .dk-seo-competitors-beside-head {
+    display: none;
+  }
+
+  .dk-seo-competitors-beside-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: var(--x6) var(--x12);
+  }
+
+  .dk-seo-competitors-beside-label {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .dk-seo-competitors-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .dk-seo-competitors-chips::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -1,0 +1,1028 @@
+/*
+ * SEO › Keywords. Measured on design/boards/seo/113.webp, panel 4 (the sheet's
+ * fourth page, enlarged): the tiles in one row, then one panel holding the
+ * filters and the keyword table edge to edge (keyword, position, volume,
+ * trend, intent, page, action). Volume is impressions here, named as such.
+ * Added to the board as the task asks, inside the panel so the filters stay
+ * close under the tiles: a head with the two modes (keywords, topic
+ * clusters), two quick filters and the buttons ("Track a phrase", "Bulk
+ * actions", "Export"); more selects in the filters' row (language, topic,
+ * source, wording, judgement); and under the list the targets and where the
+ * phrases come from.
+ *
+ * Every value is a token; the measures this page needs are named here, the
+ * class names all begin dk-seo-kw-.
+ */
+:root {
+  --dk-seo-kw-phrase-w: 30ch;     /* a phrase in the table */
+  --dk-seo-kw-topic-w: 24ch;      /* its topic under it */
+  --dk-seo-kw-path-w: 22ch;       /* a page's address in the table */
+  --dk-seo-kw-trend-w: 76px;      /* the position line in a row */
+  --dk-seo-kw-menu-w: 240px;      /* a row's menu */
+  --dk-seo-kw-map-w: 340px;       /* the mapping step inside it */
+  --dk-seo-kw-said-w: 32ch;       /* a button's sentence */
+  --dk-seo-kw-find-min: 220px;    /* the search box, before the selects */
+  --dk-seo-kw-select-min: 140px;  /* a filter select */
+  --dk-seo-kw-tgt-fig: 56px;      /* a figure column of the targets */
+}
+
+.dk-seo-kw {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---------- the list's head, inside its panel: the two modes, the quick filters, the buttons ---------- */
+.dk-seo-kw-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--x10) var(--x16);
+  padding: var(--x14) var(--pad) 0;
+}
+
+.dk-seo-kw-head-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-kw-head-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  margin-left: auto;
+}
+
+.dk-seo-kw-head-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-seo-kw-head-line {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x2);
+  padding: var(--x3);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+}
+
+.dk-seo-kw-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: calc(var(--ctl-sm) - var(--x2));
+  padding: 0 var(--x12);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-kw-mode:hover {
+  color: var(--ink);
+}
+
+.dk-seo-kw-mode--on,
+.dk-seo-kw-mode--on:hover {
+  background: var(--tab-on);
+  color: var(--ink);
+}
+
+.dk-seo-kw-mode-n {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-mode--on .dk-seo-kw-mode-n {
+  color: var(--green);
+}
+
+/* ---------- the list's panel ---------- */
+.dk-seo-kw-listform {
+  min-width: 0;
+}
+
+.dk-seo-kw-list {
+  container-type: inline-size;
+}
+
+.dk-seo-kw-reset {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-kw-reset:hover {
+  color: var(--green);
+}
+
+.dk-seo-kw-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+/* The quick filters, in the head beside the modes. */
+.dk-seo-kw-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-kw-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x8) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-kw-chip:only-child,
+.dk-seo-kw-chip:not(:has(.dk-seo-kw-chip-n)) {
+  padding-right: var(--x12);
+}
+
+.dk-seo-kw-chip:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}
+
+.dk-seo-kw-chip--on,
+.dk-seo-kw-chip--on:hover {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-seo-kw-chip-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x20);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  background: var(--card-3);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-chip--on .dk-seo-kw-chip-n {
+  background: var(--green);
+  color: var(--bg);
+  font-weight: var(--w-semi);
+}
+
+/* The filters (board: search, positions, pages, intent, sort; with language, topic, source, wording, judgement), wrapping as the panel narrows. */
+.dk-seo-kw-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) repeat(8, minmax(0, 1fr)) minmax(0, 1.4fr);
+  gap: var(--x8);
+  padding: var(--x12) var(--pad) var(--x14);
+}
+
+.dk-seo-kw-filters--clusters {
+  grid-template-columns: minmax(var(--dk-seo-kw-find-min), 2fr) repeat(3, minmax(var(--dk-seo-kw-select-min), 1fr)) minmax(0, 1.5fr);
+}
+
+.dk-seo-kw-filters .dk-select {
+  min-width: 0;
+}
+
+.dk-seo-kw-filters .dk-select select {
+  width: 100%;
+}
+
+.dk-seo-kw-find {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-kw-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-kw-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-kw-find input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-sort {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-kw-sort .dk-select {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-kw-dir {
+  display: inline-grid;
+  flex: none;
+  place-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-kw-dir:hover {
+  color: var(--ink);
+}
+
+/* ---------- the table ---------- */
+.dk-seo-kw-table {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-kw-table th,
+.dk-seo-kw-table td {
+  padding-inline: var(--x8);
+}
+
+.dk-seo-kw-none {
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-phrase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  min-width: 0;
+}
+
+.dk-seo-kw-phrase-top {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-kw-phrase-text {
+  display: inline-block;
+  max-width: var(--dk-seo-kw-phrase-w);
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-kw-target {
+  display: inline-flex;
+  color: var(--green);
+}
+
+.dk-seo-kw-phrase-sub {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-topic {
+  display: inline-block;
+  max-width: var(--dk-seo-kw-topic-w);
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-seo-kw-topic:hover {
+  color: var(--green);
+}
+
+.dk-seo-kw-topic--none {
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-lang,
+.dk-seo-kw-flag {
+  padding: 0 var(--x4);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  line-height: var(--lh-body);
+  letter-spacing: var(--track-label);
+  white-space: nowrap;
+}
+
+.dk-seo-kw-flag--off {
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-flag--on {
+  border-color: var(--green-4);
+  color: var(--green);
+}
+
+.dk-seo-kw-pos {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x2);
+  color: var(--ink);
+}
+
+.dk-seo-kw-moved {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x2);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-moved--up,
+.dk-seo-kw-moved--new {
+  color: var(--green);
+}
+
+.dk-seo-kw-moved--down {
+  color: var(--red);
+}
+
+.dk-seo-kw-trend {
+  display: inline-flex;
+  width: var(--dk-seo-kw-trend-w);
+}
+
+.dk-seo-kw-trend .dk-spark {
+  width: 100%;
+}
+
+.dk-seo-kw-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-kw-path {
+  display: inline-block;
+  max-width: var(--dk-seo-kw-path-w);
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-seo-kw-path:hover {
+  color: var(--green);
+}
+
+.dk-seo-kw-path--gone {
+  color: var(--ink-4);
+  text-decoration: line-through;
+}
+
+.dk-seo-kw-gap {
+  color: var(--amber);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-kw-page-sub {
+  max-width: var(--dk-seo-kw-path-w);
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-kw-page-sub--warn {
+  color: var(--amber);
+}
+
+/* The row's main button and its "⋯", as on the board. */
+.dk-seo-kw-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x4);
+  white-space: nowrap;
+}
+
+.dk-seo-kw-btn-warn,
+.dk-seo-kw-btn-warn:hover:not(:disabled) {
+  border-color: var(--amber-edge);
+  background: var(--amber-ground);
+  color: var(--amber);
+}
+
+.dk-seo-kw-said {
+  max-width: var(--dk-seo-kw-said-w);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+.dk-seo-kw-said--bad {
+  color: var(--red);
+}
+
+/* A row's button and menu say what happened in a note that floats under them, so the column keeps its width. */
+.dk-seo-kw-menuwrap,
+.dk-seo-kw-act {
+  position: relative;
+  display: inline-flex;
+}
+
+.dk-seo-kw-said--float {
+  position: absolute;
+  top: calc(100% + var(--x4));
+  right: 0;
+  /* Under an open menu, over the rows. */
+  z-index: calc(var(--z-pop) - 1);
+  width: max-content;
+  max-width: var(--dk-seo-kw-said-w);
+  padding: var(--x6) var(--x10);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  text-align: left;
+}
+
+.dk-seo-kw-said--float.dk-seo-kw-said--bad {
+  color: var(--red);
+}
+
+/* ---------- menus: a row's "⋯" and "Bulk actions" ---------- */
+.dk-seo-kw-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.dk-seo-kw-menu > summary {
+  list-style: none;
+  cursor: pointer;
+}
+
+.dk-seo-kw-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-kw-menu-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-kw-menu-button:hover,
+.dk-seo-kw-menu[open] > .dk-seo-kw-menu-button {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+/* A row's menu floats over the page (placed by KwAct.tsx), so the table's scroller cannot cut it. */
+.dk-seo-kw-menu-list {
+  position: fixed;
+  z-index: var(--z-pop);
+  display: flex;
+  flex-direction: column;
+  min-width: var(--dk-seo-kw-menu-w);
+  padding: var(--x4);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  text-align: left;
+  white-space: normal;
+}
+
+.dk-seo-kw-menu--static .dk-seo-kw-menu-list {
+  position: absolute;
+  top: calc(100% + var(--x4));
+  right: 0;
+}
+
+.dk-seo-kw-menu-list > button,
+.dk-seo-kw-menu-list > a {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  width: 100%;
+  padding: var(--x8) var(--x10);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-align: left;
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-kw-menu-list > button:hover:not(:disabled),
+.dk-seo-kw-menu-list > a:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-kw-menu-list > button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.dk-seo-kw-menu-head {
+  margin-top: var(--x4);
+  padding: var(--x6) var(--x10) var(--x2);
+  border-top: var(--x1) solid var(--line-2);
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-kw-menu-out {
+  margin-left: auto;
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  width: var(--dk-seo-kw-map-w);
+  max-width: calc(100vw - var(--x32));
+  padding: var(--x8);
+}
+
+.dk-seo-kw-map-head {
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-kw-map-select,
+.dk-seo-kw-map-select select {
+  width: 100%;
+}
+
+.dk-seo-kw-map-note {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-kw-map-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+.dk-seo-kw-bulk {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-seo-kw-bulk .dk-seo-kw-said {
+  text-align: right;
+}
+
+.dk-seo-kw-bulk .dk-seo-kw-menu-list {
+  min-width: calc(var(--dk-seo-kw-menu-w) - var(--x20));
+}
+
+/* ---------- the foot: the pager and what the figures are ---------- */
+.dk-seo-kw-foot {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-kw-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--x10) var(--x16);
+  padding: var(--x12) var(--pad);
+}
+
+.dk-seo-kw-showing {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-pages {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-kw-pg {
+  display: inline-grid;
+  place-content: center;
+  min-width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  padding: 0 var(--x6);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+a.dk-seo-kw-pg:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-kw-pg--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-seo-kw-pg--off,
+.dk-seo-kw-pg--gap {
+  color: var(--ink-4);
+}
+
+.dk-seo-kw-perpage {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-perpage-space {
+  display: inline-block;
+  width: calc(var(--x56) + var(--x8));
+  height: var(--ctl-sm);
+}
+
+.dk-seo-kw-basis {
+  padding: 0 var(--pad) var(--x10);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-kw-foot > .dk-stamp,
+.dk-seo-kw-foot > :last-child:not(.dk-seo-kw-basis):not(.dk-seo-kw-pager) {
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-kw-foot > .dk-seo-kw-basis:first-child {
+  padding-top: var(--x12);
+}
+
+/* ---------- the clusters ---------- */
+.dk-seo-kw-cl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  min-width: 0;
+}
+
+.dk-seo-kw-cl-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-kw-cl-rank {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-cl-name {
+  display: inline-block;
+  max-width: var(--dk-seo-kw-phrase-w);
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-kw-cl-top-phrases {
+  display: inline-block;
+  max-width: calc(var(--dk-seo-kw-phrase-w) + var(--dk-seo-kw-topic-w));
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-kw-cl .dk-chip {
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-kw-cl-n {
+  color: var(--ink);
+}
+
+a.dk-seo-kw-cl-n:hover {
+  color: var(--green);
+}
+
+.dk-seo-kw-of {
+  color: var(--ink-4);
+}
+
+/* ---------- under the list: targets, where the phrases come from ---------- */
+.dk-seo-kw-tgts {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-kw-tgt {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--dk-seo-kw-tgt-fig) var(--dk-seo-kw-tgt-fig) var(--dk-seo-kw-trend-w);
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-kw-tgt--head {
+  padding-top: 0;
+  border-top: 0;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-kw-tgt--head > span:nth-child(2),
+.dk-seo-kw-tgt--head > span:nth-child(3) {
+  text-align: right;
+}
+
+.dk-seo-kw-tgt-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-kw-tgt-sub {
+  display: flex;
+  align-items: center;
+  gap: var(--x4);
+  min-width: 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-tgt-fig {
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-seo-kw-tgt-trend {
+  display: inline-flex;
+}
+
+.dk-seo-kw-tgt-trend .dk-spark {
+  width: 100%;
+}
+
+.dk-seo-kw-srcs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-kw-src {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-kw-src:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dk-seo-kw-src-icon {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border-radius: var(--r-chip);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-seo-kw-src-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-kw-src-name {
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-src-name:hover {
+  color: var(--green);
+}
+
+.dk-seo-kw-src-line {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-kw-src-n {
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-seo-kw-research {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  margin-top: var(--x8);
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line-2);
+}
+
+.dk-seo-kw-research-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-research-line {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- "Track a phrase" ---------- */
+.dk-seo-kw-track {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-seo-kw-track-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--x12);
+}
+
+.dk-seo-kw-track-row > .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-seo-kw-track-row .dk-select,
+.dk-seo-kw-track-row .dk-select select {
+  width: 100%;
+}
+
+.dk-seo-kw-track-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-track-note {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- narrower ---------- */
+@container (max-width: 1180px) {
+  /* Two even rows: the search over three columns, then the nine selects. */
+  .dk-seo-kw-filters {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) minmax(0, 1.2fr);
+  }
+
+  .dk-seo-kw-filters > .dk-seo-kw-find {
+    grid-column: span 3;
+  }
+
+  .dk-seo-kw-filters--clusters {
+    grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  }
+
+  .dk-seo-kw-filters--clusters > .dk-seo-kw-find {
+    grid-column: auto;
+  }
+
+  /* The cells' widths come down, so the row's buttons stay in view at a 1280px screen. */
+  .dk-seo-kw-table {
+    --dk-seo-kw-phrase-w: 22ch;
+    --dk-seo-kw-topic-w: 18ch;
+    --dk-seo-kw-path-w: 16ch;
+    --dk-seo-kw-trend-w: 56px;
+  }
+
+  .dk-seo-kw-table .dk-seo-kw-cl-top-phrases {
+    max-width: var(--dk-seo-kw-phrase-w);
+  }
+}
+
+@container (max-width: 760px) {
+  .dk-seo-kw-filters,
+  .dk-seo-kw-filters--clusters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-kw-filters > .dk-seo-kw-find,
+  .dk-seo-kw-sort {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .dk-seo-kw-pager {
+    justify-content: center;
+  }
+
+  .dk-seo-kw-head-right {
+    justify-content: flex-start;
+    margin-left: 0;
+  }
+
+  .dk-seo-kw-track-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-kw-tgt {
+    grid-template-columns: minmax(0, 1fr) var(--dk-seo-kw-tgt-fig) var(--dk-seo-kw-tgt-fig);
+  }
+
+  .dk-seo-kw-tgt-trend,
+  .dk-seo-kw-tgt--head > span:nth-child(4) {
+    display: none;
+  }
+}

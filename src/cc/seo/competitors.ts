@@ -49,6 +49,9 @@ export const PLATFORMS = new Set([
   "lam.unisg.ch",
   "sav-fsa.ch",
   "beck-stellenmarkt.de",
+  /* law directories: a listing of firms, not a firm */
+  "bestlawyers.com",
+  "globallawexperts.com",
 ]);
 
 const isPlatform = (domain: string): boolean => [...PLATFORMS].some((p) => domain === p || domain.endsWith(`.${p}`));
