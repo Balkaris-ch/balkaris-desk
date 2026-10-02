@@ -1,5 +1,5 @@
-import { pathOf, siteHost } from "./http.ts";
-import type { PageFacts } from "./parse.ts";
+import { normalPath, pathOf, siteHost } from "./http.ts";
+import { normaliseText, type ContentPrint, type PageFacts } from "./parse.ts";
 
 /**
  * What the desk holds against a page, and how much.
@@ -99,7 +99,39 @@ export const LIMITS = {
   thinWords: 250,
   /** Hops a redirect may take. One is a redirect; two is a chain. */
   redirectHops: 1,
+  /**
+   * Similarity of two pages' own text at and above which they are called
+   * near duplicates: the share of their distinct five-word runs (template
+   * left out, see `templatePages`) that the two have in common (Jaccard).
+   * 0.75: three runs in four the same. Measured on the site on 2 October
+   * 2026, the most alike pair offered to search engines (/book and
+   * /contact) shares 0.44, the next 0.32, and the three noindex placeholder
+   * pages, which are one text with the nouns swapped, share 0.78 to 0.80
+   * with each other: the line sits between what the site writes on purpose
+   * and what is a copy. Google publishes no figure.
+   */
+  nearDuplicate: 0.75,
+  /** Words of own text, template left out, under which a page is not compared for duplicates at all: too little text to call two pages copies (it is thin, which content.thin says). */
+  duplicateMinWords: 50,
+  /**
+   * A block of text found on at least this share of the pages read, beyond
+   * the pages being compared, is template (the box beside every article, the
+   * list of capabilities under every service) and is left out of the
+   * comparison, unless the pages it stands on are a family of near copies
+   * (see `sameText`). 5 %: 6 of the site's 103 addresses. At least
+   * `templateFloor` pages.
+   */
+  templateShare: 0.05,
+  templateFloor: 3,
+  /** Distinct subheadings, template ones left out, two pages must share exactly to be called the same set. Fewer is a format, not a copy. */
+  h2SetMin: 3,
 } as const;
+
+/**
+ * How many OTHER pages a block of text must stand on to be template, when
+ * `read` pages were read: 5 % of them, at least 3. For the site's 103: 6.
+ */
+export const templatePages = (read: number): number => Math.max(LIMITS.templateFloor, Math.ceil(read * LIMITS.templateShare));
 
 interface Rule {
   severity: Severity;
@@ -163,6 +195,10 @@ export const RULES = {
   "schema.unreadable": { severity: "critical", cost: 15, scope: "page", area: "schema", title: "Structured data is not valid JSON" },
   "schema.incomplete": { severity: "warning", cost: 8, scope: "page", area: "schema", title: "Structured data misses a required field" },
   "content.thin": { severity: "opportunity", cost: 5, scope: "page", area: "content", title: "Thin page" },
+  "content.duplicate": { severity: "warning", cost: 15, scope: "page", area: "content", title: "Same text as another page" },
+  "content.near-duplicate": { severity: "warning", cost: 8, scope: "page", area: "content", title: "Nearly the same text as another page" },
+  "h1.duplicate": { severity: "opportunity", cost: 3, scope: "page", area: "headings", title: "Main heading shared with another page" },
+  "h2.duplicate": { severity: "opportunity", cost: 2, scope: "page", area: "headings", title: "Same subheadings as another page" },
   "links.broken": { severity: "critical", cost: 15, scope: "page", area: "links", title: "Links to a page that does not answer" },
   "links.redirected": { severity: "opportunity", cost: 2, scope: "page", area: "links", title: "Links through a redirect" },
   "links.orphan": { severity: "warning", cost: 10, scope: "page", area: "links", title: "Orphan: no page links here" },
@@ -179,6 +215,10 @@ export const RULES = {
   "robots.no-sitemap": { severity: "warning", cost: 3, scope: "site", area: "robots", title: "robots.txt does not name the sitemap" },
   "redirect.broken": { severity: "critical", cost: 5, scope: "site", area: "redirects", title: "A promised redirect does not work" },
   "redirect.chain": { severity: "opportunity", cost: 1, scope: "site", area: "redirects", title: "A redirect takes more than one hop" },
+  /* An address that redirects back to where it has been: no browser ever
+     lands. Distinct from a chain (which lands, late) and from a broken
+     redirect (which lands on the wrong thing). */
+  "redirect.loop": { severity: "critical", cost: 10, scope: "site", area: "redirects", title: "A redirect loops and never lands" },
 } as const satisfies Record<string, Rule>;
 
 export type RuleId = keyof typeof RULES;
@@ -256,8 +296,15 @@ const SITE_WIDE = new Set(["Organization", "ProfessionalService", "LocalBusiness
  * The issues of one page, taken alone (duplicates across pages are added by
  * `judge`). `defaultShare` is the site's fallback share picture,
  * site-relative, or null when it is not known.
+ *
+ * `o` is for one page of ANOTHER site, audited on its own (audit.ts):
+ * `host` is that page's host and `url` its address, so its canonical is
+ * held against its own host instead of the website's; `alone` leaves out
+ * what only a whole crawl can know (whether it is in a sitemap, whether
+ * another page links to it). Give such a page `inSitemap: true` so every
+ * other rule applies.
  */
-export function judgePage(p: PageView, defaultShare: string | null): Issue[] {
+export function judgePage(p: PageView, defaultShare: string | null, o: { host?: string; url?: string; alone?: boolean } = {}): Issue[] {
   const out: Issue[] = [];
   const f = p.facts;
 
@@ -275,15 +322,15 @@ export function judgePage(p: PageView, defaultShare: string | null): Issue[] {
        is known without the HTML still is: the response header, and the
        links other pages make to it. Nothing else is held for or against it. */
     out.push(issue("page.unreadable", p.path, `Answered 200 but could not be read: ${p.unread || "no reason was recorded"}. None of its tags were checked, and it has no score until it can be read.`, p.unread || "unread", "a page the desk can read"));
-    if (p.inSitemap && saysNoindex(null, p.robotsHeader)) {
+    if (p.inSitemap && !o.alone && saysNoindex(null, p.robotsHeader)) {
       out.push(issue("page.noindex-in-sitemap", p.path, `Listed in the sitemap but its X-Robots-Tag header says "${p.robotsHeader}"; a page is either offered to search engines or kept from them, not both.`, "noindex", "index"));
     }
-    if (p.inSitemap && p.path !== "/" && p.inlinks === 0) out.push(orphan());
+    if (p.inSitemap && !o.alone && p.path !== "/" && p.inlinks === 0) out.push(orphan());
     return out;
   }
 
   const noindex = saysNoindex(f, p.robotsHeader);
-  if (p.inSitemap && noindex) {
+  if (p.inSitemap && !o.alone && noindex) {
     out.push(issue("page.noindex-in-sitemap", p.path, `Listed in the sitemap but says "${/\bnoindex\b/i.test(f.robots ?? "") ? f.robots : p.robotsHeader}"; a page is either offered to search engines or kept from them, not both.`, "noindex", "index"));
   }
   if (!p.inSitemap) {
@@ -296,6 +343,21 @@ export function judgePage(p: PageView, defaultShare: string | null): Issue[] {
   /* canonical */
   if (!f.canonical) {
     out.push(issue("canonical.missing", p.path, "Has no canonical link; without one a copy of the page under another address can be indexed instead.", 0, 1));
+  } else if (o.host) {
+    /* A page of another site: its canonical is held against its own host and address. */
+    let to: URL | null = null;
+    try {
+      to = new URL(f.canonical, o.url ?? `https://${o.host}/`);
+    } catch {
+      to = null;
+    }
+    if (!to || (to.protocol !== "http:" && to.protocol !== "https:")) {
+      out.push(issue("canonical.mismatch", p.path, `Canonical is ${f.canonical}, which is not a web address.`, f.canonical, p.path));
+    } else if (to.host !== o.host) {
+      out.push(issue("canonical.mismatch", p.path, `Canonical names the host ${to.host}; this page is on ${o.host}.`, f.canonical, o.host));
+    } else if (normalPath(to.pathname) !== p.path) {
+      out.push(issue("canonical.mismatch", p.path, `Canonical points to ${normalPath(to.pathname)}, not to this page.`, normalPath(to.pathname), p.path));
+    }
   } else {
     const target = pathOf(f.canonical);
     let host = "";
@@ -373,7 +435,7 @@ export function judgePage(p: PageView, defaultShare: string | null): Issue[] {
     const said = p.redirected.map((r) => `${r.target} → ${r.to ?? "?"}`);
     out.push(issue("links.redirected", p.path, `Links to ${plural(p.redirected.length, "address", "addresses")} that redirect (${said.slice(0, 2).join(", ")}${said.length > 2 ? "…" : ""}); link the final address and save the reader a hop.`, p.redirected.length, 0, said));
   }
-  if (p.path !== "/" && p.inlinks === 0) out.push(orphan());
+  if (!o.alone && p.path !== "/" && p.inlinks === 0) out.push(orphan());
   if (p.externalBroken.length) {
     const said = p.externalBroken.map((b) => `${b.target} (${b.status || "no answer"})`);
     out.push(issue("links.external-broken", p.path, `Links to ${plural(p.externalBroken.length, "outside page")} that ${p.externalBroken.length === 1 ? "fails" : "fail"}: ${said.slice(0, 2).join(", ")}${said.length > 2 ? "…" : ""}.`, p.externalBroken.length, 0, said));
@@ -404,7 +466,8 @@ export interface Verdict {
 
 /**
  * Judge the whole site: every page alone, then the things only visible
- * across pages (two pages with one title), then the site's own issues
+ * across pages (two pages with one title, one description, one text, one
+ * main heading or one set of subheadings), then the site's own issues
  * (`siteIssues`: sitemap, robots, redirects, made by their own modules).
  */
 export function judge(pages: PageView[], siteIssues: Issue[], defaultShare: string | null): Verdict {
@@ -429,6 +492,7 @@ export function judge(pages: PageView[], siteIssues: Issue[], defaultShare: stri
   };
   dupes("title", "title.duplicate");
   dupes("description", "description.duplicate");
+  issues.push(...sameText(pages, offered), ...sameHeadings(pages, offered));
 
   issues.push(...siteIssues);
 
@@ -459,4 +523,475 @@ export function judge(pages: PageView[], siteIssues: Issue[], defaultShare: stri
     siteScore = Math.max(0, s);
   }
   return { issues, scores, siteScore };
+}
+
+/* ---------- the same text, the same headings, on two pages ------------------- */
+
+/**
+ * DUPLICATE CONTENT, compared among the pages offered to search engines (in
+ * the sitemap, answering 200, read, not noindex: the same pages the title
+ * and description duplicates are held among), on each page's own text as
+ * parse.ts fingerprints it (ContentPrint), with template left out:
+ *
+ *   template   a block of text that stands on at least `templatePages(n)`
+ *              pages read in this crawl besides the ones being compared
+ *              (n: every page read, noindex or not: the templates are the
+ *              site's). On the site: the capabilities listed under every
+ *              service, the "Work with us" box beside every article, the
+ *              proof cards. Leaving it out is what keeps every page of one
+ *              template from reading as a copy of every other.
+ *   family     ...UNLESS the pages the block stands on are themselves near
+ *              copies of each other. Frequency alone cannot tell the two
+ *              apart: a set of location or landing pages made from one set
+ *              of paragraphs repeats those paragraphs on as many pages as a
+ *              template does, and leaving them out would compare such pages
+ *              on their few own words and miss exactly the copies this rule
+ *              is for. So the blocks are grouped by the set of pages they
+ *              stand on, and for each set up to `FAMILY_PAIRS` pairs of its
+ *              pages are compared, with only the WIDER template left out
+ *              (blocks that also stand on pages outside the set). When more
+ *              than half of those pairs reach `LIMITS.nearDuplicate`, the
+ *              set is a family and its blocks are the pages' own text. The
+ *              site's real template stands on pages that are otherwise
+ *              unalike, so it stays template.
+ *   exact      pages whose own text has one md5 (`content.duplicate`),
+ *              when what they share is not only template and comes to at
+ *              least `LIMITS.duplicateMinWords` words.
+ *   near       two pages whose own text, template left out, shares at least
+ *              `LIMITS.nearDuplicate` of its distinct five-word runs, as the
+ *              bottom-k MinHash sketches estimate it (`content.near-duplicate`,
+ *              one finding on each page per pair, with the similarity). Each
+ *              page needs `duplicateMinWords` own words to be compared. At
+ *              most `NEAR_PER_PAGE` pairs per page, the closest first.
+ *
+ * NEVER A PAGE AGAINST ITSELF, nor against a twin that names it as its
+ * canonical: a copy that says "the original is over there" is how a copy is
+ * meant to be kept (and a noindex twin is not among the offered pages at all).
+ *
+ * EVERY PAIR IS COMPARED, so the cost grows with the square of the pages.
+ * Each page is therefore prepared once (`prepare`: which of its blocks and
+ * sketch entries are template whatever the other page, which only when the
+ * other page lacks the block too) and a pair is then one merge of two
+ * sorted lists of at most 128 numbers, with no allocation: about a second
+ * for a thousand pages on the desk's thread.
+ */
+const NEAR_PER_PAGE = 20;
+/** Pairs of a block's pages compared to decide whether those pages are a family. */
+const FAMILY_PAIRS = 24;
+
+interface Entry {
+  /** The shingle's 32-bit hash. */
+  h: number;
+  /** The block it was first found in; 0xffff when past the kept list. */
+  b: number;
+}
+
+interface Unpacked {
+  entries: Entry[];
+  /** The largest hash the sketch is complete up to; Infinity when it holds every shingle of the page. */
+  tau: number;
+}
+
+function unpack(c: ContentPrint): Unpacked {
+  const buf = Buffer.from(c.sketch, "base64");
+  const entries: Entry[] = [];
+  for (let i = 0; i + 6 <= buf.length; i += 6) entries.push({ h: buf.readUInt32LE(i), b: buf.readUInt16LE(i + 4) });
+  const complete = c.shingles <= entries.length;
+  return { entries, tau: complete ? Infinity : (entries[entries.length - 1]?.h ?? Infinity) };
+}
+
+/**
+ * How alike two pages' own texts are: the share of their distinct shingles
+ * they have in common (Jaccard), estimated from the two bottom-k sketches.
+ *
+ * Both sketches hold every hash of their page up to their own k-th
+ * smallest; below the lower of the two they are both complete, so the hashes
+ * there are a fair random sample of the two sets, and the share they have in
+ * common estimates the share the whole sets have. Shingles from template
+ * blocks (`template` says which, by block fingerprint) are left out of both
+ * sides first. Two pages short enough to be kept whole are compared exactly.
+ * `sample` is how many distinct hashes the estimate rests on.
+ */
+export function similarity(a: ContentPrint, b: ContentPrint, template: (block: string) => boolean = () => false): { value: number; sample: number } {
+  return compareSketches(a, unpack(a), b, unpack(b), template);
+}
+
+function compareSketches(a: ContentPrint, ua: Unpacked, b: ContentPrint, ub: Unpacked, template: (block: string) => boolean): { value: number; sample: number } {
+  const tau = Math.min(ua.tau, ub.tau);
+  const own = (c: ContentPrint, e: Entry): boolean => {
+    const block = c.blocks[e.b];
+    return !block || !template(block[0]);
+  };
+  const sa = new Set(ua.entries.filter((e) => e.h <= tau && own(a, e)).map((e) => e.h));
+  let both = 0;
+  let onlyB = 0;
+  for (const e of ub.entries) {
+    if (e.h > tau || !own(b, e)) continue;
+    if (sa.has(e.h)) both++;
+    else onlyB++;
+  }
+  const union = sa.size + onlyB;
+  return { value: union ? both / union : 0, sample: union };
+}
+
+/** Words of a page's own text that are not template. Blocks past the kept list count as its own. */
+const ownWords = (c: ContentPrint, template: (block: string) => boolean): number => c.words - c.blocks.reduce((s, [h, w]) => s + (template(h) ? w : 0), 0);
+
+/** The page a page names as its canonical, as a stored address: a pair where one names the other is a twin, not a copy. Worked out once per page (it parses a URL, and every pair asks). */
+const canonicals = new WeakMap<PageView, string | null>();
+const canonicalOf = (p: PageView): string | null => {
+  let c = canonicals.get(p);
+  if (c === undefined) {
+    c = p.facts?.canonical ? pathOf(p.facts.canonical) : null;
+    canonicals.set(p, c);
+  }
+  return c;
+};
+const twins = (a: PageView, b: PageView): boolean => canonicalOf(a) === b.path || canonicalOf(b) === a.path;
+
+const printOf = (p: PageView): ContentPrint | null => p.facts?.content ?? null;
+const pct = (x: number): string => `${Math.round(x * 100)}%`;
+const names = (others: string[]): string => `${others.slice(0, 2).join(" and ")}${others.length > 2 ? ` and ${others.length - 2} more` : ""}`;
+
+/** Up to `most` distinct pairs of `pages`: every pair when there are no more, otherwise a fixed spread (the same pages always give the same pairs). */
+function pairsOf(pages: readonly string[], most: number): [string, string][] {
+  const m = pages.length;
+  const out: [string, string][] = [];
+  if ((m * (m - 1)) / 2 <= most) {
+    for (let i = 0; i < m; i++) for (let j = i + 1; j < m; j++) out.push([pages[i] as string, pages[j] as string]);
+    return out;
+  }
+  const seen = new Set<number>();
+  let s = Math.imul(m, 2654435761) >>> 0;
+  const next = (): number => {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return (s >>> 8) % m;
+  };
+  while (out.length < most) {
+    const i = next();
+    const j = next();
+    const key = Math.min(i, j) * m + Math.max(i, j);
+    if (i === j || seen.has(key)) continue;
+    seen.add(key);
+    out.push([pages[i] as string, pages[j] as string]);
+  }
+  return out;
+}
+
+/**
+ * The blocks that are NOT template although they stand on enough pages to
+ * be, because those pages are a family of near copies (see `sameText`).
+ * Blocks are grouped by the set of pages they stand on; each set is judged
+ * once, on at most FAMILY_PAIRS of its pairs.
+ */
+function familyBlocks(on: ReadonlyMap<string, ReadonlySet<string>>, need: number, prints: ReadonlyMap<string, ContentPrint>, unpacked: ReadonlyMap<string, Unpacked>): Set<string> {
+  const bySet = new Map<string, { pages: string[]; blocks: string[] }>();
+  for (const [h, s] of on) {
+    /* On fewer pages than that a block is never template: nothing to decide. */
+    if (s.size < need) continue;
+    const pages = [...s].sort();
+    const key = pages.join("\n");
+    const had = bySet.get(key);
+    if (had) had.blocks.push(h);
+    else bySet.set(key, { pages, blocks: [h] });
+  }
+  const out = new Set<string>();
+  for (const { pages, blocks } of bySet.values()) {
+    const members = new Set(pages);
+    const memo = new Map<string, boolean>();
+    /* While this set is judged, template is what would be template and also stands on a page outside the set. */
+    const wider = (h: string): boolean => {
+      let w = memo.get(h);
+      if (w === undefined) {
+        w = false;
+        const s = on.get(h);
+        if (s && s.size >= need) {
+          for (const x of s) {
+            if (!members.has(x)) {
+              w = true;
+              break;
+            }
+          }
+        }
+        memo.set(h, w);
+      }
+      return w;
+    };
+    const tried = pairsOf(pages, FAMILY_PAIRS);
+    let alike = 0;
+    for (const [x, y] of tried) {
+      const px = prints.get(x) as ContentPrint;
+      const py = prints.get(y) as ContentPrint;
+      if (ownWords(px, wider) < LIMITS.duplicateMinWords || ownWords(py, wider) < LIMITS.duplicateMinWords) continue;
+      if (px.md5 === py.md5 || compareSketches(px, unpacked.get(x) as Unpacked, py, unpacked.get(y) as Unpacked, wider).value >= LIMITS.nearDuplicate) alike++;
+    }
+    if (alike * 2 > tried.length) for (const h of blocks) out.add(h);
+  }
+  return out;
+}
+
+/** One page made ready to be compared with every other at the cost of a merge (see sameText). */
+interface Prepared {
+  /** The sketch's hashes, ascending. */
+  hashes: number[];
+  /** For each hash: 0 own text; 1 template whatever the other page; 2 template unless the other page carries its block too. */
+  status: Uint8Array;
+  /** For each hash of status 2: its block. */
+  border: (string | undefined)[];
+  tau: number;
+  /** Every block the page lists. */
+  blocks: Set<string>;
+  /** Its words less those of the blocks that are template whatever the other page. */
+  sureOwn: number;
+  /** Its blocks of status 2, with their words, once per time they stand on the page. */
+  borderWords: [string, number][];
+}
+
+/**
+ * How one page's block stands, for every pair it is in: on `c` pages read,
+ * this one among them, a block is template for a pair when the pages
+ * besides the two number `need` or more (and it is not a family's). So:
+ * with `need` + 2 or more pages, always; with `need` + 1, unless the other
+ * page carries it too; with fewer, never.
+ */
+function standingOf(h: string, on: ReadonlyMap<string, ReadonlySet<string>>, need: number, family: ReadonlySet<string>): 0 | 1 | 2 {
+  if (family.has(h)) return 0;
+  const besides = (on.get(h)?.size ?? 1) - 1;
+  return besides >= need + 1 ? 1 : besides === need ? 2 : 0;
+}
+
+function prepare(c: ContentPrint, u: Unpacked, standing: (h: string) => 0 | 1 | 2): Prepared {
+  let sureOwn = c.words;
+  const borderWords: [string, number][] = [];
+  for (const [h, w] of c.blocks) {
+    const st = standing(h);
+    if (st === 1) sureOwn -= w;
+    else if (st === 2) borderWords.push([h, w]);
+  }
+  const status = new Uint8Array(u.entries.length);
+  const border: (string | undefined)[] = new Array(u.entries.length);
+  u.entries.forEach((e, i) => {
+    const block = c.blocks[e.b];
+    /* A hash from past the kept list of blocks is the page's own. */
+    if (!block) return;
+    const st = standing(block[0]);
+    status[i] = st;
+    if (st === 2) border[i] = block[0];
+  });
+  return { hashes: u.entries.map((e) => e.h), status, border, tau: u.tau, blocks: new Set(c.blocks.map(([h]) => h)), sureOwn, borderWords };
+}
+
+/** `ownWords` for page A in the pair (A, B), from what `prepare` worked out. */
+function ownIn(a: Prepared, b: Prepared): number {
+  let n = a.sureOwn;
+  for (const [h, w] of a.borderWords) if (!b.blocks.has(h)) n -= w;
+  return n;
+}
+
+/**
+ * `compareSketches` for a pair of prepared pages, as one merge of their two
+ * ascending hash lists: the same shared and distinct counts below the lower
+ * of the two sketches' limits, own hashes only.
+ */
+function shareOf(a: Prepared, b: Prepared): number {
+  const tau = Math.min(a.tau, b.tau);
+  const ownA = (i: number): boolean => a.status[i] === 0 || (a.status[i] === 2 && b.blocks.has(a.border[i] as string));
+  const ownB = (j: number): boolean => b.status[j] === 0 || (b.status[j] === 2 && a.blocks.has(b.border[j] as string));
+  const na = a.hashes.length;
+  const nb = b.hashes.length;
+  let i = 0;
+  let j = 0;
+  let both = 0;
+  let union = 0;
+  for (;;) {
+    while (i < na && (a.hashes[i] as number) <= tau && !ownA(i)) i++;
+    while (j < nb && (b.hashes[j] as number) <= tau && !ownB(j)) j++;
+    const ha = i < na && (a.hashes[i] as number) <= tau ? (a.hashes[i] as number) : -1;
+    const hb = j < nb && (b.hashes[j] as number) <= tau ? (b.hashes[j] as number) : -1;
+    if (ha < 0 && hb < 0) break;
+    union++;
+    if (hb < 0 || (ha >= 0 && ha < hb)) i++;
+    else if (ha < 0 || hb < ha) j++;
+    else {
+      both++;
+      i++;
+      j++;
+    }
+  }
+  return union ? both / union : 0;
+}
+
+function sameText(pages: PageView[], offered: PageView[]): Issue[] {
+  const out: Issue[] = [];
+  const read = pages.filter((p) => p.status === 200 && printOf(p));
+  const need = templatePages(read.length);
+  /* Which pages each block of text stands on. */
+  const on = new Map<string, Set<string>>();
+  for (const p of read) {
+    for (const [h] of (printOf(p) as ContentPrint).blocks) {
+      const s = on.get(h) ?? new Set<string>();
+      s.add(p.path);
+      on.set(h, s);
+    }
+  }
+  const prints = new Map(read.map((p) => [p.path, printOf(p) as ContentPrint] as const));
+  const unpacked = new Map(read.map((p) => [p.path, unpack(printOf(p) as ContentPrint)] as const));
+  /* Blocks that stand on many pages because those pages are near copies: not template. */
+  const family = familyBlocks(on, need, prints, unpacked);
+  /** Template, when the pages in `besides` are left out of the count. */
+  const templateBesides =
+    (besides: readonly string[]) =>
+    (h: string): boolean => {
+      const s = on.get(h);
+      if (!s || family.has(h)) return false;
+      let n = s.size;
+      for (const x of besides) if (s.has(x)) n--;
+      return n >= need;
+    };
+
+  const cands = offered.filter((p) => printOf(p));
+
+  /* Exact: one md5. */
+  const byMd5 = new Map<string, PageView[]>();
+  for (const p of cands) {
+    const key = (printOf(p) as ContentPrint).md5;
+    byMd5.set(key, [...(byMd5.get(key) ?? []), p]);
+  }
+  for (const group of byMd5.values()) {
+    if (group.length < 2) continue;
+    const own = ownWords(printOf(group[0] as PageView) as ContentPrint, templateBesides(group.map((g) => g.path)));
+    if (own < LIMITS.duplicateMinWords) continue;
+    for (const p of group) {
+      const others = group.filter((g) => g !== p && !twins(p, g)).map((g) => g.path);
+      if (!others.length) continue;
+      out.push(issue("content.duplicate", p.path, `Has the same own text as ${names(others)}, word for word (${plural(own, "word")}, the site's template left out); search engines index one of them and the others compete with it.`, group.length, 1, others));
+    }
+  }
+
+  /* Near: every other pair, by their sketches, each page prepared once. */
+  const standings = new Map<string, 0 | 1 | 2>();
+  const standing = (h: string): 0 | 1 | 2 => {
+    let s = standings.get(h);
+    if (s === undefined) {
+      s = standingOf(h, on, need, family);
+      standings.set(h, s);
+    }
+    return s;
+  };
+  const ready = cands.map((p) => prepare(printOf(p) as ContentPrint, unpacked.get(p.path) as Unpacked, standing));
+  const near = new Map<string, { other: string; value: number }[]>();
+  const pair = (path: string, other: string, value: number): void => {
+    const list = near.get(path);
+    if (list) list.push({ other, value });
+    else near.set(path, [{ other, value }]);
+  };
+  for (let i = 0; i < cands.length; i++) {
+    const a = cands[i] as PageView;
+    const pa = printOf(a) as ContentPrint;
+    const ra = ready[i] as Prepared;
+    for (let j = i + 1; j < cands.length; j++) {
+      const b = cands[j] as PageView;
+      const pb = printOf(b) as ContentPrint;
+      const rb = ready[j] as Prepared;
+      if (pa.md5 === pb.md5 || twins(a, b)) continue;
+      if (ownIn(ra, rb) < LIMITS.duplicateMinWords || ownIn(rb, ra) < LIMITS.duplicateMinWords) continue;
+      const value = shareOf(ra, rb);
+      if (value < LIMITS.nearDuplicate) continue;
+      pair(a.path, b.path, value);
+      pair(b.path, a.path, value);
+    }
+  }
+  for (const [path, list] of near) {
+    for (const n of list.sort((x, y) => y.value - x.value).slice(0, NEAR_PER_PAGE)) {
+      out.push(
+        issue(
+          "content.near-duplicate",
+          path,
+          `Shares ${pct(n.value)} of its own text with ${n.other} (distinct five-word runs, the site's template left out); from ${pct(LIMITS.nearDuplicate)} two pages read as one and compete for the same searches.`,
+          Math.round(n.value * 100) / 100,
+          LIMITS.nearDuplicate,
+          [n.other],
+          n.other,
+        ),
+      );
+    }
+  }
+  return out;
+}
+
+/**
+ * THE SAME HEADINGS, among the same offered pages.
+ *
+ *   h1.duplicate   pages whose first <h1> reads the same once case,
+ *                  punctuation and spacing are set aside.
+ *   h2.duplicate   pages with the same SET of subheadings, once template
+ *                  subheadings are left out (one that stands on at least
+ *                  `templatePages(n)` other pages read: "Asked before
+ *                  deciding.", "Key takeaways"), and only when at least
+ *                  `LIMITS.h2SetMin` remain. Fewer than that, or a set many
+ *                  pages share, is a format (the desk's article formats give
+ *                  every article of a kind the same subheadings), not a copy.
+ */
+function sameHeadings(pages: PageView[], offered: PageView[]): Issue[] {
+  const out: Issue[] = [];
+  const flag = (rule: "h1.duplicate" | "h2.duplicate", groups: Iterable<PageView[]>, say: (p: PageView, others: string[]) => string) => {
+    for (const group of groups) {
+      if (group.length < 2) continue;
+      for (const p of group) {
+        const others = group.filter((g) => g !== p && !twins(p, g)).map((g) => g.path);
+        if (others.length) out.push(issue(rule, p.path, say(p, others), group.length, 1, others));
+      }
+    }
+  };
+
+  const byH1 = new Map<string, PageView[]>();
+  for (const p of offered) {
+    const h = normaliseText(p.facts?.h1[0] ?? "");
+    if (h) byH1.set(h, [...(byH1.get(h) ?? []), p]);
+  }
+  flag("h1.duplicate", byH1.values(), (p, others) => `Has the same main heading (“${p.facts?.h1[0] ?? ""}”) as ${names(others)}; each page's <h1> should say what that page alone is about.`);
+
+  const read = pages.filter((p) => p.status === 200 && p.facts?.h2s);
+  const need = templatePages(read.length);
+  const on = new Map<string, number>();
+  for (const p of read) {
+    for (const h of new Set((p.facts?.h2s ?? []).map(normaliseText))) if (h) on.set(h, (on.get(h) ?? 0) + 1);
+  }
+  const bySet = new Map<string, PageView[]>();
+  for (const p of offered) {
+    if (!p.facts?.h2s) continue;
+    /* Its own subheadings: on fewer than `need` pages besides this one. */
+    const own = [...new Set(p.facts.h2s.map(normaliseText))].filter((h) => h && (on.get(h) ?? 1) - 1 < need).sort();
+    if (own.length < LIMITS.h2SetMin) continue;
+    const key = own.join("\n");
+    bySet.set(key, [...(bySet.get(key) ?? []), p]);
+  }
+  flag("h2.duplicate", bySet.values(), (_p, others) => `Has the same subheadings as ${names(others)}, the site's template ones left out; two pages built on one outline usually say one thing twice.`);
+  return out;
+}
+
+/* ---------- redirect loops ------------------------------------------------------ */
+
+/**
+ * The loop in a chain of redirects, or null.
+ *
+ * `hops` as http.ts's `get` records them (each address that answered with a
+ * redirect), `final` the address it stopped at and `status` what that
+ * answered. A chain that comes back to an address it has already passed
+ * through, and is still being redirected there, never lands: that is a loop.
+ * `get` stops after five hops, so a loop shows as a repeated address within
+ * them. Returns the addresses from the first visit of the repeated one to
+ * its return: ["…/a", "…/b", "…/a"].
+ */
+export function redirectLoop(hops: readonly { url: string }[], final: string, status: number): string[] | null {
+  if (!hops.length) return null;
+  const all = [...hops.map((h) => h.url), final];
+  for (let i = 1; i < all.length; i++) {
+    const first = all.indexOf(all[i] as string);
+    if (first === i) continue;
+    /* The chain ended at an address it had passed, and that address now answered something else: it landed. */
+    if (i === all.length - 1 && !(status >= 300 && status < 400)) continue;
+    return all.slice(first, i + 1);
+  }
+  return null;
 }

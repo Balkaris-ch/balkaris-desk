@@ -131,6 +131,90 @@ export interface PageFacts {
    * how a file that only client code will load is still found on the page.
    */
   mentions: string[];
+  /**
+   * The <h2> headings' words, in order: at most 40, each cut at 200
+   * characters. Absent in facts kept before October 2026.
+   */
+  h2s?: string[];
+  /**
+   * The language versions the page names (<link rel="alternate" hreflang>):
+   * the code as written and the absolute address. At most 50. Absent in facts
+   * kept before October 2026.
+   */
+  hreflang?: { lang: string; href: string }[];
+  /** The page's own text as the duplicate rules compare it (see `ContentPrint`). Absent in facts kept before October 2026. */
+  content?: ContentPrint;
+}
+
+/**
+ * The page's own text, fingerprinted for the duplicate rules in rules.ts.
+ *
+ * WHAT "OWN TEXT" IS, decided here, on the page alone. The words inside
+ * <main> (the shared menu, header and footer of the layout sit outside it
+ * on every page of the site, which is why `words` already counts <main>
+ * only), without what is never read (scripts, styles, SVG, anything hidden
+ * or aria-hidden) and without navigation INSIDE <main>: <nav>, forms and
+ * role=navigation|search|menu. On the site those are the breadcrumb, the
+ * "On this page" contents, the journal's shelves and the legal links: lists
+ * of other pages' names, not words of this one. Taken block by block (a
+ * paragraph, a list item, a heading, a table cell, a button…), each block
+ * NFKC-folded, lower-cased, and every run of characters that is not a
+ * letter or a digit turned into one space.
+ *
+ * WHAT IS TEMPLATE, decided in rules.ts, across pages: a block whose text
+ * stands on many other pages (the "Work with us" box beside every article,
+ * the list of capabilities under every service, "Asked before deciding.").
+ * That needs every page, so this record keeps each block's fingerprint and
+ * the rules leave the template blocks out when they compare two pages.
+ */
+export interface ContentPrint {
+  /**
+   * md5 (hex) of the normalised own text, its blocks joined by a line break.
+   * Two pages with the same value have the same own text, word for word.
+   */
+  md5: string;
+  /** Words in the normalised own text. */
+  words: number;
+  /**
+   * Each block in order: the first 12 hex characters of the md5 of its
+   * normalised text, and its words. At most `PRINT.blocks`; a page with more
+   * keeps the first ones.
+   */
+  blocks: [string, number][];
+  /** Distinct shingles (runs of `PRINT.shingle` words inside one block; a shorter block is one shingle). */
+  shingles: number;
+  /**
+   * MinHash in its bottom-k form: of every distinct shingle's 32-bit hash
+   * (the first four bytes of its md5), the `PRINT.sketch` smallest, each with
+   * the index of the block it was first found in (0xffff when that block is
+   * past the kept list). Packed little-endian, 6 bytes an entry, ascending,
+   * as base64. A page with fewer shingles than that keeps them all, and
+   * two such pages are compared exactly.
+   */
+  sketch: string;
+}
+
+/** The sizes behind `ContentPrint`. Changing one changes every fingerprint at the next crawl. */
+export const PRINT = {
+  /** Words in a shingle. Five is the usual size for near-duplicate detection of prose. */
+  shingle: 5,
+  /** Entries in the bottom-k sketch. 128 estimates a similarity of 0.8 within about ±0.04. */
+  sketch: 128,
+  /** Blocks listed per page. */
+  blocks: 400,
+} as const;
+
+/** How the parse can be widened, for the custom extraction and the audit of one address (extract.ts, audit.ts). */
+export interface ParseOptions {
+  /**
+   * The host the page belongs to when it is not the website's: a page of
+   * another site, audited on its own. Links and pictures on that host (or
+   * its "www." twin) then count as the page's own, as the site's do for a
+   * page of the site.
+   */
+  host?: string;
+  /** Called with the parsed document before its window is closed: what custom extraction reads. */
+  visit?: (doc: Document) => void;
 }
 
 export interface Parsed {
@@ -237,7 +321,7 @@ const MENTION = new RegExp(`(?:/[A-Za-z0-9._~@+-]+)+\\.(?:${MEDIA})\\b`, "gi");
  * `/_next/image?url=%2Fwork%2Fa.webp&w=640` is the optimiser serving
  * /work/a.webp, and is reported as that file, "optimised".
  */
-function resolveSrc(src: string, pageUrl: string): { file: string | null; remote: string | null; remoteUrl?: string; via: "optimised" | "direct" } | null {
+function resolveSrc(src: string, pageUrl: string, ownHosts: readonly string[] = [siteHost(), twinHost()]): { file: string | null; remote: string | null; remoteUrl?: string; via: "optimised" | "direct" } | null {
   if (!src || src.startsWith("data:") || src.startsWith("blob:")) return null;
   let u: URL;
   try {
@@ -245,11 +329,11 @@ function resolveSrc(src: string, pageUrl: string): { file: string | null; remote
   } catch {
     return null;
   }
-  const own = u.host === siteHost() || u.host === twinHost();
+  const own = ownHosts.includes(u.host);
   if (own && u.pathname === "/_next/image") {
     const inner = u.searchParams.get("url");
     if (!inner) return null;
-    const hit = resolveSrc(inner, pageUrl);
+    const hit = resolveSrc(inner, pageUrl, ownHosts);
     return hit ? { ...hit, via: "optimised" } : null;
   }
   if (own) return { file: decoded(u.pathname), remote: null, via: "direct" };
@@ -280,38 +364,169 @@ const lighter = (html: string): string =>
     .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
     .replace(/<svg\b([^>]*)>[\s\S]*?<\/svg>/gi, "<svg$1></svg>");
 
+/* ---------- the own text's fingerprint (ContentPrint) ------------------------ */
+
+/** Never read at all: not counted in `words`, not part of the own text. */
+const SKIP = "script,style,noscript,template,svg,dialog,[hidden],[aria-hidden='true']";
+/** Never part of the own text: what `words` skips, and navigation inside <main>. */
+const NOT_OWN = `${SKIP},nav,form,[role='navigation'],[role='search'],[role='menu']`;
+/** The elements whose text is one block. Text outside all of them belongs to its nearest parent that is not inline. */
+const BLOCK = "p,li,h1,h2,h3,h4,h5,h6,td,th,blockquote,figcaption,dt,dd,pre,summary,caption,legend,button";
+const INLINE = new Set(["A", "ABBR", "B", "BDI", "BDO", "CITE", "CODE", "DATA", "DFN", "EM", "I", "KBD", "MARK", "Q", "S", "SAMP", "SMALL", "SPAN", "STRONG", "SUB", "SUP", "TIME", "U", "VAR", "LABEL", "FONT"]);
+/** A ceiling on the text fingerprinted, so one enormous page costs a bounded amount: about 30,000 words. */
+const PRINT_CHARS = 200_000;
+
+/** NFKC, lower case, and every run of anything but letters and digits as one space. */
+export const normaliseText = (s: string): string =>
+  s
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+
+const md5 = (s: string): Buffer => createHash("md5").update(s).digest();
+
+/**
+ * The text of `root` (<main>, or <body> on a page without one), read once,
+ * in document order:
+ *
+ *   pieces   every text node that is read at all (SKIP left out), squashed:
+ *            what `words` counts and the change fingerprint hashes;
+ *   blocks   the own text (NOT_OWN left out) as blocks of normalised words:
+ *            what ContentPrint is made of. A text node belongs to its nearest
+ *            BLOCK ancestor; without one, to its nearest ancestor that is not
+ *            inline (or `root`).
+ *
+ * ONE TOP-DOWN PASS. Each element's state (inside something skipped, inside
+ * navigation, its block) is carried down from its parent, so the cost is one
+ * step per node however deep the nesting. Asking element.closest() for every
+ * text node costs one step per ANCESTOR, and a page nested a few thousand
+ * deep (anybody can name one to the audit) turned that into minutes.
+ */
+function readText(root: Element): { pieces: string[]; blocks: string[] } {
+  const pieces: string[] = [];
+  const by = new Map<Element, string[]>();
+  let chars = 0;
+  /** An element's state, which its child nodes read. */
+  interface At {
+    /** Inside something that is not own text (NOT_OWN). */
+    notOwn: boolean;
+    /** The nearest BLOCK ancestor-or-self, or null. */
+    block: Element | null;
+    /** The nearest ancestor-or-self that is not inline, or `root`. */
+    plain: Element;
+  }
+  /* What lies above `root` counts as closest() would see it. */
+  const above = root.parentElement;
+  if (above?.closest(SKIP) || root.matches(SKIP)) return { pieces, blocks: [] };
+  const start: At = {
+    notOwn: Boolean(above?.closest(NOT_OWN)) || root.matches(NOT_OWN),
+    block: root.matches(BLOCK) ? root : (above?.closest(BLOCK) ?? null),
+    plain: root,
+  };
+  /* Nodes still to visit, each with its parent's state; children are pushed
+     last-first so they come off in document order. */
+  const stack: [ChildNode, At][] = [];
+  const push = (el: Element, at: At): void => {
+    const kids = el.childNodes;
+    for (let i = kids.length - 1; i >= 0; i--) stack.push([kids[i] as ChildNode, at]);
+  };
+  push(root, start);
+  while (stack.length) {
+    const [n, at] = stack.pop() as [ChildNode, At];
+    if (n.nodeType === 3) {
+      const raw = n.nodeValue ?? "";
+      const t = squash(raw);
+      if (t) pieces.push(t);
+      if (!at.notOwn && chars < PRINT_CHARS) {
+        const own = normaliseText(raw);
+        if (own) {
+          const block = at.block ?? at.plain;
+          const parts = by.get(block) ?? [];
+          parts.push(own);
+          by.set(block, parts);
+          chars += own.length + 1;
+        }
+      }
+    } else if (n.nodeType === 1) {
+      const el = n as Element;
+      /* Nothing under a skipped element is read at all. */
+      if (el.matches(SKIP)) continue;
+      push(el, {
+        notOwn: at.notOwn || el.matches(NOT_OWN),
+        block: el.matches(BLOCK) ? el : at.block,
+        plain: INLINE.has(el.tagName) ? at.plain : el,
+      });
+    }
+  }
+  return { pieces, blocks: [...by.values()].map((p) => p.join(" ")) };
+}
+
+/** The fingerprint of a page's own text: md5, blocks, and the bottom-k MinHash sketch. Exported for the check script. */
+export function contentPrint(blocks: readonly string[]): ContentPrint {
+  const text = blocks.join("\n");
+  const listed: [string, number][] = [];
+  /* Every distinct shingle's hash, with the block it was first found in. */
+  const hashes = new Map<number, number>();
+  let words = 0;
+  blocks.forEach((b, i) => {
+    const w = b.split(" ");
+    words += w.length;
+    if (i < PRINT.blocks) listed.push([md5(b).toString("hex").slice(0, 12), w.length]);
+    const at = i < PRINT.blocks ? i : 0xffff;
+    const add = (s: string) => {
+      const h = md5(s).readUInt32LE(0);
+      if (!hashes.has(h)) hashes.set(h, at);
+    };
+    if (w.length < PRINT.shingle) add(b);
+    else for (let k = 0; k + PRINT.shingle <= w.length; k++) add(w.slice(k, k + PRINT.shingle).join(" "));
+  });
+  const smallest = [...hashes.keys()].sort((a, b) => a - b).slice(0, PRINT.sketch);
+  const packed = Buffer.alloc(smallest.length * 6);
+  smallest.forEach((h, i) => {
+    packed.writeUInt32LE(h, i * 6);
+    packed.writeUInt16LE(hashes.get(h) as number, i * 6 + 4);
+  });
+  return { md5: createHash("md5").update(text).digest("hex"), words, blocks: listed, shingles: hashes.size, sketch: packed.toString("base64") };
+}
+
 /**
  * Read one served page.
  *
  * `url` is the address it was served from: relative links and sources are
  * resolved against it. During a crawl this runs inside parser.ts's capped
- * thread (`parseIsolated`); called directly it runs here.
+ * thread (`parseIsolated`), or extract.ts's when custom extraction rules are
+ * on; called directly it runs here. `opts` is for a page of another site and
+ * for extraction (see ParseOptions); without it the page is the website's.
  */
-export function parsePage(html: string, url: string): Parsed {
+export function parsePage(html: string, url: string, opts: ParseOptions = {}): Parsed {
   const dom = new JSDOM(lighter(html), { url });
   try {
     const doc = dom.window.document;
     const meta = (sel: string): string | null => orNull(doc.querySelector(sel)?.getAttribute("content"));
     const main = doc.querySelector("main");
     const inMain = (el: Element): boolean => (main ? main.contains(el) : true);
+    /* The hosts that are this page's own: the website's two, or the audited site's. */
+    const ownHosts = opts.host ? [opts.host, opts.host.startsWith("www.") ? opts.host.slice(4) : `www.${opts.host}`] : [siteHost(), twinHost()];
+    const pathOn = (u: string): string | null => {
+      if (!opts.host) return pathOf(u);
+      try {
+        const p = new URL(u);
+        return (p.protocol === "http:" || p.protocol === "https:") && ownHosts.includes(p.host) ? normalPath(p.pathname) : null;
+      } catch {
+        return null;
+      }
+    };
 
     /* --- structured data --- */
     const schema: SchemaBlock[] = [...doc.querySelectorAll('script[type="application/ld+json"]')].map((s) => readSchema(s.textContent ?? ""));
     const schemaTypes = [...new Set(schema.flatMap((b) => b.nodes.flatMap((n) => n.type.split("+"))))].sort();
 
     /* --- words: the page's own content, one text node at a time so two
-           blocks side by side are not glued into one word --- */
-    const SKIP = "script,style,noscript,template,svg,dialog,[hidden],[aria-hidden='true']";
+           blocks side by side are not glued into one word; and the own
+           text's blocks, in the same pass (readText) --- */
     const root = main ?? doc.body;
-    const pieces: string[] = [];
-    if (root) {
-      const walker = doc.createTreeWalker(root, dom.window.NodeFilter.SHOW_TEXT);
-      for (let n = walker.nextNode(); n; n = walker.nextNode()) {
-        if (n.parentElement?.closest(SKIP)) continue;
-        const t = squash(n.nodeValue);
-        if (t) pieces.push(t);
-      }
-    }
+    const { pieces, blocks: own } = root ? readText(root) : { pieces: [], blocks: [] };
     const text = pieces.join(" ");
     const words = text ? text.split(/\s+/).filter((w) => /[\p{L}\p{N}]/u.test(w)).length : 0;
 
@@ -327,7 +542,7 @@ export function parsePage(html: string, url: string): Parsed {
         continue;
       }
       if (u.protocol !== "http:" && u.protocol !== "https:") continue;
-      const internalPath = pathOf(u.toString());
+      const internalPath = pathOn(u.toString());
       const internal = internalPath !== null;
       u.hash = "";
       const target = internal ? (internalPath as string) : u.toString();
@@ -343,13 +558,13 @@ export function parsePage(html: string, url: string): Parsed {
       }
     }
     const linkList = [...links.values()];
-    const self = pathOf(url);
+    const self = pathOn(url);
     const distinct = (pred: (l: LinkFact) => boolean) => new Set(linkList.filter(pred).map((l) => l.target)).size;
 
     /* --- pictures --- */
     const images: ImageFact[] = [];
     for (const img of doc.querySelectorAll("img")) {
-      const hit = resolveSrc((img.getAttribute("src") ?? "").trim(), url);
+      const hit = resolveSrc((img.getAttribute("src") ?? "").trim(), url, ownHosts);
       if (!hit) continue;
       const altAttr = img.getAttribute("alt");
       const alt: AltState = altAttr === null ? "absent" : altAttr.trim() === "" ? "empty" : "written";
@@ -371,9 +586,9 @@ export function parsePage(html: string, url: string): Parsed {
     /* --- video --- */
     const videos: VideoFact[] = [];
     for (const v of doc.querySelectorAll("video")) {
-      const poster = resolveSrc((v.getAttribute("poster") ?? "").trim(), url);
+      const poster = resolveSrc((v.getAttribute("poster") ?? "").trim(), url, ownHosts);
       const sources = [v.getAttribute("src"), ...[...v.querySelectorAll("source")].map((s) => s.getAttribute("src"))]
-        .map((s) => resolveSrc((s ?? "").trim(), url))
+        .map((s) => resolveSrc((s ?? "").trim(), url, ownHosts))
         .filter((s): s is NonNullable<typeof s> => s !== null);
       if (!sources.length) videos.push({ file: null, remote: null, poster: poster?.file ?? null });
       for (const s of sources) videos.push({ file: s.file, remote: s.remote, poster: poster?.file ?? null });
@@ -382,7 +597,7 @@ export function parsePage(html: string, url: string): Parsed {
     /* --- every file the HTML mentions, wherever --- */
     const flat = html.replace(/%2F/gi, "/").replace(/\\u002[fF]/g, "/").replace(/\\\//g, "/");
     const mentions = new Set<string>();
-    const hosts = [`/${siteHost()}`, `/${twinHost()}`];
+    const hosts = ownHosts.map((h) => `/${h}`);
     for (const m of flat.matchAll(MENTION)) {
       let p = m[0];
       /* "https://www.balkaris.ch/og/home.jpg" is matched from its second slash on: take the host off again. */
@@ -396,6 +611,22 @@ export function parsePage(html: string, url: string): Parsed {
     const canonical = orNull(doc.querySelector('link[rel="canonical"]')?.getAttribute("href"));
     const robots = meta('meta[name="robots"]')?.toLowerCase() ?? null;
     const h1 = [...doc.querySelectorAll("h1")].map((h) => squash(h.textContent)).filter(Boolean);
+    const h2s = [...doc.querySelectorAll("h2")]
+      .map((h) => squash(h.textContent).slice(0, 200))
+      .filter(Boolean)
+      .slice(0, 40);
+    const hreflang: { lang: string; href: string }[] = [];
+    for (const l of doc.querySelectorAll('link[rel~="alternate"][hreflang]')) {
+      const lang = squash(l.getAttribute("hreflang"));
+      let href = "";
+      try {
+        href = new URL((l.getAttribute("href") ?? "").trim(), url).toString();
+      } catch {
+        href = squash(l.getAttribute("href"));
+      }
+      if (lang && hreflang.length < 50) hreflang.push({ lang: lang.slice(0, 40), href: href.slice(0, 300) });
+    }
+    const content = contentPrint(own);
 
     const facts: PageFacts = {
       title,
@@ -424,12 +655,16 @@ export function parsePage(html: string, url: string): Parsed {
       images,
       videos,
       mentions: [...mentions].sort(),
+      h2s,
+      hreflang,
+      content,
     };
 
     const hash = createHash("sha1")
       .update(JSON.stringify([title, description, canonical ? normalPath(canonical) : null, robots, h1, text]))
       .digest("hex");
 
+    opts.visit?.(doc);
     return { facts, links: linkList, hash };
   } finally {
     dom.window.close();

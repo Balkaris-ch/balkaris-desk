@@ -1,12 +1,14 @@
 import type { DayPoint, Reading, Share, Stat } from "../../../web/src/contract/common.ts";
+import type { ExtractResultRow, ExtractResults, ExtractRule, ExtractRuleInput, SpiderDuplicates } from "../../../web/src/contract/spider.ts";
 import { db } from "../../db.ts";
 import type { Job } from "../scheduler.ts";
 import { keep, kept, note, ok, record, series, setState, state, today, waiting } from "../store.ts";
-import { abs, get, pathOf, pool, siteHost, twinHost, type Got } from "./http.ts";
+import { closeExtractor, EXTRACT, parseWithRules, trialRule, validateRule, type ExtractFound, type ExtractRuleDef } from "./extract.ts";
+import { abs, get, normalPath, pathOf, pool, siteHost, twinHost, type Got } from "./http.ts";
 import type { LinkFact, PageFacts } from "./parse.ts";
 import { closeParser, parseIsolated } from "./parser.ts";
 import { probeIfDue } from "./probes.ts";
-import { issue, judge, kindOf, KIND_LABEL, RULES, saysNoindex, type Issue, type PageKind, type PageView, type RuleId, type Severity } from "./rules.ts";
+import { issue, judge, kindOf, KIND_LABEL, LIMITS, redirectLoop, RULES, saysNoindex, type Issue, type PageKind, type PageView, type RuleId, type Severity } from "./rules.ts";
 import { fingerprint, lastSitemap, refreshSitemap, type SitemapEntry } from "./sitemap.ts";
 import { structure, type RedirectRule, type Structure } from "./structure.ts";
 
@@ -26,6 +28,18 @@ import { structure, type RedirectRule, type Structure } from "./structure.ts";
  * when it last changed), every link (`cc_links`), what each distinct link
  * target answered (`cc_targets`), and what the rules concluded
  * (`cc_issues`). The page's HTML is never kept: it is parsed and dropped.
+ * The facts carry a fingerprint of the page's own text (parse.ts
+ * ContentPrint: an md5, its blocks, a MinHash sketch), which is how the
+ * duplicate-content rules compare pages without keeping their words. When
+ * the owner has custom extraction rules on (extract.ts), what each found on
+ * each page in its scope is kept too (`cc_extract_results`), with how long
+ * it took there. A rule that runs past a page's deadline (extract.ts) is not
+ * asked again for the rest of that crawl, and is switched off when it does
+ * so in `OVERRUNS_TO_SWITCH_OFF` crawls running.
+ *
+ * REDIRECT LOOPS are their own finding (redirect.loop, with the hops),
+ * wherever the crawl follows redirects: a page it reads, a link on a page
+ * (the link is then broken, not "redirected"), a redirect rule.
  *
  * HOW HARD IT LEANS ON THE SITE. Three requests at a time with a short pause,
  * so about a hundred pages take under a minute. One document is parsed at a
@@ -106,7 +120,43 @@ db.exec(`
     last_seen  TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS cc_issues_path ON cc_issues (path);
+
+  /* Custom extraction (extract.ts): the owner's rules, and what each found
+     on each page in its scope at the last crawl. Nothing is seeded. */
+  CREATE TABLE IF NOT EXISTS cc_extract_rules (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    /* 'css', 'regex' or 'xpath'. */
+    kind       TEXT NOT NULL,
+    expression TEXT NOT NULL,
+    /* css and xpath: the attribute read from each match (NULL: its text).
+       regex: the capture group kept (NULL: the whole match). */
+    attribute  TEXT,
+    /* NULL: every page. Otherwise the beginning of the stored address
+       ("/insights/" is every article, "/how-to" every page beginning so). */
+    scope      TEXT,
+    enabled    INTEGER NOT NULL DEFAULT 1,
+    added_by   TEXT NOT NULL,
+    added_at   TEXT NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS cc_extract_results (
+    rule    INTEGER NOT NULL,
+    path    TEXT NOT NULL,
+    /* JSON: the first values, each cut (EXTRACT in extract.ts). */
+    matches TEXT NOT NULL,
+    count   INTEGER NOT NULL,
+    error   TEXT,
+    at      TEXT NOT NULL,
+    /* Milliseconds the rule took on the page; NULL when it was not run there. */
+    ms      INTEGER,
+    PRIMARY KEY (rule, path)
+  );
 `);
+/* The first copies of cc_extract_results were made before `ms` was kept. */
+if (!(db.prepare("PRAGMA table_info(cc_extract_results)").all() as { name: string }[]).some((c) => c.name === "ms")) {
+  db.exec("ALTER TABLE cc_extract_results ADD COLUMN ms INTEGER");
+}
 
 /* ---------- what is stored about one request -------------------------------- */
 
@@ -186,15 +236,49 @@ export type Outcome =
   /** It would not say: it refuses bots, timed out or failed on its side. NOT broken. */
   | "unchecked";
 
+/** An address as the hop lists show it: a stored address on the canonical host, the whole URL anywhere else (the bare domain included). */
+const shown = (url: string): string => {
+  try {
+    const u = new URL(url);
+    return u.host === siteHost() ? `${normalPath(u.pathname)}${u.search}` : url;
+  } catch {
+    return url;
+  }
+};
+
+/** The statuses of the redirects round a loop (redirectLoop's addresses), in order. */
+const loopStatuses = (hops: readonly { url: string; status: number }[], round: readonly string[]): number[] => {
+  const start = hops.findIndex((h) => h.url === round[0]);
+  return start < 0 ? [] : hops.slice(start, start + round.length - 1).map((h) => h.status);
+};
+
+/** A redirect loop the crawl ran into, for rule redirect.loop. */
+interface Loop {
+  /** The addresses round the loop, the first one again at the end. */
+  hops: string[];
+  /** The status of each redirect on the way. */
+  statuses: number[];
+  /** How it was met: a page the crawl reads, a link on a page, a redirect rule (its source). */
+  met: { page?: string; link?: string; rule?: string };
+}
+
 /**
  * Ask an address on the site that is not one of the crawled pages what it
  * answers: one GET, body not read.
+ *
+ * A REDIRECT LOOP IS BROKEN, not "a redirect": it never lands, and a
+ * browser shows an error. Its hops come back in `loop` for redirect.loop.
  */
-async function checkInternal(target: string): Promise<{ status: number; landed: number; lands: string; outcome: Outcome; remark: string | null }> {
+async function checkInternal(target: string): Promise<{ status: number; landed: number; lands: string; outcome: Outcome; remark: string | null; loop: Loop | null }> {
   const g = await get(abs(target), { body: false });
   const status = g.hops[0]?.status ?? g.status;
+  const round = redirectLoop(g.hops, g.url, g.status);
+  if (round) {
+    const hops = round.map(shown);
+    return { status, landed: g.status, lands: pathOf(g.url) ?? g.url, outcome: "broken", remark: `redirects in a loop and never lands: ${hops.join(" → ")}`, loop: { hops, statuses: loopStatuses(g.hops, round), met: { link: target } } };
+  }
   const outcome: Outcome = status >= 300 && status < 400 ? "redirect" : status === 200 ? "ok" : "broken";
-  return { status, landed: g.status, lands: pathOf(g.url) ?? g.url, outcome, remark: g.error ?? null };
+  return { status, landed: g.status, lands: pathOf(g.url) ?? g.url, outcome, remark: g.error ?? null, loop: null };
 }
 
 /**
@@ -218,8 +302,14 @@ async function checkExternal(target: string): Promise<{ status: number; landed: 
   const status = g.status;
   let outcome: Outcome;
   let remark: string | null = null;
+  const round = redirectLoop(g.hops, g.url, g.status);
   if (g.status >= 200 && g.status < 300) outcome = "ok";
-  else if (g.status === 404 || g.status === 410) outcome = "broken";
+  else if (round) {
+    /* Not called broken: many sites loop a client that keeps no cookies
+       (this one keeps none) and land a browser fine. Said, not counted. */
+    outcome = "unchecked";
+    remark = `redirects in a loop for a client without cookies: ${round.join(" → ")}`.slice(0, 400);
+  } else if (g.status === 404 || g.status === 410) outcome = "broken";
   else if (g.status === 0 && /ENOTFOUND|getaddrinfo/i.test(g.error ?? "")) {
     outcome = "broken";
     remark = "the host name does not exist";
@@ -247,10 +337,16 @@ export interface RedirectCheck {
   lands: string | null;
   landed: number | null;
   hops: number;
-  /** "ok", "broken" (no redirect, wrong place, or not 200), "chain" (works in more than one hop), "untested". */
+  /** "ok", "broken" (no redirect, wrong place, not 200, or a loop), "chain" (works in more than one hop), "untested". */
   outcome: "ok" | "broken" | "chain" | "untested";
   /** One sentence saying what happened. */
   remark: string;
+  /**
+   * Present when the redirect goes round in a loop and never lands: the
+   * addresses round it, the first one again at the end. The outcome is then
+   * "broken", and the finding is redirect.loop instead of redirect.broken.
+   */
+  loop?: string[];
 }
 
 /**
@@ -289,11 +385,16 @@ async function checkRedirect(source: string, destination: string, by: RedirectCh
   const status = g.hops[0]?.status ?? g.status;
   const lands = pathOf(g.url) ?? g.url;
   const hops = g.hops.length;
+  const round = redirectLoop(g.hops, g.url, g.status);
   let outcome: RedirectCheck["outcome"];
   let remark: string;
   if (hops === 0) {
     outcome = "broken";
     remark = status === 0 ? `Did not answer (${g.error ?? "no reply"}).` : `Answers ${status} itself and does not redirect.`;
+  } else if (round) {
+    outcome = "broken";
+    remark = `Goes round in a loop and never lands: ${round.map(shown).join(" → ")} (${loopStatuses(g.hops, round).join(", ")}).`;
+    return { source, destination, by, tested, status, lands, landed: g.status, hops, outcome, remark, loop: round.map(shown) };
   } else if (g.status !== 200) {
     outcome = "broken";
     remark = `Redirects (${status}) to ${lands}, which answers ${g.status || "nothing"}.`;
@@ -351,6 +452,7 @@ export function crawl(progress: (done: number, of: number, what?: string) => voi
     crawling = null;
     /* The parsing thread's memory goes back to the system with the crawl. */
     await closeParser().catch(() => {});
+    await closeExtractor().catch(() => {});
   });
   return crawling;
 }
@@ -392,6 +494,23 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
   const before = new Map((db.prepare("SELECT * FROM cc_pages").all() as unknown as Row[]).map((r) => [r.path, r]));
   const first = before.size === 0;
 
+  /* The custom extraction rules that are on. With any, every page is parsed
+     in extract.ts's thread, which reads the facts and runs the rules in one
+     pass; with none, in parser.ts's as before. */
+  const extracting = activeRules();
+  /* Rules that ran past a page's deadline in this crawl, with that page:
+     not asked again until the next crawl (each would cost the deadline on
+     every page in its scope). */
+  const overrun = new Map<number, string>();
+  /* Redirect loops met on the way, by the first address of the loop: one
+     finding however many ways it was met. */
+  const loops = new Map<string, Loop>();
+  const meet = (l: Loop): void => {
+    const key = l.hops[0] as string;
+    const had = loops.get(key);
+    loops.set(key, had ? { ...had, met: { ...l.met, ...had.met } } : l);
+  };
+
   /* 2. Every page: fetch, parse, store. */
   const paths = [...wanted.keys()];
   const views = new Map<string, PageView>();
@@ -408,6 +527,10 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
   `);
   const dropLinks = db.prepare("DELETE FROM cc_links WHERE source = ?");
   const addLink = db.prepare("INSERT OR REPLACE INTO cc_links (source, target, text, internal, place, rel, times) VALUES (?, ?, ?, ?, ?, ?, ?)");
+  /* Only the rows of the rules asked of the page this time (a JSON list of
+     ids): a rule switched off keeps what it found at the last crawl it ran in. */
+  const dropFound = db.prepare("DELETE FROM cc_extract_results WHERE path = ? AND rule IN (SELECT value FROM json_each(?))");
+  const addFound = db.prepare("INSERT OR REPLACE INTO cc_extract_results (rule, path, matches, count, error, at, ms) VALUES (?, ?, ?, ?, ?, ?, ?)");
 
   await pool(
     paths,
@@ -424,14 +547,35 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
       let facts: PageFacts | null = null;
       let links: LinkFact[] = [];
       let hash: string | null = null;
+      /* What the custom extraction rules in scope found here; null when none ran. */
+      let found: ExtractFound[] | null = null;
+      /* The ids of the rules in scope here, run or skipped: their rows are replaced. */
+      let asked: number[] = [];
       /* Why a page that answered 200 was not read, for the rule that says so. */
       let unread: string | null = null;
+      const round = redirectLoop(g.hops, g.url, g.status);
+      if (round) meet({ hops: round.map(shown), statuses: loopStatuses(g.hops, round), met: { page: path } });
       if (status === 200) {
         if (!isHtml) unread = `the answer is ${g.headers["content-type"] ? `“${g.headers["content-type"]}”` : "of no stated type"}, not HTML`;
         else if (!g.body) unread = "the answer had no body";
         else {
           try {
-            const read = await parseIsolated(g.body, g.url);
+            let read;
+            if (extracting.length) {
+              const mine = extracting.filter((r) => inScope(r, path));
+              /* A rule that overran on an earlier page is not asked here; its answer says why. */
+              const skipped = mine.filter((r) => overrun.has(r.id));
+              const both = await parseWithRules(g.body, g.url, mine.filter((r) => !overrun.has(r.id)));
+              for (const id of both.overran ?? []) if (!overrun.has(id)) overrun.set(id, path);
+              read = both.parsed;
+              found = [
+                ...both.found,
+                ...skipped.map((r): ExtractFound => ({ rule: r.id, matches: [], count: 0, error: `not run: it ran for more than ${EXTRACT.pageMs / 1000} seconds on ${overrun.get(r.id)} earlier in this crawl and was stopped for the rest of it` })),
+              ];
+              asked = mine.map((r) => r.id);
+            } else {
+              read = await parseIsolated(g.body, g.url);
+            }
             facts = read.facts;
             links = read.links;
             hash = read.hash;
@@ -457,6 +601,10 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
         if (facts) {
           dropLinks.run(path);
           for (const l of links) addLink.run(path, l.target, l.text, l.internal ? 1 : 0, l.place, l.rel, l.times);
+          /* What the rules in scope found here replaces what they found
+             before; a rule that is off keeps its last answers. */
+          if (asked.length) dropFound.run(path, JSON.stringify(asked));
+          for (const f of found ?? []) addFound.run(f.rule, path, JSON.stringify(f.matches), f.count, f.error ?? null, now, f.ms ?? null);
         }
         db.exec("COMMIT");
       } catch (e) {
@@ -519,6 +667,30 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
     150,
   );
 
+  /* 2b. Extraction rules that overran a page's deadline: switched off when
+         they did so in the crawl before too (the count is kept in cc_state),
+         with a line in the feed; a rule that ran clean starts counting again. */
+  for (const r of extracting) {
+    const key = `extract:overran:${r.id}`;
+    const where = overrun.get(r.id);
+    if (!where) {
+      if (state(key)) setState(key, "");
+      continue;
+    }
+    const times = Number(state(key) || 0) + 1;
+    if (times < OVERRUNS_TO_SWITCH_OFF) {
+      setState(key, String(times));
+      continue;
+    }
+    db.prepare("UPDATE cc_extract_rules SET enabled = 0 WHERE id = ?").run(r.id);
+    setState(key, "");
+    note("crawl", `Extraction rule switched off: ${r.name}`, {
+      tone: "warn",
+      detail: `It ran for more than ${EXTRACT.pageMs / 1000} seconds on one page in ${times} crawls running (this time on ${where}) and was stopped each time. What it found before is kept; switch it on again once it is quicker.`,
+      dedupe: `extract:off:${r.id}:${now}`,
+    });
+  }
+
   /* 3. Pages that left the set. A page the desk knew only from the repository
         is not "gone" because the repository could not be read this time: it
         is kept as it was, unread, until a crawl that can tell. */
@@ -526,6 +698,7 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
   for (const p of gone) {
     db.prepare("DELETE FROM cc_pages WHERE path = ?").run(p);
     db.prepare("DELETE FROM cc_links WHERE source = ?").run(p);
+    db.prepare("DELETE FROM cc_extract_results WHERE path = ?").run(p);
     changes.push({ path: p, text: `Page gone: ${p}`, detail: "It is no longer in the sitemap or the repository's page files.", tone: "warn", key: `gone:${now.slice(0, 10)}` });
   }
 
@@ -543,6 +716,7 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
     3,
     async (t) => {
       const r = await checkInternal(t);
+      if (r.loop) meet(r.loop);
       saveTarget.run(t, 1, r.status, r.landed, r.lands, r.outcome, r.remark, now);
     },
     150,
@@ -581,8 +755,10 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
 
   /* 6. Judge. */
   const statusOf = new Map<string, { outcome: Outcome; status: number; lands: string | null }>();
+  /* A crawled page whose redirects go round in a loop is broken for whoever links to it. */
+  const looping = new Set([...loops.values()].map((l) => l.met.page).filter((p): p is string => Boolean(p)));
   for (const v of views.values()) {
-    statusOf.set(v.path, { outcome: v.status === 200 ? "ok" : v.status >= 300 && v.status < 400 ? "redirect" : "broken", status: v.status, lands: v.redirectTo ?? null });
+    statusOf.set(v.path, { outcome: v.status === 200 ? "ok" : looping.has(v.path) ? "broken" : v.status >= 300 && v.status < 400 ? "redirect" : "broken", status: v.status, lands: v.redirectTo ?? null });
   }
   for (const t of db.prepare("SELECT target, status, lands, outcome FROM cc_targets").all() as { target: string; status: number; lands: string | null; outcome: Outcome }[]) {
     if (!statusOf.has(t.target)) statusOf.set(t.target, { outcome: t.outcome, status: t.status, lands: t.lands });
@@ -605,8 +781,32 @@ async function doCrawl(progress: (done: number, of: number, what?: string) => vo
 
   const siteIssues: Issue[] = [...map.issues];
   for (const c of checks) {
-    if (c.outcome === "broken") siteIssues.push(issue("redirect.broken", null, `The redirect from ${c.source} to ${c.destination} does not work: ${c.remark}`, c.status, "a redirect that lands on 200", undefined, c.source));
+    /* A loop is its own finding (redirect.loop, below), not a broken redirect. */
+    if (c.loop) meet({ hops: c.loop, statuses: [], met: { rule: c.source } });
+    else if (c.outcome === "broken") siteIssues.push(issue("redirect.broken", null, `The redirect from ${c.source} to ${c.destination} does not work: ${c.remark}`, c.status, "a redirect that lands on 200", undefined, c.source));
     if (c.outcome === "chain") siteIssues.push(issue("redirect.chain", null, `The redirect from ${c.source}: ${c.remark}`, c.hops, 1, undefined, c.source));
+  }
+  /* Every loop once, with its hops and how the crawl met it. */
+  const linkedFrom = db.prepare("SELECT DISTINCT source FROM cc_links WHERE target = ? AND internal = 1 ORDER BY source LIMIT 6");
+  for (const l of loops.values()) {
+    const start = l.hops[0] as string;
+    const sources = (linkedFrom.all(l.met.link ?? l.met.page ?? start) as { source: string }[]).map((r) => r.source);
+    const how = [
+      l.met.rule ? `the redirect rule from ${l.met.rule} leads into it` : "",
+      l.met.page ? `${l.met.page} is one of the pages the crawl reads` : "",
+      sources.length ? `linked from ${sources.slice(0, 5).join(", ")}${sources.length > 5 ? " and more" : ""}` : "",
+    ].filter(Boolean);
+    siteIssues.push(
+      issue(
+        "redirect.loop",
+        null,
+        `${start} redirects in a loop and never lands: ${l.hops.join(" → ")}${l.statuses.length ? ` (${l.statuses.join(", ")})` : ""}. A browser gives up with an error.${how.length ? ` ${how.join("; ").replace(/^[a-z]/, (c) => c.toUpperCase())}.` : ""}`,
+        l.hops.length - 1,
+        "a redirect that lands on 200",
+        l.hops,
+        start,
+      ),
+    );
   }
 
   const verdict = judge([...views.values()], siteIssues, shape?.defaultShare ?? null);
@@ -1180,4 +1380,184 @@ export function findPages(q: string, limit = 20): PageRow[] {
     .filter((r) => hits.has(r.path))
     .sort((a, b) => rank(a) - rank(b) || a.path.length - b.path.length)
     .slice(0, limit);
+}
+
+/* ---------- duplicates, as the last crawl found them ------------------------------ */
+
+/**
+ * The duplicate-content findings of the last crawl (rules.ts: content.duplicate,
+ * content.near-duplicate, h1.duplicate, h2.duplicate), as groups and pairs
+ * rather than one finding per page.
+ */
+export function contentDuplicates(): Reading<SpiderDuplicates> {
+  return read(() => {
+    const groups = (rule: RuleId): string[][] => {
+      const seen = new Map<string, string[]>();
+      for (const f of listIssues({ rule })) {
+        if (!f.path) continue;
+        const pages = [...new Set([f.path, ...(f.related ?? [])])].sort();
+        seen.set(pages.join("\n"), pages);
+      }
+      return [...seen.values()];
+    };
+    const near = new Map<string, { a: string; b: string; similarity: number }>();
+    for (const f of listIssues({ rule: "content.near-duplicate" })) {
+      const other = f.related?.[0];
+      if (!f.path || !other) continue;
+      const [a, b] = [f.path, other].sort() as [string, string];
+      near.set(`${a}\n${b}`, { a, b, similarity: typeof f.measured === "number" ? f.measured : Number(f.measured) });
+    }
+    const heading = new Map((db.prepare("SELECT path, heading FROM cc_pages").all() as { path: string; heading: string | null }[]).map((r) => [r.path, r.heading ?? ""]));
+    return {
+      exact: groups("content.duplicate").map((pages) => ({ pages })),
+      near: [...near.values()].sort((x, y) => y.similarity - x.similarity),
+      h1: groups("h1.duplicate").map((pages) => ({ heading: heading.get(pages[0] as string) ?? "", pages })),
+      h2: groups("h2.duplicate").map((pages) => ({ pages })),
+      threshold: LIMITS.nearDuplicate,
+    };
+  });
+}
+
+/* ---------- custom extraction rules (extract.ts) ------------------------------------- */
+
+interface RuleRow {
+  id: number;
+  name: string;
+  kind: "css" | "regex" | "xpath";
+  expression: string;
+  attribute: string | null;
+  scope: string | null;
+  enabled: number;
+  added_by: string;
+  added_at: string;
+}
+
+/** Rules kept, at most. A rule is a question asked of every page at every crawl. */
+const RULES_KEPT = 50;
+
+/**
+ * Crawls running in which a rule ran past a page's deadline before it is
+ * switched off. Two: once can be a machine that was busy for ten seconds;
+ * twice running is the rule.
+ */
+const OVERRUNS_TO_SWITCH_OFF = 2;
+
+/** Whether a rule runs on a page: every page, or those whose stored address begins with its scope. */
+const inScope = (r: ExtractRuleDef & { scope: string | null }, path: string): boolean => !r.scope || path.startsWith(r.scope);
+
+/** The rules that are on, as the crawl runs them, with their names for what the crawl says about them. */
+function activeRules(): (ExtractRuleDef & { scope: string | null; name: string })[] {
+  return (db.prepare("SELECT id, name, kind, expression, attribute, scope FROM cc_extract_rules WHERE enabled = 1 ORDER BY id").all() as unknown as RuleRow[]).map((r) => ({
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    expression: r.expression,
+    attribute: r.attribute,
+    scope: r.scope,
+  }));
+}
+
+function ruleOf(r: RuleRow): ExtractRule {
+  const ran = db.prepare("SELECT COUNT(*) AS n, SUM(CASE WHEN count > 0 THEN 1 ELSE 0 END) AS hit, MAX(at) AS at, MAX(ms) AS slow FROM cc_extract_results WHERE rule = ?").get(r.id) as {
+    n: number;
+    hit: number | null;
+    at: string | null;
+    slow: number | null;
+  };
+  return {
+    id: r.id,
+    name: r.name,
+    kind: r.kind,
+    expression: r.expression,
+    attribute: r.attribute,
+    scope: r.scope,
+    enabled: Boolean(r.enabled),
+    addedBy: r.added_by,
+    addedAt: r.added_at,
+    pagesRun: ran.n,
+    pagesMatched: ran.hit ?? 0,
+    lastRun: ran.at,
+    slowestMs: ran.slow,
+  };
+}
+
+/** Every custom extraction rule, oldest first. */
+export function extractRules(): ExtractRule[] {
+  return (db.prepare("SELECT * FROM cc_extract_rules ORDER BY id").all() as unknown as RuleRow[]).map(ruleOf);
+}
+
+/** One rule, or null. */
+export function extractRule(id: number): ExtractRule | null {
+  const r = db.prepare("SELECT * FROM cc_extract_rules WHERE id = ?").get(id) as unknown as RuleRow | undefined;
+  return r ? ruleOf(r) : null;
+}
+
+/** Why no rule can be added now (the table is full, or as many are on as a crawl runs), or null. */
+function noRoom(): string | null {
+  const count = db.prepare("SELECT COUNT(*) AS n, SUM(enabled) AS on_ FROM cc_extract_rules").get() as { n: number; on_: number | null };
+  if (count.n >= RULES_KEPT) return `The desk keeps at most ${RULES_KEPT} rules; delete one first.`;
+  if ((count.on_ ?? 0) >= EXTRACT.enabled) return `${EXTRACT.enabled} rules are on already, the most a crawl runs; switch one off first.`;
+  return null;
+}
+
+/**
+ * Add a rule, after extract.ts's checks: what can be seen in it
+ * (`validateRule`), then how long it takes on the desk's test page, timed in
+ * the extraction thread (`trialRule`, a few hundred milliseconds at most,
+ * never in the desk's own thread). It runs from the next crawl on. Returns
+ * the rule, or the reason it was refused.
+ */
+export async function addExtractRule(input: ExtractRuleInput, by: string): Promise<{ ok: true; rule: ExtractRule } | { ok: false; reason: string }> {
+  const checked = validateRule({ name: input.name, kind: input.kind, expression: input.expression, attribute: input.attribute ?? null });
+  if (!checked.ok) return checked;
+  const scope = input.scope === undefined || input.scope === null || input.scope.trim() === "" ? null : input.scope.trim();
+  if (scope !== null && (!scope.startsWith("/") || scope.length > 200 || /\s/.test(scope))) return { ok: false, reason: "A scope is the beginning of an address on the site, starting with / (\"/insights/\"), or nothing for every page." };
+  const full = noRoom();
+  if (full) return { ok: false, reason: full };
+  const trial = await trialRule({ kind: checked.rule.kind, expression: checked.rule.expression });
+  if (!trial.ok) return trial;
+  /* Asked again: another rule may have been added while this one was tried. */
+  const fullNow = noRoom();
+  if (fullNow) return { ok: false, reason: fullNow };
+  const r = checked.rule;
+  const at = new Date().toISOString();
+  const res = db.prepare("INSERT INTO cc_extract_rules (name, kind, expression, attribute, scope, enabled, added_by, added_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?)").run(r.name, r.kind, r.expression, r.attribute, scope, by, at);
+  return { ok: true, rule: extractRule(Number(res.lastInsertRowid)) as ExtractRule };
+}
+
+/** Switch a rule on or off (`enabled` absent: the other way). Null when there is no such rule; the reason when it may not be switched on. */
+export function toggleExtractRule(id: number, enabled?: boolean): { ok: true; rule: ExtractRule } | { ok: false; reason: string } | null {
+  const had = extractRule(id);
+  if (!had) return null;
+  const want = enabled ?? !had.enabled;
+  if (want && !had.enabled) {
+    const on = (db.prepare("SELECT COUNT(*) AS n FROM cc_extract_rules WHERE enabled = 1").get() as { n: number }).n;
+    if (on >= EXTRACT.enabled) return { ok: false, reason: `${EXTRACT.enabled} rules are on already, the most a crawl runs; switch one off first.` };
+  }
+  db.prepare("UPDATE cc_extract_rules SET enabled = ? WHERE id = ?").run(want ? 1 : 0, id);
+  return { ok: true, rule: extractRule(id) as ExtractRule };
+}
+
+/** Delete a rule and everything it found. False when there was no such rule. */
+export function deleteExtractRule(id: number): boolean {
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM cc_extract_results WHERE rule = ?").run(id);
+    const gone = db.prepare("DELETE FROM cc_extract_rules WHERE id = ?").run(id).changes > 0;
+    db.exec("COMMIT");
+    return gone;
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
+/** What one rule found at the last crawl it ran in, page by page, pages with matches first. Null when there is no such rule. */
+export function extractResults(id: number): ExtractResults | null {
+  const rule = extractRule(id);
+  if (!rule) return null;
+  const pages = (
+    db.prepare("SELECT path, matches, count, error, at, ms FROM cc_extract_results WHERE rule = ? ORDER BY (count > 0) DESC, path").all(id) as { path: string; matches: string; count: number; error: string | null; at: string; ms: number | null }[]
+  ).map((r): ExtractResultRow => ({ path: r.path, matches: parse<string[]>(r.matches) ?? [], count: r.count, error: r.error, at: r.at, ms: r.ms }));
+  return { rule, pages };
 }

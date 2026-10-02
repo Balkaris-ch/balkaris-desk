@@ -122,6 +122,7 @@ export function guarded(job: Job): Job {
 
 const extra: [string, string, () => Promise<{ routes: Hono<Vars> }>][] = [
   ["article", "Article", () => import("./routes/article.ts")],
+  ["spider", "Spider", () => import("./routes/spider.ts")],
 ];
 
 /** What a screen answers when its own code could not be loaded. */

@@ -103,10 +103,9 @@ const LINE_RULES = {
   descriptions: R("description.missing"),
   titles: R("title.missing"),
   schema: R("schema.none", "schema.incomplete", "schema.unreadable"),
-  /* The text comparison and the loop check come with the crawler upgrade (the next release). */
-  duplicates: ["content.duplicate", "content.near-duplicate"] as unknown as site.RuleId[],
+  duplicates: R("content.duplicate", "content.near-duplicate"),
   alt: R("images.alt-absent"),
-  redirects: ["redirect.broken", "redirect.chain", "redirect.loop", "page.redirects"] as unknown as site.RuleId[],
+  redirects: R("redirect.broken", "redirect.chain", "redirect.loop", "page.redirects"),
 };
 
 /** The operator's fix for a rule, where it has one: titles and descriptions, and redirects for what no longer answers. */
@@ -245,8 +244,7 @@ function checklist(view: SiteView, findings: Reading<site.Finding[]>, days: numb
     line("descriptions", "Missing meta descriptions", "Pages without a meta description, by the crawl.", "#issues", () => byRules(LINE_RULES.descriptions), () => ({ label: "Propose", task: METADATA_TASK })),
     line("titles", "Missing title tags", "Pages without a title, by the crawl.", "#issues", () => byRules(LINE_RULES.titles), () => ({ label: "Propose", task: METADATA_TASK })),
     line("schema", "Missing structured data", "Pages with no structured data, structured data missing a required field, or structured data that is not valid JSON, by the crawl. Pages with only the site's own are listed under Structured data, not counted here.", "#schema", () => byRules(LINE_RULES.schema)),
-    line("duplicates", "Duplicate content", "Pages whose own text is the same as, or nearly the same as, another page's, by the crawl's comparison of each page's text.", "#issues", () =>
-      "content.duplicate" in site.RULES ? byRules(LINE_RULES.duplicates) : waiting("crawl", "The crawl does not compare page texts yet: that check arrives with the crawler upgrade.")),
+    line("duplicates", "Duplicate content", "Pages whose own text is the same as, or nearly the same as, another page's, by the crawl's comparison of each page's text.", "#issues", () => byRules(LINE_RULES.duplicates)),
     line("slow", "Slow pages (LCP > 2.5 s)", "Pages of the daily PageSpeed test whose mobile lab Largest Contentful Paint is over 2.5 s, of the pages it measured. A lab run on Google's machines, not visitors' field data.", "#speed", () => {
       const runs = site.labRuns("mobile");
       if (runs.state !== "ok") return runs;
