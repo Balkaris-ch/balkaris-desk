@@ -199,7 +199,7 @@ function bar(who: Person): string {
     <span>Signed in as <b style="color:var(--fg)">${esc(who.name)}</b>${
       who.canPublish ? "" : ` \u2014 <span style="color:var(--warn)">no email yet, so you cannot publish</span>`
     }</span>
-    <span><a href="/">Everything</a> &nbsp;\u00b7&nbsp; <a href="/people">People</a> &nbsp;
+    <span><a href="/console">Everything</a> &nbsp;\u00b7&nbsp; <a href="/people">People</a> &nbsp;
       <form method="post" action="/logout"><button>Sign out</button></form></span>
   </div>`;
 }
@@ -447,7 +447,7 @@ export function draftPage(
   return page(
     post.title,
     `${bar(who)}
-     <a class="back" href="/">← everything</a>
+     <a class="back" href="/console">← everything</a>
      <p class="src">${esc(kind)} · from <a href="${esc(post.source.url)}" rel="noreferrer noopener">${esc(
        post.source.author ? `@${post.source.author}` : post.source.site,
      )}</a> · ${esc(shelf)} · written ${esc(ago(d.created_at))} by ${esc(d.model ?? "?")} in ${
@@ -589,7 +589,7 @@ export function linkPage(id: number): string | null {
 
   return page(
     String(l.title ?? l.url),
-    `<a class="back" href="/">← everything</a>
+    `<a class="back" href="/console">← everything</a>
      <h1>${esc(l.title ?? l.url)}</h1>
      <p class="sub"><a href="${esc(l.url as string)}" rel="noreferrer noopener">${esc(l.url)}</a></p>
      ${l.error ? `<p class="flag">${esc(l.error)}</p>` : ""}

@@ -1,0 +1,78 @@
+.dk-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--x6);
+}
+
+/* Two columns while each row keeps a readable width, one when it would not. */
+.dk-actions--two {
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--action-min), 100%), 1fr));
+}
+
+.dk-action-form {
+  display: contents;
+}
+
+.dk-action {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  width: 100%;
+  min-height: var(--ctl-sm);
+  padding: var(--x6) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-row);
+  background: var(--card-2);
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-action:hover {
+  background: var(--card-3);
+  border-color: var(--line-2);
+}
+
+.dk-action-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-2);
+}
+
+.dk-action-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-action-label {
+  font-weight: var(--w-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-action-desc {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-action-go {
+  color: var(--ink-4);
+  transition:
+    transform var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-action:hover .dk-action-go {
+  color: var(--ink-2);
+  transform: translateX(var(--x2));
+}

@@ -1,0 +1,59 @@
+/* A form field: a label over a dark box, with a green ring while it has the keyboard. */
+.dk-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-field + .dk-field {
+  margin-top: var(--x14);
+}
+
+.dk-field-label {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-field-hint {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-field-hint--error {
+  color: var(--red);
+}
+
+.dk-input {
+  width: 100%;
+  min-height: var(--ctl);
+  padding: var(--x8) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  font-size: var(--t-body);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.dk-input:hover {
+  border-color: var(--pop-edge);
+}
+
+.dk-input:focus-visible {
+  outline: none;
+  border-color: var(--green-2);
+  box-shadow: 0 0 0 var(--x3) var(--green-glow);
+}
+
+textarea.dk-input {
+  min-height: calc(var(--ctl) * 2.5);
+  resize: vertical;
+  line-height: var(--lh-body);
+}
+
+.dk-field .dk-select {
+  display: flex;
+}

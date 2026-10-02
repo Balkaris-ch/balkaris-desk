@@ -1,0 +1,1658 @@
+/*
+ * AI Operator. Measured on design/boards/ai-operator.png (1672 × 941):
+ * the prompt box and AI response side by side, the eight cards under the box
+ * beside Recent actions, and the three panels across the foot.
+ */
+
+.dk-operator {
+  --op-right: 452px;          /* the right column: AI response, Recent actions */
+  --op-tile: 36px;            /* an icon on a card */
+  --op-tile-sm: 32px;
+  --op-tile-xs: 28px;
+  --op-bar: 108px;            /* a task's bar */
+  --op-glow: 0 0 0 var(--x1) color-mix(in srgb, var(--green) 18%, transparent), 0 0 var(--x24) color-mix(in srgb, var(--green) 12%, transparent);
+  --op-edge: color-mix(in srgb, var(--green) 62%, transparent); /* the prompt box's lit edge */
+  --op-pick: 34px;            /* a select in the prompt box */
+  --op-chip: 30px;            /* a suggested prompt */
+  --op-do: 80px;              /* an action card */
+  --op-lh: 1.4;               /* two short lines under a card's title */
+  --op-card: 54px;            /* a result card under the answer */
+  --op-time: 44px;            /* the time column of Recent actions */
+  --op-feed-row: 36px;        /* a line of Recent actions */
+  --op-engine: 430px;         /* the workstation's block in the head */
+  --op-task-row: 46px;        /* a line of Current tasks */
+  --op-ap-row: 34px;          /* a line of Actions & approvals */
+  --op-tile-lg: 40px;         /* the answer's icon */
+  --op-stop: 52px;            /* a task's Stop */
+  --op-todo-row: 42px;        /* a line of the to-do list */
+  --op-ctx-min: 150px;        /* Website context's table, so the tabs do not jump */
+  --op-ctx-row: 24px;         /* a row of that table, as tight as the board's */
+  --op-row-btn: 72px;         /* Review, Approve, Preview */
+  --op-diff-tag: 48px;        /* "Now", "After" in a review */
+  --op-mark: 18px;            /* a task's ring, a to-do's box */
+  --op-pct: 34px;             /* room for "100%" beside a bar */
+  --op-mode-w: 260px;         /* the chip naming the task the box will run */
+  --op-said-w: 220px;         /* a sentence beside Refresh */
+  --op-lh-text: 1.55;         /* an answer's lines */
+  --op-sky: 360px;            /* the globe behind the head */
+  --op-globe-opacity: 0.9;
+  --op-globe-lit: var(--green-4);    /* the sphere where the light falls */
+  --op-globe-mid: color-mix(in srgb, var(--green-3) 70%, var(--bg));
+  --op-globe-rim: color-mix(in srgb, var(--green) 32%, transparent);
+  --op-globe-grid: color-mix(in srgb, var(--green) 10%, transparent);
+  --op-globe-orbit: color-mix(in srgb, var(--green) 45%, transparent);
+  --op-hair: 0.8px;
+  --op-orbit-w: 1.2px;
+  --op-chip-ground: color-mix(in srgb, var(--green-3) 92%, transparent); /* "Analyzing your website…" over the globe */
+  --op-ask-wash: color-mix(in srgb, var(--green) 3.5%, transparent); /* the prompt box's lit top */
+  --op-send-glow: color-mix(in srgb, var(--green) 35%, transparent);
+  --op-send-hover: color-mix(in srgb, var(--green) 85%, var(--ink-on-green));
+  --op-off: 0.4;              /* a control that cannot be pressed now */
+  --op-busy: 0.6;             /* a card whose task is being queued */
+  --op-spin: 1.15s;           /* a running task's ring */
+  --op-travel: 1.6s;          /* the light along a running model task's bar */
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+  min-width: 0;
+}
+
+/* ---------- the head ---------- */
+
+.dk-operator-head {
+  position: relative;
+  min-width: 0;
+}
+
+/* The head sits above its globe, as on the board. */
+.dk-operator-head > .dk-head {
+  position: relative;
+  z-index: 1;
+}
+
+.dk-operator-sky {
+  position: absolute;
+  top: 0;
+  left: 52%;
+  width: var(--op-sky);
+  height: 100%;
+  margin-left: calc(var(--op-sky) / -2);
+  pointer-events: none;
+}
+
+.dk-operator-globe {
+  position: absolute;
+  bottom: calc(var(--x16) * -1);
+  left: 0;
+  width: 100%;
+  height: auto;
+  max-width: none;
+  opacity: var(--op-globe-opacity);
+}
+
+.dk-operator-globe-lit {
+  stop-color: var(--op-globe-lit);
+}
+
+.dk-operator-globe-mid {
+  stop-color: var(--op-globe-mid);
+}
+
+.dk-operator-globe-dark {
+  stop-color: var(--bg);
+}
+
+.dk-operator-globe-ball {
+  stroke: var(--op-globe-rim);
+  stroke-width: var(--x1);
+}
+
+.dk-operator-globe-grid ellipse,
+.dk-operator-globe-grid line {
+  fill: none;
+  stroke: var(--op-globe-grid);
+  stroke-width: var(--op-hair);
+}
+
+.dk-operator-globe-orbit {
+  fill: none;
+  stroke: var(--op-globe-orbit);
+  stroke-width: var(--op-orbit-w);
+  stroke-dasharray: 1.5 5;
+  stroke-linecap: round;
+}
+
+.dk-operator-globe-dot {
+  fill: var(--green);
+  filter: drop-shadow(0 0 var(--x3) var(--green));
+}
+
+.dk-operator-working {
+  position: absolute;
+  top: calc(var(--head-top) + var(--x6));
+  right: calc(var(--x56) * -1);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--ctl);
+  padding: 0 var(--x14);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-field);
+  background: var(--op-chip-ground);
+  box-shadow: var(--op-glow);
+  color: var(--green);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  pointer-events: auto;
+}
+
+.dk-operator-working-ring {
+  width: var(--x14);
+  height: var(--x14);
+  border: var(--x2) solid var(--green-4);
+  border-top-color: var(--green);
+  border-radius: var(--r-pill);
+  animation-name: dk-operator-spin;
+  animation-duration: var(--op-spin);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-operator-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Where the board says "Powered by Balkaris AI": what is true. */
+/* Under the date, level with the title, as the board places its "Powered by"
+   block; it does not make the head taller. */
+.dk-operator-engine {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--head-top) + var(--x14) + var(--x14));
+  right: var(--x4);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x12);
+  max-width: var(--op-engine);
+  text-align: left;
+}
+
+.dk-operator-engine-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--op-tile);
+  height: var(--op-tile);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-operator-engine-mark--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  box-shadow: var(--op-glow);
+  color: var(--green);
+}
+
+.dk-operator-engine-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-operator-engine-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-operator-engine-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-operator-engine-state {
+  display: block;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-engine-state .dk-operator-status-dot {
+  display: inline-block;
+  margin-right: var(--x6);
+  vertical-align: var(--x1);
+}
+
+/* ---------- the specimen ribbon ---------- */
+
+.dk-operator-ribbon {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x10) var(--x14);
+  border: var(--x1) dashed var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-ribbon .dk-icon {
+  flex: none;
+  margin-top: var(--x1);
+  color: var(--amber);
+}
+
+.dk-operator-ribbon b {
+  color: var(--amber);
+  font-weight: var(--w-semi);
+}
+
+/* ---------- the layout ---------- */
+
+.dk-operator-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--op-right);
+  gap: var(--x14) var(--x20);
+  align-items: stretch;
+}
+
+.dk-operator-bottom {
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x12);
+  align-items: stretch;
+}
+
+.dk-operator-panel {
+  min-width: 0;
+}
+
+/* The two cards on the right of the board are as tight as it draws them:
+   a short head with a small "View all", and five lines of Recent actions
+   in the height of the eight cards beside them, so the foot row starts
+   where the board's does (about y 690 at 1672 × 941). */
+.dk-operator-top > .dk-operator-panel > .dk-card-head,
+.dk-operator-bottom > .dk-operator-panel > .dk-card-head {
+  min-height: 0;
+  padding: var(--x8) var(--pad) var(--x2);
+}
+
+.dk-operator-top > .dk-operator-panel > .dk-card-head .dk-card-heading,
+.dk-operator-bottom > .dk-operator-panel > .dk-card-head .dk-card-heading {
+  padding-top: calc((var(--ctl-xs) - var(--x20)) / 2);
+}
+
+.dk-operator-top > .dk-operator-panel > .dk-card-body {
+  padding-bottom: var(--x8);
+}
+
+.dk-operator-feed-card > .dk-card-body {
+  padding-top: 0;
+  padding-bottom: var(--x6);
+}
+
+.dk-operator-feed-card .dk-operator-feed-row {
+  padding: 0;
+}
+
+.dk-operator-feed-card .dk-operator-feed-text {
+  gap: var(--x1);
+}
+
+/* ---------- the prompt box ---------- */
+
+.dk-operator-ask {
+  min-width: 0;
+  padding: var(--x12) var(--x12) var(--x14);
+  border: var(--x1) solid var(--op-edge);
+  border-radius: var(--r-card);
+  background: linear-gradient(180deg, var(--op-ask-wash) 0%, var(--card) 40%);
+  box-shadow: var(--op-glow);
+}
+
+.dk-operator-box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x10) var(--x10) var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-operator-box:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-operator-input {
+  width: 100%;
+  min-height: var(--x40);
+  padding: var(--x4) var(--x4) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-title);
+  line-height: var(--lh-body);
+  resize: none;
+  outline: none;
+}
+
+.dk-operator-input::placeholder {
+  color: var(--ink-3);
+}
+
+.dk-operator-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-operator-pick {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: var(--op-pick);
+  padding: 0 var(--x10) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-operator-pick:hover {
+  border-color: var(--pop-edge);
+  color: var(--ink);
+}
+
+.dk-operator-pick select {
+  appearance: none;
+  padding: 0 var(--x20) 0 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  outline: none;
+}
+
+.dk-operator-pick select option {
+  background: var(--pop);
+  color: var(--ink);
+}
+
+.dk-operator-pick select:focus-visible {
+  text-decoration: underline;
+  text-decoration-color: var(--green);
+}
+
+.dk-operator-pick > .dk-icon:last-child {
+  position: absolute;
+  right: var(--x10);
+  pointer-events: none;
+  color: var(--ink-3);
+}
+
+.dk-operator-pick--fixed {
+  max-width: 100%;
+  min-width: 0;
+  padding-right: var(--x12);
+  border-style: dashed;
+  color: var(--ink-3);
+}
+
+/* What a task is given can be a long sentence: on a phone it is cut, and its title holds it whole. */
+.dk-operator-pick--fixed > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-operator-pick--fixed:hover {
+  border-color: var(--line-2);
+  color: var(--ink-3);
+}
+
+.dk-operator-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: var(--op-mode-w);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-pill);
+  background: var(--green-3);
+  color: var(--green);
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.dk-operator-mode span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl);
+  height: var(--ctl);
+  margin-left: auto;
+  border: 0;
+  border-radius: var(--r-ctl);
+  background: var(--green);
+  box-shadow: 0 0 var(--x16) var(--op-send-glow);
+  color: var(--bg);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    opacity var(--fast) var(--ease);
+}
+
+.dk-operator-send:hover {
+  background: var(--op-send-hover);
+}
+
+.dk-operator-send:disabled {
+  opacity: var(--op-off);
+  box-shadow: none;
+  cursor: default;
+}
+
+.dk-operator-label {
+  margin: var(--x12) 0 var(--x8) var(--x2);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-operator-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x10);
+}
+
+.dk-operator-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x12);
+  height: var(--op-chip);
+  padding: 0 var(--x10) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-operator-chip .dk-icon {
+  color: var(--ink-3);
+}
+
+.dk-operator-chip:hover,
+.dk-operator-chip--on {
+  border-color: var(--green-4);
+  background: var(--green-3);
+  color: var(--ink);
+}
+
+.dk-operator-chip:hover .dk-icon,
+.dk-operator-chip--on .dk-icon {
+  color: var(--green);
+}
+
+.dk-operator-said {
+  margin-top: var(--x8);
+  color: var(--green);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-said--bad {
+  color: var(--red);
+}
+
+.dk-operator-said-inline {
+  max-width: var(--op-said-w);
+  color: var(--green);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  text-align: right;
+}
+
+/* ---------- "What would you like to do?" ---------- */
+
+.dk-operator-quick {
+  min-width: 0;
+}
+
+.dk-operator-quick-title {
+  margin: 0 0 var(--x10) var(--x2);
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+}
+
+.dk-operator-dos {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x12);
+}
+
+.dk-operator-do {
+  display: grid;
+  grid-template-columns: var(--op-tile) minmax(0, 1fr) var(--x14);
+  align-items: start;
+  gap: var(--x12);
+  min-height: var(--op-do);
+  padding: var(--x12) var(--x10) var(--x12) var(--x14);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  color: var(--ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-operator-do:hover {
+  border-color: var(--green-4);
+  background: var(--card-2);
+}
+
+.dk-operator-do--busy {
+  opacity: var(--op-busy);
+}
+
+.dk-operator-do-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--op-tile);
+  height: var(--op-tile);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-tile-icon);
+  background: var(--green-3);
+  color: var(--green);
+}
+
+.dk-operator-do-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-operator-do-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-operator-do-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--op-lh);
+}
+
+.dk-operator-do-go {
+  margin-top: var(--x2);
+  color: var(--green);
+}
+
+.dk-operator-aside {
+  margin-top: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-link {
+  color: var(--green);
+}
+
+.dk-operator-link:hover {
+  text-decoration: underline;
+}
+
+/* ---------- a panel's title with its figure ---------- */
+
+.dk-operator-tasks-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x16);
+}
+
+.dk-operator-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+}
+
+.dk-operator-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+}
+
+.dk-operator-dot--on {
+  background: var(--green);
+  box-shadow: 0 0 var(--x6) var(--green);
+}
+
+.dk-operator-ring {
+  width: var(--x10);
+  height: var(--x10);
+  border: var(--x2) solid var(--green);
+  border-radius: var(--r-pill);
+}
+
+/* ---------- icon tiles ---------- */
+
+.dk-operator-tile {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--op-tile-lg);
+  height: var(--op-tile-lg);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-tile-icon);
+  background: var(--tone-ground);
+  color: var(--tone);
+}
+
+.dk-operator-tile--sm {
+  width: var(--op-tile-sm);
+  height: var(--op-tile-sm);
+  border-radius: var(--r-field);
+}
+
+.dk-operator-tile--xs {
+  width: var(--op-tile-xs);
+  height: var(--op-tile-xs);
+  border-radius: var(--r-pill);
+}
+
+/* ---------- AI response ---------- */
+
+.dk-operator-said-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x14);
+}
+
+.dk-operator-bubble-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-operator-bubble {
+  padding: var(--x10) var(--x14);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+/* What it was given, and the way to the whole answer, on one line under it. */
+.dk-operator-meta {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x10);
+  margin-top: var(--x6);
+  min-width: 0;
+}
+
+.dk-operator-meta .dk-operator-given {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-meta .dk-operator-more {
+  flex: none;
+  margin: 0;
+}
+
+.dk-operator-bubble-q {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-bubble-error {
+  margin-top: var(--x4);
+  color: var(--red);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-text {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--op-lh-text);
+  overflow-wrap: anywhere;
+}
+
+.dk-operator-text p + p,
+.dk-operator-text p + ul,
+.dk-operator-text p + ol,
+.dk-operator-text ul + p,
+.dk-operator-text ol + p {
+  margin-top: var(--x8);
+}
+
+.dk-operator-text ul,
+.dk-operator-text ol {
+  padding-left: var(--x20);
+}
+
+.dk-operator-text ul {
+  list-style: disc;
+}
+
+.dk-operator-text ol {
+  list-style: decimal;
+}
+
+.dk-operator-text li + li {
+  margin-top: var(--x4);
+}
+
+/* Three lines in the panel, as on the board; the whole answer is one click away. */
+.dk-operator-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+}
+
+/* Clamped, the answer reads as one run of text: its list marks would be cut off. */
+.dk-operator-clamp ul,
+.dk-operator-clamp ol {
+  display: inline;
+  padding: 0;
+}
+
+.dk-operator-clamp li,
+.dk-operator-clamp p {
+  display: inline;
+}
+
+.dk-operator-clamp li::before {
+  content: " · ";
+}
+
+.dk-operator-clamp > * + *::before {
+  content: " ";
+}
+
+.dk-operator-given {
+  margin-top: var(--x8);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-given-off {
+  color: var(--amber);
+}
+
+.dk-operator-flags {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin-top: var(--x8);
+}
+
+.dk-operator-flags li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--amber);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-flags .dk-icon {
+  flex: none;
+  margin-top: var(--x1);
+}
+
+.dk-operator-more {
+  display: inline-block;
+  margin-top: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-operator-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x10);
+  margin-top: var(--x12);
+}
+
+.dk-operator-card {
+  display: grid;
+  grid-template-columns: var(--op-tile-sm) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--op-card);
+  padding: var(--x8) var(--x10) var(--x8) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-operator-card:hover {
+  border-color: var(--pop-edge);
+  background: var(--card-3);
+}
+
+.dk-operator-card-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-operator-card-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-card-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-card-go {
+  color: var(--ink-2);
+}
+
+/* ---------- Recent actions ---------- */
+
+.dk-operator-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-operator-feed-item {
+  position: relative;
+}
+
+/* The line that joins the nodes. */
+.dk-operator-feed-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  bottom: -50%;
+  left: calc(var(--x4) - var(--x1) / 2);
+  width: var(--x1);
+  background: var(--line-2);
+}
+
+.dk-operator-feed-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--x10) var(--op-time) var(--op-tile-xs) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--op-feed-row);
+  padding: var(--x2) 0;
+  border-radius: var(--r-row);
+}
+
+.dk-operator-feed-row--link:hover {
+  background: var(--hover);
+}
+
+.dk-operator-feed-node {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+}
+
+.dk-operator-feed-time {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-operator-feed-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-operator-feed-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-feed-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-feed-go {
+  margin-right: var(--x4);
+  color: var(--ink-3);
+}
+
+/* ---------- Current tasks ---------- */
+
+.dk-operator-tasks {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-operator-task,
+.dk-operator-todo {
+  display: grid;
+  grid-template-columns: var(--x20) minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--op-task-row);
+  padding: var(--x4) 0;
+}
+
+.dk-operator-task + .dk-operator-task,
+.dk-operator-todo + .dk-operator-todo {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-operator-task-mark {
+  width: var(--op-mark);
+  height: var(--op-mark);
+  border: var(--x2) solid var(--green);
+  border-radius: var(--r-pill);
+}
+
+.dk-operator-task-mark--run {
+  border-color: var(--green-4);
+  border-top-color: var(--green);
+  animation-name: dk-operator-spin;
+  animation-duration: var(--op-spin);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.dk-operator-task-mark--crawl {
+  border-color: var(--blue);
+}
+
+.dk-operator-task-mark--wait {
+  border-color: var(--ink-4);
+}
+
+.dk-operator-task-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-operator-task-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-task-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-task-bar {
+  display: grid;
+  grid-template-columns: var(--op-pct) var(--op-bar);
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-operator-task-bar > :only-child {
+  grid-column: 2;
+}
+
+.dk-operator-task-pct {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  text-align: right;
+}
+
+.dk-operator-task-queued {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-align: right;
+}
+
+/* A model's answer has no progress to report: a light that travels, not a percentage. */
+.dk-operator-busy {
+  position: relative;
+  display: block;
+  height: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.dk-operator-busy::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 40%;
+  border-radius: inherit;
+  background: var(--green);
+  animation-name: dk-operator-travel;
+  animation-duration: var(--op-travel);
+  animation-timing-function: var(--ease);
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-operator-travel {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-operator-busy::after,
+  .dk-operator-task-mark--run,
+  .dk-operator-working-ring {
+    animation-name: none;
+  }
+
+  .dk-operator-busy::after {
+    width: 100%;
+    opacity: var(--op-off);
+  }
+}
+
+.dk-operator-stop {
+  min-width: var(--op-stop);
+}
+
+.dk-operator-sublabel {
+  margin: var(--x12) 0 var(--x2);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-operator-todo {
+  grid-template-columns: var(--x20) minmax(0, 1fr) auto;
+  min-height: var(--op-todo-row);
+}
+
+.dk-operator-tick {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--op-mark);
+  height: var(--op-mark);
+  border: var(--x1) solid var(--ink-4);
+  border-radius: var(--x4);
+  background: transparent;
+  color: var(--ink-on-green);
+  cursor: pointer;
+}
+
+.dk-operator-tick:hover {
+  border-color: var(--green);
+}
+
+.dk-operator-todo--done .dk-operator-tick {
+  border-color: var(--green-2);
+  background: var(--green-2);
+}
+
+.dk-operator-todo--done .dk-operator-task-title {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.dk-operator-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-chip);
+  color: var(--ink-4);
+  cursor: pointer;
+}
+
+.dk-operator-remove:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+/* ---------- Website context ---------- */
+
+.dk-operator-tabs {
+  margin-bottom: var(--x8);
+}
+
+.dk-operator-ctx {
+  min-height: var(--op-ctx-min);
+}
+
+/* The board's table is tighter than the primitive's dense rows. */
+.dk-operator-ctx .dk-table--dense tbody td {
+  height: var(--op-ctx-row);
+}
+
+.dk-operator-ctx .dk-table thead th {
+  height: var(--op-ctx-row);
+}
+
+.dk-operator-ctx .dk-table th:first-child,
+.dk-operator-ctx .dk-table td:first-child {
+  padding-left: var(--x6);
+}
+
+.dk-operator-ctx .dk-table th:last-child,
+.dk-operator-ctx .dk-table td:last-child {
+  padding-right: var(--x6);
+}
+
+.dk-operator-path {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.dk-operator-path:hover {
+  color: var(--green);
+}
+
+.dk-operator-ctx td:first-child {
+  max-width: 0;
+  width: 100%;
+}
+
+.dk-operator-status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--tone);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-operator-status-dot {
+  width: var(--x6);
+  height: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--tone, var(--ink-4));
+}
+
+.dk-operator-change {
+  color: var(--tone);
+}
+
+.dk-operator-quiet {
+  color: var(--ink-4);
+}
+
+.dk-operator-ctx-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x12);
+  margin-top: var(--x12);
+}
+
+.dk-operator-stamp {
+  margin-left: auto;
+}
+
+.dk-operator-refresh {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-operator-fixes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-operator-fixes-what {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* ---------- Actions & approvals ---------- */
+
+.dk-operator-aps {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-operator-ap {
+  display: grid;
+  grid-template-columns: var(--op-tile-xs) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--op-ap-row);
+  padding: var(--x3) 0;
+}
+
+.dk-operator-ap + .dk-operator-ap {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-operator-ap-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-operator-ap-title {
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-operator-ap-sub {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-operator-ap-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-operator-row-btn {
+  min-width: var(--op-row-btn);
+}
+
+.dk-operator-more-line {
+  margin-top: var(--x8);
+  font-size: var(--t-label);
+}
+
+/* ---------- a proposal's review ---------- */
+
+.dk-operator-diff {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-operator-diff + .dk-operator-diff {
+  margin-top: var(--x10);
+}
+
+.dk-operator-diff-label {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-operator-diff-before,
+.dk-operator-diff-after {
+  display: grid;
+  grid-template-columns: var(--op-diff-tag) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--x10);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-operator-diff-before {
+  color: var(--ink-3);
+}
+
+.dk-operator-diff-was {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+
+.dk-operator-diff-after {
+  color: var(--ink);
+}
+
+.dk-operator-diff-before em {
+  font-style: normal;
+}
+
+.dk-operator-diff-tag {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  text-decoration: none;
+}
+
+.dk-operator-diff-after .dk-operator-diff-tag {
+  color: var(--green);
+}
+
+.dk-operator-diff-n {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-operator-consequence {
+  margin-top: var(--x14);
+  padding: var(--x10) var(--x12);
+  border-left: var(--x2) solid var(--green);
+  background: var(--green-3);
+  color: var(--ink);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-consequence--warn {
+  border-left-color: var(--amber);
+  background: var(--amber-ground);
+}
+
+/* ---------- the results pages ---------- */
+
+.dk-operator-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--op-right);
+  gap: var(--x16) var(--x20);
+  align-items: start;
+}
+
+.dk-operator-result .dk-operator-text {
+  font-size: var(--t-sub);
+}
+
+.dk-operator-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-operator-list > li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-operator-opps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-operator-opp {
+  padding: var(--x12) var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-operator-opp-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-operator-opp p {
+  margin-top: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-operator-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--x6) var(--x16);
+  font-size: var(--t-small);
+}
+
+.dk-operator-facts dt {
+  color: var(--ink-3);
+}
+
+.dk-operator-facts dd {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- narrower screens ---------- */
+
+@media (max-width: 1500px) {
+  .dk-operator {
+    --op-right: 400px;
+  }
+
+  .dk-operator-dos {
+    gap: var(--x10);
+  }
+
+  .dk-operator-do {
+    grid-template-columns: var(--op-tile-sm) minmax(0, 1fr) auto;
+    gap: var(--x10);
+    padding: var(--x12);
+  }
+
+  .dk-operator-do-icon {
+    width: var(--op-tile-sm);
+    height: var(--op-tile-sm);
+  }
+
+  .dk-operator-bottom {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-operator-bottom > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1300px) {
+  .dk-operator-sky {
+    display: none;
+  }
+
+  .dk-operator-dos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-operator-cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 1100px) {
+  .dk-operator-top,
+  .dk-operator-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* No room beside the title: the workstation's block goes under the head. */
+  .dk-operator-engine {
+    position: static;
+    max-width: none;
+    margin: var(--x6) 0 0 var(--head-inset);
+  }
+
+  .dk-operator-bottom {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-operator-dos {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dk-operator-dos {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-operator-do {
+    min-height: 0;
+  }
+
+  .dk-operator-chips {
+    gap: var(--x8);
+  }
+
+  .dk-operator-chip {
+    max-width: 100%;
+  }
+
+  .dk-operator-chip span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dk-operator-task {
+    grid-template-columns: var(--x20) minmax(0, 1fr) auto;
+  }
+
+  .dk-operator-task-bar {
+    grid-column: 2 / 3;
+    grid-row: 2;
+    grid-template-columns: var(--op-pct) minmax(0, 1fr);
+  }
+
+  .dk-operator-stop {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  .dk-operator-ap {
+    grid-template-columns: var(--op-tile-xs) minmax(0, 1fr);
+  }
+
+  .dk-operator-ap-actions {
+    grid-column: 2;
+  }
+
+  .dk-operator-feed-row {
+    grid-template-columns: var(--x10) var(--x40) var(--op-tile-xs) minmax(0, 1fr);
+  }
+
+  .dk-operator-feed-go {
+    display: none;
+  }
+
+  .dk-operator-diff-before,
+  .dk-operator-diff-after {
+    grid-template-columns: var(--x40) minmax(0, 1fr);
+  }
+
+  .dk-operator-diff-n {
+    grid-column: 2;
+  }
+}
+
+.dk-operator-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-operator-fact {
+  display: contents;
+}
+
+/* A proposal on a result's page: its state first, as a word. */
+.dk-operator-ap--badge {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.dk-operator-ap--badge .dk-operator-ap-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

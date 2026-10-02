@@ -1,0 +1,188 @@
+/*
+ * The charts' specimen sheet. A plain page of panels on the desk's ground, so
+ * that a photograph of it can be laid beside a board. It brings its own few
+ * rules and leans on nothing from the shell, which may not exist yet.
+ */
+.dk-kit {
+  min-height: 100dvh;
+  padding: var(--x24) var(--page-x) var(--x56);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-body);
+}
+
+.dk-kit-top {
+  display: grid;
+  gap: var(--x6);
+  max-width: var(--kit-top);
+  margin-bottom: var(--x24);
+}
+
+.dk-kit-top h1 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-display);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}
+
+.dk-kit-top p {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-sub);
+}
+
+.dk-kit-top .dk-kit-eyebrow {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-kit-grid {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+.dk-kit-group {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: var(--x4);
+  margin-top: var(--x20);
+}
+
+.dk-kit-group h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-kit-group p {
+  margin: 0;
+  color: var(--ink-3);
+}
+
+.dk-kit-panel {
+  grid-column: span 4;
+  display: grid;
+  align-content: start;
+  gap: var(--x14);
+  min-width: 0;
+  padding: var(--pad);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-kit-panel[data-span="3"] {
+  grid-column: span 3;
+}
+
+.dk-kit-panel[data-span="6"] {
+  grid-column: span 6;
+}
+
+.dk-kit-panel[data-span="8"] {
+  grid-column: span 8;
+}
+
+.dk-kit-panel[data-span="12"] {
+  grid-column: 1 / -1;
+}
+
+.dk-kit-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x10);
+}
+
+.dk-kit-head h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+}
+
+.dk-kit-state {
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+}
+
+.dk-kit-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--x20) var(--x24);
+}
+
+.dk-kit-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x20) var(--x24);
+}
+
+.dk-kit-pair > :last-child {
+  flex: 1 1 var(--kit-legend);
+  min-width: 0;
+}
+
+.dk-kit-stack {
+  display: grid;
+  gap: var(--x14);
+}
+
+.dk-kit-labelled {
+  display: grid;
+  justify-items: start;
+  gap: var(--x6);
+}
+
+.dk-kit-labelled small {
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+}
+
+.dk-kit-narrow {
+  max-width: var(--kit-narrow);
+}
+
+/* The sheet's own measures: they belong to this page only, so they live here
+   and not among the desk's tokens. (A media query cannot read a custom
+   property, so the two breakpoints below are written out.) */
+.dk-kit {
+  --kit-top: 720px;
+  --kit-legend: 140px;
+  --kit-narrow: 300px;
+}
+
+@media (max-width: 1100px) {
+  .dk-kit-panel,
+  .dk-kit-panel[data-span="3"],
+  .dk-kit-panel[data-span="6"],
+  .dk-kit-panel[data-span="8"] {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 720px) {
+  .dk-kit {
+    padding-inline: var(--x16);
+  }
+
+  .dk-kit-panel,
+  .dk-kit-panel[data-span="3"],
+  .dk-kit-panel[data-span="6"],
+  .dk-kit-panel[data-span="8"] {
+    grid-column: 1 / -1;
+  }
+}

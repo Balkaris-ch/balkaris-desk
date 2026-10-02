@@ -1,0 +1,105 @@
+/*
+ * Progress bars and the lists made of them. Measured on the boards' Leads by
+ * service and Content gap: a 6px track with fully round ends, the fill in
+ * plain green, rows 28px apart, the figures right-aligned in their own
+ * columns.
+ */
+.dk-hbar {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: var(--x24);
+  height: var(--bar);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-hbar-fill {
+  display: block;
+  min-width: var(--bar);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c);
+}
+
+/* ---------- the list ------------------------------------------------------ */
+
+.dk-barlist {
+  display: grid;
+  grid-template-columns: minmax(0, max-content) minmax(var(--x40), 1fr) auto;
+  align-items: center;
+  column-gap: var(--x14);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+.dk-barlist[data-seconds] {
+  grid-template-columns: minmax(0, max-content) minmax(var(--x40), 1fr) auto auto;
+}
+
+.dk-barlist--value-first {
+  grid-template-columns: minmax(0, 1fr) auto minmax(var(--x40), var(--barlist-bar));
+}
+
+.dk-barlist--value-first[data-seconds] {
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(var(--x40), var(--barlist-bar));
+}
+
+.dk-barlist-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: var(--barlist-row);
+}
+
+.dk-barlist[data-divided] .dk-barlist-row + .dk-barlist-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-barlist-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-barlist-label:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-barlist-value,
+.dk-barlist-second {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dk-barlist-second {
+  color: var(--ink);
+}
+
+/* value-first: label, second, value, bar. The markup is in bar-first order. */
+.dk-barlist--value-first .dk-barlist-label {
+  order: 1;
+}
+
+.dk-barlist--value-first .dk-barlist-second {
+  order: 2;
+}
+
+.dk-barlist--value-first .dk-barlist-value {
+  order: 3;
+}
+
+.dk-barlist--value-first .dk-barlist-bar {
+  order: 4;
+}

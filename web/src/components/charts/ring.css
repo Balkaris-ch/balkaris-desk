@@ -1,0 +1,66 @@
+/*
+ * A ring gauge. Measured on the Pages board: the row ring is 30px with a 3px
+ * stroke and an 11px bold figure; Route health's is 112px with the figure at
+ * 22px and its word in the ring's own colour.
+ */
+.dk-ring {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: var(--ring-row);
+  aspect-ratio: 1;
+  vertical-align: middle;
+}
+
+.dk-ring--panel {
+  width: var(--ring-panel);
+}
+
+.dk-ring-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dk-ring-track,
+.dk-ring-arc {
+  fill: none;
+}
+
+.dk-ring-track {
+  stroke: var(--track);
+}
+
+.dk-ring-arc {
+  stroke: var(--c);
+}
+
+.dk-ring-middle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--x4);
+}
+
+.dk-ring-figure {
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-label);
+  font-weight: var(--w-bold);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.dk-ring--panel .dk-ring-figure {
+  font-size: var(--t-figure-2);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-ring-caption {
+  color: var(--c);
+  font-family: var(--font);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}

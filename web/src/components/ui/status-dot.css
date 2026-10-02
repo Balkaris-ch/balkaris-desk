@@ -1,0 +1,56 @@
+.dk-dot {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.dk-dot-mark {
+  flex: none;
+  position: relative;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+/* Quiet is a grey dot, not body ink. */
+.dk-dot.dk-tone-quiet .dk-dot-mark {
+  background: var(--ink-4);
+}
+
+.dk-dot--tint .dk-dot-label {
+  color: var(--tone);
+}
+
+.dk-dot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-dot-mark--pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: inherit;
+  animation-name: dk-dot-pulse;
+  animation-duration: 2.2s;
+  animation-timing-function: var(--ease);
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-dot-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  70%,
+  100% {
+    transform: scale(2.8);
+    opacity: 0;
+  }
+}

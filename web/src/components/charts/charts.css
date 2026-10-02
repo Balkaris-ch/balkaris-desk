@@ -1,0 +1,51 @@
+/*
+ * What every chart shares: the one custom property a mark is painted with.
+ *
+ * A component never writes a colour. It puts `dk-c-s1` (or a tone) on a mark
+ * and the mark's own stylesheet paints with `var(--c)`. So a series' colour is
+ * decided in one place, and a legend's dot and its line cannot disagree.
+ *
+ * `--chart-ground` is what a chart stands on. Areas are mixed into it rather
+ * than made see-through, so a second series covers the first as on the boards
+ * instead of muddying it. A chart on anything but a panel sets it.
+ */
+.dk-c-s1 { --c: var(--s1); }
+.dk-c-s2 { --c: var(--s2); }
+.dk-c-s3 { --c: var(--s3); }
+.dk-c-s4 { --c: var(--s4); }
+.dk-c-s5 { --c: var(--s5); }
+.dk-c-s6 { --c: var(--s6); }
+.dk-c-green { --c: var(--green); }
+.dk-c-red { --c: var(--red); }
+.dk-c-amber { --c: var(--amber); }
+.dk-c-blue { --c: var(--blue); }
+.dk-c-violet { --c: var(--violet); }
+.dk-c-pink { --c: var(--pink); }
+.dk-c-sand { --c: var(--sand); }
+.dk-c-grey { --c: var(--grey); }
+.dk-c-ink { --c: var(--ink); }
+
+/* A sentence inside a chart that has nothing to draw: why, in the chart's own place. */
+.dk-chart-note {
+  margin: 0;
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-align: center;
+  text-wrap: balance;
+}
+
+/* Read by a screen reader, seen by nobody. The charts carry their own copy so
+   that one dropped into a page without the desk's base sheet still hides it. */
+.dk-chart-sr {
+  position: absolute;
+  width: var(--x1);
+  height: var(--x1);
+  margin: calc(var(--x1) * -1);
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

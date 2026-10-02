@@ -1,0 +1,1211 @@
+/*
+ * The Assets screen. Drawn as one more board of the Pages set: the tile row,
+ * the tab strip with the search box and Filters on its right, the dense table
+ * with thumbnails, and the panels under it. Every value is a token
+ * (styles/tokens.css) or one of the few named below, which only this screen
+ * needs.
+ */
+:root {
+  --dk-assets-search-w: 270px;      /* the search box beside the tabs, as the Pages board draws it */
+  --dk-assets-name: 200px;          /* a file's name in the File column */
+  --dk-assets-name-narrow: 128px;   /* and in a narrower table */
+  --dk-assets-alt: 168px;           /* the first alt text in its cell */
+  --dk-assets-alt-narrow: 100px;
+  --dk-assets-pagechip: 134px;      /* a page's address as a chip */
+  --dk-assets-pagechip-narrow: 84px;
+  --dk-assets-preview-h: 246px;     /* the opened file's picture */
+}
+
+/* ---------- tiles ---------- */
+.dk-assets-tile {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: var(--tile-h);
+  padding: var(--x14) var(--x20) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-assets-tile-label {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  min-height: var(--x20);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+  line-height: var(--x20);
+}
+
+.dk-assets-tile-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The figure, and beside it what it is made of, where the board draws a spark. */
+.dk-assets-tile-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x14);
+  min-width: 0;
+  margin-top: var(--x2);
+}
+
+.dk-assets-tile-row > .dk-tip-anchor {
+  display: block;
+  flex: 1;
+  min-width: var(--x24);
+  max-width: var(--spark-w);
+  margin-left: auto;
+}
+
+.dk-assets-tile-figure {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.dk-assets-tile-value {
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-assets-tile-of {
+  color: var(--ink-3);
+  font-size: var(--t-title);
+}
+
+.dk-assets-tile-sub {
+  margin-top: var(--x4);
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-assets-tile .dk-stamp {
+  margin-top: var(--x4);
+}
+
+/* A tile too narrow for both keeps the figure and lets the bar go: the line under it still says the parts. */
+@container (max-width: 150px) {
+  .dk-assets-tile-row > .dk-tip-anchor {
+    display: none;
+  }
+}
+
+/* The parts of a figure: one thin bar, a part's share of its width each. */
+.dk-assets-parts {
+  display: flex;
+  gap: var(--x2);
+  width: 100%;
+  height: var(--bar);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-assets-parts:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-assets-seg {
+  flex-basis: 0;
+  min-width: var(--x3);
+  height: 100%;
+  background: var(--seg);
+}
+
+.dk-assets-seg--s1,
+.dk-assets-dot.dk-assets-seg--s1 { --seg: var(--s1); }
+.dk-assets-seg--s2,
+.dk-assets-dot.dk-assets-seg--s2 { --seg: var(--s2); }
+.dk-assets-seg--s3,
+.dk-assets-dot.dk-assets-seg--s3 { --seg: var(--s3); }
+.dk-assets-seg--s4,
+.dk-assets-dot.dk-assets-seg--s4 { --seg: var(--s4); }
+.dk-assets-seg--s5,
+.dk-assets-dot.dk-assets-seg--s5 { --seg: var(--s5); }
+.dk-assets-seg--s6,
+.dk-assets-dot.dk-assets-seg--s6 { --seg: var(--s6); }
+.dk-assets-seg--good { --seg: var(--green); }
+.dk-assets-seg--warn { --seg: var(--amber); }
+.dk-assets-seg--bad { --seg: var(--red); }
+.dk-assets-seg--quiet { --seg: var(--ink-4); }
+
+.dk-assets-parts-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-assets-dot {
+  display: inline-block;
+  width: var(--x8);
+  height: var(--x8);
+  margin-right: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--seg);
+  vertical-align: baseline;
+}
+
+/* ---------- notices ---------- */
+.dk-assets-notice {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x10) var(--pad);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-assets-notice-dot {
+  flex: none;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--notice);
+  box-shadow: 0 0 0 var(--x3) var(--notice-glow);
+}
+
+.dk-assets-notice--info { --notice: var(--blue); --notice-glow: var(--blue-ground); }
+.dk-assets-notice--good { --notice: var(--green); --notice-glow: var(--green-3); }
+.dk-assets-notice--warn { --notice: var(--amber); --notice-glow: var(--amber-ground); }
+.dk-assets-notice--bad { --notice: var(--red); --notice-glow: var(--red-ground); }
+
+/* ---------- the strip: tabs, search, filters ---------- */
+.dk-assets-tools {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-assets-tabs {
+  min-width: 0;
+}
+
+.dk-assets-tools-side {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-assets-search {
+  display: flex;
+  align-items: center;
+  width: var(--dk-assets-search-w);
+  height: calc(var(--ctl) + var(--x2));
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-assets-search:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-assets-search-go {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl);
+  height: 100%;
+  border-radius: var(--r-field) 0 0 var(--r-field);
+  color: var(--ink-3);
+}
+
+.dk-assets-search-go:hover {
+  color: var(--ink);
+}
+
+.dk-assets-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0 var(--x12) 0 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-body);
+  outline: none;
+}
+
+.dk-assets-search-input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-assets-filters {
+  position: relative;
+}
+
+.dk-assets-filters-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  height: calc(var(--ctl) + var(--x2));
+  padding: 0 var(--x16);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  list-style: none;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-assets-filters-button::-webkit-details-marker {
+  display: none;
+}
+
+.dk-assets-filters-button:hover,
+.dk-assets-filters[open] > .dk-assets-filters-button {
+  background: var(--card-3);
+}
+
+.dk-assets-filters-button:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-assets-filters-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x20);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  background: var(--green-3);
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-assets-filters-panel {
+  position: absolute;
+  top: calc(100% + var(--x8));
+  right: 0;
+  z-index: var(--z-pop);
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  width: var(--pop-w);
+  max-width: calc(100vw - var(--x32));
+  padding: var(--pad);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-card);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+}
+
+.dk-assets-filter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-assets-filter .dk-select {
+  width: 100%;
+}
+
+.dk-assets-filter-clear {
+  align-self: flex-start;
+  font-size: var(--t-small);
+}
+
+/* ---------- the head's side: the rescan, and where the figures come from ---------- */
+.dk-assets-head-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x8);
+}
+
+.dk-assets-head-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--x4) var(--x14);
+}
+
+/* ---------- the table ---------- */
+.dk-assets-table-card {
+  container-type: inline-size;
+  overflow: hidden;
+}
+
+/* The Pages board's rows: a thumbnail and two lines in 42px. */
+.dk-assets-table-card .dk-table--roomy tbody td {
+  height: calc(var(--table-row-roomy) - var(--x4));
+}
+
+.dk-assets-absent {
+  padding: var(--pad);
+}
+
+.dk-assets-file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x12);
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A film's poster as its thumbnail, with a film's mark in the corner so it is not taken for a picture. */
+.dk-assets-thumb-film {
+  position: relative;
+  flex: none;
+  display: inline-flex;
+}
+
+.dk-assets-thumb-play {
+  position: absolute;
+  right: var(--x2);
+  bottom: var(--x2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x14);
+  height: var(--x14);
+  border-radius: var(--x3);
+  background: var(--scrim);
+  color: var(--ink);
+}
+
+.dk-assets-file-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-assets-file-name {
+  max-width: var(--dk-assets-name);
+  overflow: hidden;
+  color: inherit;
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+}
+
+.dk-assets-file-folder {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+}
+
+.dk-assets-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-assets-ext {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-assets-dash {
+  color: var(--ink-4);
+}
+
+.dk-assets-heavy {
+  color: var(--red);
+}
+
+.dk-assets-warn {
+  color: var(--amber);
+}
+
+.dk-assets-bad {
+  color: var(--red);
+}
+
+.dk-assets-good {
+  color: var(--green);
+}
+
+.dk-assets-quiet {
+  color: var(--ink-3);
+}
+
+.dk-assets-used {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+}
+
+.dk-assets-used-n {
+  min-width: var(--x14);
+  color: var(--ink);
+}
+
+.dk-assets-pagechip {
+  display: inline-block;
+  max-width: var(--dk-assets-pagechip);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  overflow: hidden;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: calc(var(--x20) - var(--x2));
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-assets-pagechip:hover {
+  border-color: var(--green-4);
+  color: var(--green);
+}
+
+.dk-assets-more {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-assets-alt {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: 100%;
+  color: var(--ink-2);
+}
+
+.dk-assets-alt-text {
+  max-width: var(--dk-assets-alt);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-assets-alt--bad {
+  color: var(--red);
+}
+
+.dk-assets-alt--quiet {
+  color: var(--ink-3);
+}
+
+.dk-assets-chips {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-assets-chip {
+  display: inline-flex;
+  border-radius: var(--r-chip);
+}
+
+.dk-assets-chip:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-assets-chips .dk-chip {
+  height: calc(var(--x20) + var(--x2));
+  padding: 0 var(--x6);
+}
+
+.dk-assets-none {
+  color: var(--ink-4);
+}
+
+.dk-assets-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x2);
+}
+
+.dk-assets-link {
+  color: var(--green);
+}
+
+.dk-assets-link:hover {
+  text-decoration: underline;
+}
+
+.dk-assets-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+.dk-assets-cut {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+.dk-assets-break {
+  overflow-wrap: anywhere;
+}
+
+/* Tooltip words */
+.dk-assets-tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-assets-tip b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-assets-tip-figures {
+  color: var(--ink-3);
+}
+
+/* ---------- the pager, in the table's foot ---------- */
+.dk-assets-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x16);
+  padding: var(--x10) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* "1–8 of 550 files", and beside it where the rows come from, as the Pages screen prints it. */
+.dk-assets-pager-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x14);
+  min-width: 0;
+}
+
+.dk-assets-pager-stamps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x14);
+}
+
+.dk-assets-pager-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-assets-pager-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  padding: 0 var(--x6);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  transition: background-color var(--fast) var(--ease);
+}
+
+a.dk-assets-pager-step:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-assets-pager-step--on {
+  border-color: var(--green-4);
+  background: var(--tab-on);
+  color: var(--ink);
+}
+
+.dk-assets-pager-step--off {
+  color: var(--ink-4);
+}
+
+.dk-assets-pager-gap {
+  padding: 0 var(--x2);
+  color: var(--ink-4);
+}
+
+.dk-assets-pager-per {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+/* ---------- panels ---------- */
+.dk-assets-panel-stamp {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x14);
+  margin-top: var(--x12);
+}
+
+.dk-assets-panel-note {
+  margin-top: var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-assets-panel-lead {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-assets-panel-lead b {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+}
+
+.dk-assets-panel-lead b.dk-assets-bad {
+  color: var(--red);
+}
+
+.dk-assets-panel-lead b.dk-assets-good {
+  color: var(--green);
+}
+
+.dk-assets-donut {
+  display: flex;
+  align-items: center;
+  gap: var(--x16);
+  min-width: 0;
+}
+
+.dk-assets-donut > .dk-legend {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-assets-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  margin-top: var(--x10);
+}
+
+.dk-assets-fact {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--barlist-row);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-assets-fact-dot {
+  flex: none;
+  width: var(--legend-dot);
+  height: var(--legend-dot);
+  border-radius: var(--r-pill);
+  background: var(--fact);
+}
+
+.dk-assets-fact--good { --fact: var(--green); }
+.dk-assets-fact--warn { --fact: var(--amber); }
+.dk-assets-fact--bad { --fact: var(--red); }
+.dk-assets-fact--info { --fact: var(--blue); }
+.dk-assets-fact--quiet { --fact: var(--ink-4); }
+
+.dk-assets-fact-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-assets-fact .dk-tip-anchor {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-assets-fact--quiet .dk-assets-fact-text {
+  color: var(--ink-3);
+}
+
+.dk-assets-fact-figure {
+  flex: none;
+  color: var(--ink);
+}
+
+.dk-assets-rows {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x10);
+}
+
+.dk-assets-row {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--x10);
+  min-height: var(--barlist-row);
+  padding: var(--x4) var(--x6);
+  margin: 0 calc(var(--x6) * -1);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-assets-row:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-assets-row-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-assets-row-sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-assets-row-figure {
+  grid-column: 3;
+  justify-self: end;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-assets-hosts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin-top: var(--x10);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-assets-hosts li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  color: var(--ink);
+}
+
+.dk-assets-default {
+  margin-top: var(--x4);
+}
+
+.dk-assets-pagechips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-top: var(--x8);
+}
+
+/* ---------- one file, opened beside the list ---------- */
+.dk-assets-drawer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-pop);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dk-assets-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+}
+
+.dk-assets-drawer-panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(calc(var(--dialog-md) - var(--x40)), 100vw);
+  height: 100%;
+  border-left: var(--x1) solid var(--pop-edge);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  outline: none;
+}
+
+.dk-assets-drawer-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--top);
+  padding: 0 var(--pad);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-assets-drawer-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-assets-drawer-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+}
+
+.dk-assets-drawer-x:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-assets-drawer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--pad);
+}
+
+.dk-assets-preview {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: var(--dk-assets-preview-h);
+  overflow: hidden;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card-2);
+}
+
+/* A picture with a transparency channel sits on a check, so its edges show. */
+.dk-assets-preview--alpha {
+  background: repeating-conic-gradient(var(--card-3) 0% 25%, var(--card-2) 0% 50%) 50% / var(--x16) var(--x16);
+}
+
+.dk-assets-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* A film's poster in the opened file: what it is, across its foot. */
+.dk-assets-preview {
+  position: relative;
+}
+
+.dk-assets-preview-caption {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  padding: var(--x6) var(--x10);
+  background: var(--scrim);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-assets-preview-caption .dk-icon {
+  flex: none;
+}
+
+.dk-assets-preview-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--x10);
+  max-width: 70%;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-align: center;
+}
+
+.dk-assets-drawer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-top: var(--x12);
+}
+
+.dk-assets-drawer-actions .dk-chip {
+  margin-left: auto;
+}
+
+.dk-assets-drawer-section {
+  margin-top: var(--x20);
+}
+
+.dk-assets-drawer-h {
+  margin-bottom: var(--x10);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-assets-dl {
+  display: flex;
+  flex-direction: column;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-assets-dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 0.42fr) minmax(0, 0.58fr);
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+  font-size: var(--t-body);
+}
+
+.dk-assets-dl dt {
+  color: var(--ink-3);
+}
+
+.dk-assets-dl dd {
+  min-width: 0;
+  color: var(--ink);
+}
+
+.dk-assets-checks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-assets-check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--x10);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--check-edge);
+  border-radius: var(--r-field);
+  background: var(--check-ground);
+}
+
+.dk-assets-check > .dk-icon {
+  margin-top: var(--x2);
+  color: var(--check);
+}
+
+.dk-assets-check--pass { --check: var(--green); --check-edge: var(--line); --check-ground: var(--card); }
+.dk-assets-check--warn { --check: var(--amber); --check-edge: var(--amber-edge); --check-ground: var(--amber-ground); }
+.dk-assets-check--fail { --check: var(--red); --check-edge: var(--red-edge); --check-ground: var(--red-ground); }
+.dk-assets-check--note { --check: var(--ink-3); --check-edge: var(--line); --check-ground: var(--card); }
+
+.dk-assets-check-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-assets-check-head b {
+  font-weight: var(--w-semi);
+}
+
+.dk-assets-check-word {
+  flex: none;
+  color: var(--check);
+  font-size: var(--t-small);
+}
+
+.dk-assets-check-text {
+  margin-top: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-assets-check-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x16);
+  margin-top: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-assets-check-figures b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-assets-uses {
+  display: flex;
+  flex-direction: column;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-assets-uses > li {
+  padding: var(--x10) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-assets-use-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-assets-use-page:hover .dk-assets-use-title {
+  color: var(--green);
+}
+
+.dk-assets-use-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-assets-use-path {
+  color: var(--ink-3);
+  overflow-wrap: anywhere;
+}
+
+.dk-assets-use-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin-top: var(--x6);
+}
+
+.dk-assets-use-list li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding-left: var(--x10);
+  border-left: var(--x2) solid var(--line-2);
+  font-size: var(--t-small);
+}
+
+.dk-assets-use-how {
+  color: var(--ink-3);
+}
+
+.dk-assets-use-alt {
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- narrower ---------- */
+/* Under the full width the long cells give way first, so the checks stay in sight. */
+@container (max-width: 1200px) {
+  .dk-assets-file-name {
+    max-width: var(--dk-assets-name-narrow);
+  }
+
+  .dk-assets-alt-text {
+    max-width: var(--dk-assets-alt-narrow);
+  }
+
+  .dk-assets-pagechip {
+    max-width: var(--dk-assets-pagechip-narrow);
+  }
+
+}
+
+@media (max-width: 1360px) {
+  .dk-assets-tools {
+    flex-wrap: wrap;
+  }
+
+  .dk-assets-tools-side {
+    flex: 1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 760px) {
+  .dk-assets-head-side {
+    align-items: flex-start;
+  }
+
+  .dk-assets-head-stamps {
+    justify-content: flex-start;
+  }
+
+  .dk-assets-tools-side {
+    width: 100%;
+  }
+
+  .dk-assets-search {
+    flex: 1;
+    width: auto;
+  }
+
+  .dk-assets-filters-panel {
+    position: fixed;
+    top: auto;
+    right: var(--x16);
+    left: var(--x16);
+    bottom: var(--x16);
+    width: auto;
+    max-width: none;
+  }
+
+  .dk-assets-pager {
+    justify-content: center;
+  }
+
+  .dk-assets-drawer-panel {
+    width: 100vw;
+    border-left: 0;
+  }
+}

@@ -1,0 +1,224 @@
+/* A wide table scrolls inside its own panel; the page never scrolls sideways. */
+.dk-table-wrap {
+  /* Positioned, so the visually hidden caption and heads (.dk-sr, absolute)
+     are clipped by this scroller instead of widening the page when a table
+     scrolls sideways. */
+  position: relative;
+  width: 100%;
+  overflow-x: auto;
+  border-radius: inherit;
+}
+
+.dk-table {
+  width: 100%;
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+
+.dk-table th,
+.dk-table td {
+  padding: 0 var(--x12);
+  text-align: left;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dk-table th:first-child,
+.dk-table td:first-child {
+  padding-left: var(--pad);
+}
+
+.dk-table th:last-child,
+.dk-table td:last-child {
+  padding-right: var(--pad);
+}
+
+.dk-table .dk-table-right {
+  text-align: right;
+}
+
+.dk-table .dk-table-center {
+  text-align: center;
+}
+
+/* ---- heads ---- */
+.dk-table thead th {
+  height: var(--x32);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-table--plain thead th {
+  height: var(--x40);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-small);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dk-table-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  border-radius: var(--x4);
+}
+
+.dk-table-right .dk-table-sort {
+  flex-direction: row-reverse;
+}
+
+.dk-table-sort .dk-icon {
+  opacity: 0.45;
+}
+
+.dk-table-sort:hover,
+.dk-table-sort--on {
+  color: var(--ink);
+}
+
+.dk-table-sort--on .dk-icon {
+  opacity: 1;
+  color: var(--green);
+}
+
+/* ---- rows ---- */
+.dk-table tbody tr {
+  position: relative;
+  border-top: var(--x1) solid var(--line);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-table--dense tbody td {
+  height: var(--table-row);
+}
+
+.dk-table--roomy tbody td {
+  height: var(--table-row-roomy);
+}
+
+.dk-table tbody tr:hover,
+.dk-table tbody tr.dk-table-picked {
+  background: var(--hover);
+}
+
+.dk-table tbody td:first-child {
+  color: var(--ink);
+}
+
+/* The first cell's link is stretched over the whole row, so the row is one
+   real link: it can be opened in a new tab and reached with the keyboard. */
+.dk-table-go {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  max-width: 100%;
+  color: inherit;
+}
+
+.dk-table-go::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.dk-table-linked {
+  cursor: pointer;
+}
+
+.dk-table-linked:hover td:first-child {
+  color: var(--green);
+}
+
+/* Anything else a row holds that can be pressed stays above that link. */
+.dk-table tbody :is(button, input, select, a:not(.dk-table-go), [tabindex]) {
+  position: relative;
+  z-index: 1;
+}
+
+.dk-table-go:focus-visible {
+  outline: none;
+}
+
+.dk-table-go:focus-visible::after {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: calc(var(--x2) * -1);
+}
+
+/* ---- the checkbox column ---- */
+.dk-table .dk-table-pick {
+  width: var(--x40);
+  padding-right: 0;
+}
+
+.dk-check {
+  appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: var(--x14);
+  height: var(--x14);
+  margin: 0;
+  border: var(--x1) solid var(--ink-4);
+  border-radius: var(--x3);
+  background: transparent;
+  vertical-align: middle;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-check:hover {
+  border-color: var(--ink-2);
+}
+
+.dk-check:checked,
+.dk-check:indeterminate {
+  border-color: var(--green-2);
+  background: var(--green-2);
+}
+
+/* The tick and the dash are drawn with the box's own edges: no image, no font. */
+.dk-check:checked::after {
+  content: "";
+  width: var(--x4);
+  height: var(--x8);
+  margin-top: calc(var(--x2) * -1);
+  border: solid var(--ink-on-green);
+  border-width: 0 var(--x2) var(--x2) 0;
+  transform: rotate(45deg);
+}
+
+.dk-check:indeterminate::after {
+  content: "";
+  width: var(--x8);
+  height: var(--x2);
+  background: var(--ink-on-green);
+}
+
+.dk-check:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ---- no rows ---- */
+.dk-table-none td,
+.dk-table--dense .dk-table-none td,
+.dk-table--roomy .dk-table-none td {
+  height: var(--x56);
+  color: var(--ink-3);
+  text-align: center;
+  white-space: normal;
+}
+
+.dk-table tbody tr.dk-table-none:hover {
+  background: transparent;
+}

@@ -1,0 +1,237 @@
+/*
+ * The conversion funnel. Measured on the Conversions board: each step a
+ * faintly edged card about 100px wide, its label and figure centred, a column
+ * that is brightest in a band at its top, the share under it, and in the gap
+ * between two cards an arrow with the step's rate in green.
+ */
+.dk-funnel {
+  container-type: inline-size;
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-funnel-list {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  column-gap: var(--funnel-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-funnel-step {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto auto var(--funnel-col) auto;
+  justify-items: center;
+  row-gap: var(--x4);
+  min-width: 0;
+  padding: var(--x10) var(--x8) var(--x8);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  text-align: center;
+}
+
+.dk-funnel-label {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A step's optional second line (`FunnelStep.note`): the event it is counted
+   from. It never widens its step: it takes the step's width (the label
+   stretches to it when it has a note) and is cut there, whole on hover. */
+.dk-funnel-label:has(> .dk-funnel-note) {
+  justify-self: stretch;
+}
+
+.dk-funnel-note {
+  display: block;
+  contain: inline-size;
+  overflow: hidden;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+}
+
+.dk-funnel-figure {
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}
+
+/* The column's room: a thin stem falls from the figure to the column's top. */
+.dk-funnel-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 0;
+  padding-top: var(--x4);
+}
+
+.dk-funnel-stem {
+  position: relative;
+  flex: 1 1 0;
+  width: var(--x1);
+  min-height: 0;
+  margin-bottom: var(--x3);
+  background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--c) var(--funnel-stem-ink), transparent));
+}
+
+/* The stem points down into its column, as on the board. A stem with no room has no head. */
+.dk-funnel-stem::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: var(--funnel-head);
+  height: var(--funnel-head);
+  transform: translate(-50%, 0) rotate(45deg);
+  transform-origin: center;
+  border-right: var(--x1) solid color-mix(in srgb, var(--c) var(--funnel-stem-ink), transparent);
+  border-bottom: var(--x1) solid color-mix(in srgb, var(--c) var(--funnel-stem-ink), transparent);
+}
+
+.dk-funnel-stem:not([data-room])::after {
+  display: none;
+}
+
+.dk-funnel-bar {
+  flex: none;
+  width: var(--funnel-bar);
+  max-width: 100%;
+  height: calc(var(--h) * (100% - var(--x4)));
+  min-height: var(--x1);
+  border-radius: var(--x4) var(--x4) 0 0;
+  /* A lit band across the top, then the colour sinks into the panel. Measured
+     on the board: the band is nearly the full colour, the body starts at about
+     half and is a tenth at the foot. */
+  background:
+    linear-gradient(to bottom, color-mix(in srgb, var(--c) var(--funnel-band), var(--chart-ground, var(--card))) 0 var(--x12), transparent var(--x12)),
+    linear-gradient(to bottom, color-mix(in srgb, var(--c) var(--funnel-body-top), var(--chart-ground, var(--card))), color-mix(in srgb, var(--c) var(--funnel-body-low), var(--chart-ground, var(--card))));
+  box-shadow: inset 0 var(--x1) 0 color-mix(in srgb, var(--c) var(--funnel-edge), transparent);
+}
+
+.dk-funnel-share {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+}
+
+/* The rate sits in the gap before its step. */
+.dk-funnel-rate {
+  position: absolute;
+  top: var(--funnel-rate-top);
+  right: 100%;
+  display: grid;
+  justify-items: center;
+  gap: var(--x6);
+  width: var(--funnel-gap);
+  color: var(--c);
+  font-size: var(--t-label);
+  line-height: 1;
+}
+
+.dk-funnel-rate b {
+  font-weight: var(--w-medium);
+}
+
+.dk-funnel-rate[data-none] {
+  color: var(--ink-4);
+}
+
+.dk-funnel-arrow {
+  width: var(--x12);
+  height: var(--x12);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--chart-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Said whenever the columns are on a log scale, so nobody reads them as proportions. */
+.dk-funnel-scale {
+  margin: var(--x8) 0 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+/* ---------- narrow: the columns become rows ------------------------------- */
+
+@container (max-width: 520px) {
+  .dk-funnel-list {
+    grid-auto-flow: row;
+    row-gap: var(--x24);
+  }
+
+  .dk-funnel-step {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-rows: auto auto;
+    align-items: baseline;
+    justify-items: start;
+    column-gap: var(--x10);
+    row-gap: var(--x8);
+    padding: var(--x10) var(--x12);
+    text-align: left;
+  }
+
+  .dk-funnel-share {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: var(--x40);
+    text-align: right;
+  }
+
+  .dk-funnel-col {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    flex-direction: row;
+    padding-top: 0;
+  }
+
+  .dk-funnel-stem {
+    display: none;
+  }
+
+  /* A row's bar is read against the share printed beside it, so it is always
+     straight: --w is the step's part of the largest, whatever the scale. */
+  .dk-funnel-bar {
+    width: calc(var(--w) * 100%);
+    min-width: var(--x1);
+    height: var(--x8);
+    border-radius: var(--r-pill);
+    background: linear-gradient(to right, color-mix(in srgb, var(--c) var(--funnel-row-low), var(--chart-ground, var(--card))), var(--c));
+    box-shadow: none;
+  }
+
+  .dk-funnel-scale {
+    display: none;
+  }
+
+  .dk-funnel-rate {
+    top: auto;
+    right: auto;
+    bottom: 100%;
+    left: var(--x12);
+    display: flex;
+    align-items: center;
+    width: auto;
+    height: var(--x24);
+  }
+
+  .dk-funnel-arrow {
+    transform: rotate(90deg);
+  }
+}

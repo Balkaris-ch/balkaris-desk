@@ -1,0 +1,28 @@
+.dk-bar {
+  display: block;
+  width: 100%;
+  min-width: var(--x32);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  overflow: hidden;
+}
+
+.dk-bar--thin {
+  height: var(--x4);
+}
+
+.dk-bar--md {
+  height: var(--x6);
+}
+
+.dk-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--tone);
+  transition: width var(--slow) var(--ease);
+}
+
+.dk-bar.dk-tone-quiet .dk-bar-fill {
+  background: var(--ink-3);
+}

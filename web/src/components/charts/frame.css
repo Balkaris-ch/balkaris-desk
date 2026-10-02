@@ -1,0 +1,257 @@
+/*
+ * The plot: tick labels left (and right), the stretched SVG, x labels under
+ * it, and the hover layer over it. Measured on the boards' Website traffic and
+ * Ranking trend panels.
+ *
+ * The frame is a size container, so that a narrow chart can drop every other
+ * x label and its dots without the server knowing how wide it will be. It
+ * takes the width of whatever it is put in; it has none of its own.
+ */
+.dk-frame {
+  --chart-ground: var(--card);
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: var(--x8);
+  margin: 0;
+  /* Half of the last x label hangs past the last point. */
+  padding-inline-end: var(--x16);
+  /* The boards print axis figures light, close to body text: they are read, not decoration. */
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-label);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+/* A right axis is its own gutter. */
+.dk-frame--right {
+  padding-inline-end: 0;
+}
+
+.dk-frame--fill {
+  height: 100%;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.dk-frame-plot {
+  grid-column: 2;
+  grid-row: 1;
+  position: relative;
+  min-width: 0;
+  height: var(--chart-h);
+}
+
+.dk-frame--fill .dk-frame-plot {
+  height: auto;
+  min-height: var(--chart-h-min);
+}
+
+/* ---------- tick labels -------------------------------------------------- */
+
+.dk-frame-y {
+  grid-column: 1;
+  grid-row: 1;
+  position: relative;
+  text-align: right;
+}
+
+.dk-frame-y--right {
+  grid-column: 3;
+  text-align: left;
+}
+
+.dk-frame-y-size {
+  display: block;
+  height: 0;
+  visibility: hidden;
+  white-space: nowrap;
+}
+
+.dk-frame-y-tick {
+  position: absolute;
+  inset-inline: 0;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.dk-frame-x {
+  grid-column: 2;
+  grid-row: 2;
+  position: relative;
+  height: calc(var(--t-label) + var(--x10));
+}
+
+.dk-frame-x span {
+  position: absolute;
+  top: var(--x10);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* A short stub under the baseline marks the day a label belongs to. */
+.dk-frame-x span::before {
+  content: "";
+  position: absolute;
+  top: calc(var(--x10) * -1);
+  left: 50%;
+  width: var(--x1);
+  height: var(--chart-tick);
+  background: var(--chart-axis);
+}
+
+/* ---------- grid --------------------------------------------------------- */
+
+.dk-frame-grid {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+/* Over the areas and columns, under the lines and their dots. */
+.dk-frame-axes {
+  z-index: 1;
+}
+
+.dk-frame-gridline,
+.dk-frame-axis {
+  fill: none;
+  stroke-width: var(--x1);
+  vector-effect: non-scaling-stroke;
+  shape-rendering: crispEdges;
+}
+
+.dk-frame-gridline {
+  stroke: var(--chart-grid);
+  stroke-dasharray: var(--x2) var(--x3);
+}
+
+.dk-frame-axis {
+  stroke: var(--chart-axis);
+}
+
+/* ---------- nothing to draw ---------------------------------------------- */
+
+.dk-frame-note {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: var(--x12) var(--x16);
+}
+
+/* ---------- hover -------------------------------------------------------- */
+
+.dk-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  cursor: crosshair;
+  /* A finger dragged across reads the chart; dragged down it still scrolls the page. */
+  touch-action: pan-y;
+  border-radius: var(--x2);
+}
+
+.dk-hover-rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--x1);
+  margin-left: calc(var(--x1) / -2);
+  background: var(--chart-rule);
+  pointer-events: none;
+}
+
+.dk-hover-mark {
+  position: absolute;
+  width: var(--chart-dot);
+  height: var(--chart-dot);
+  margin: calc(var(--chart-dot) / -2) 0 0 calc(var(--chart-dot) / -2);
+  border-radius: 50%;
+  background: var(--c);
+  box-shadow: 0 0 0 var(--x3) color-mix(in srgb, var(--c) var(--chart-halo), transparent);
+  pointer-events: none;
+}
+
+.dk-hover-tip {
+  position: absolute;
+  top: 0;
+  z-index: var(--z-tip);
+  display: grid;
+  gap: var(--x6);
+  min-width: var(--chart-tip-min);
+  padding: var(--x10) var(--x12);
+  transform: translateX(var(--x12));
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dk-hover-tip[data-side="left"] {
+  transform: translateX(calc(-100% - var(--x12)));
+}
+
+.dk-hover-tip p {
+  margin: 0;
+}
+
+.dk-hover-title {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+}
+
+.dk-hover-row {
+  display: grid;
+  grid-template-columns: var(--x8) minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--x8);
+}
+
+.dk-hover-key {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: 50%;
+  background: var(--c);
+}
+
+/* The previous period is a dashed line on the chart, so it is one here. */
+.dk-hover-key[data-dashed] {
+  height: 0;
+  border-radius: 0;
+  border-top: var(--x2) dashed var(--c);
+  background: none;
+}
+
+.dk-hover-value {
+  padding-inline-start: var(--x12);
+  color: var(--ink);
+  font-weight: var(--w-semi);
+  text-align: right;
+}
+
+.dk-hover-note {
+  max-width: var(--chart-tip-max);
+  color: var(--amber);
+  font-size: var(--t-label);
+  white-space: normal;
+}
+
+/* ---------- a narrow chart ----------------------------------------------- */
+
+@container (max-width: 460px) {
+  .dk-frame-x span[data-tier="1"] {
+    display: none;
+  }
+}

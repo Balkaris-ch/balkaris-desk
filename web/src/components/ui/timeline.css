@@ -1,0 +1,92 @@
+.dk-timeline {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* The rail the nodes sit on. It stops at the first and the last node. */
+.dk-timeline::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--x4) - var(--x1) / 2);
+  top: var(--x16);
+  bottom: var(--x16);
+  width: var(--x1);
+  background: var(--line-2);
+}
+
+.dk-timeline-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--x8) var(--timeline-time) var(--x10) minmax(0, 1fr) auto;
+  align-items: start;
+  column-gap: var(--x12);
+  padding: var(--x6) 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--x20);
+}
+
+.dk-timeline-row--link {
+  margin: 0 calc(var(--x8) * -1);
+  padding-left: var(--x8);
+  padding-right: var(--x8);
+  border-radius: var(--r-chip);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-timeline-row--link:hover {
+  background: var(--hover);
+}
+
+.dk-timeline-node {
+  width: var(--x8);
+  height: var(--x8);
+  margin-top: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+  box-shadow: 0 0 0 var(--x3) var(--card);
+}
+
+.dk-timeline-time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-timeline-dot {
+  width: var(--x10);
+  height: var(--x10);
+  margin-top: calc((var(--x20) - var(--x10)) / 2);
+  border: var(--x2) solid var(--tone);
+  border-radius: var(--r-pill);
+  background: var(--tone-ground);
+}
+
+.dk-timeline-dot.dk-tone-quiet {
+  border-color: var(--ink-4);
+}
+
+.dk-timeline-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-timeline-text {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-timeline-detail {
+  color: var(--ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-timeline-go {
+  margin-top: var(--x3);
+  color: var(--ink-4);
+}

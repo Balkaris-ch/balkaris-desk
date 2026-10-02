@@ -1,0 +1,29 @@
+.dk-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x3);
+  font-weight: var(--w-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dk-delta--md {
+  font-size: var(--t-delta);
+}
+
+.dk-delta--sm {
+  font-size: var(--t-body);
+}
+
+.dk-delta--good {
+  color: var(--green);
+}
+
+.dk-delta--bad {
+  color: var(--red);
+}
+
+.dk-delta--flat,
+.dk-delta--none {
+  color: var(--ink-3);
+}

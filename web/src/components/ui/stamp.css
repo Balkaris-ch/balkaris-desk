@@ -1,0 +1,26 @@
+.dk-stamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x4);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-stamp--noted {
+  cursor: help;
+  text-decoration: underline dotted var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-stamp--noted:hover,
+.dk-stamp--noted:focus-visible {
+  color: var(--ink-3);
+}

@@ -1,0 +1,34 @@
+# Installed on the box as `balkaris-desk-web.service`: the desk's interface.
+#
+# A Next.js standalone build, made on a workstation and shipped as a folder
+# (deploy/push.sh). The box never runs `next build`: it shares 3.7 GB with the
+# engine, and a build is the one moment a Next app needs a gigabyte.
+#
+# It holds no data and no credential. Every figure it draws is asked from the
+# desk server beside it on :3400, with the visitor's own cookie; if this unit
+# is down, the Telegram door, the runner door and /health are untouched,
+# because Caddy sends those straight to :3400.
+[Unit]
+Description=Balkaris desk — the interface
+After=network-online.target balkaris-desk.service
+Wants=network-online.target
+
+[Service]
+User=deploy
+Group=deploy
+# A symlink to the release that is live. push.sh unpacks beside it and swaps.
+WorkingDirectory=/opt/balkaris-desk/web-live
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=5
+Environment=NODE_ENV=production
+Environment=PORT=3401
+# Loopback only. Caddy is the one door from outside.
+Environment=HOSTNAME=127.0.0.1
+Environment=DESK_API=http://127.0.0.1:3400
+# Rendering text and SVG. If it ever needs more than this, something is wrong
+# with it, and it should be the one that dies rather than the engine.
+MemoryMax=400M
+
+[Install]
+WantedBy=multi-user.target

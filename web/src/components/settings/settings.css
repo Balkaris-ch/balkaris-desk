@@ -1,0 +1,654 @@
+/*
+ * Settings. No board: drawn in the boards' language (panels, label and value
+ * rows as on Site Health's Infrastructure, chips, the dense table). Every
+ * value is a token; the classes are this screen's own (dk-settings-).
+ */
+
+/* The tab strip's wrapper (TabsInView) takes no room of its own. */
+.dk-settings-tabwrap {
+  display: contents;
+}
+
+/* ---------- small words ---------- */
+.dk-settings-quiet {
+  color: var(--ink-3);
+}
+
+.dk-settings-strong {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-wrap {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  line-height: var(--lh-body);
+}
+
+.dk-settings-code {
+  padding: var(--x1) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-prose b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-settings-prose + .dk-settings-facts,
+.dk-settings-facts + .dk-settings-signout {
+  margin-top: var(--x12);
+}
+
+/* A plain sentence in a panel's footer. */
+.dk-settings-foot {
+  padding: var(--x10) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-foot--inset {
+  border-top: var(--x1) solid var(--line);
+}
+
+/* ---------- label and value rows ---------- */
+.dk-settings-facts {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-settings-fact {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+  gap: var(--x4) var(--x14);
+  align-items: baseline;
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-settings-fact:first-child {
+  border-top: 0;
+  padding-top: var(--x4);
+}
+
+.dk-settings-fact dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-settings-fact dd {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-settings-fact-value {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-fact-note {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-fact-note .dk-bar {
+  max-width: 100%;
+}
+
+/* ---------- people ---------- */
+.dk-settings-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-settings-who-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-settings-who-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-who-name .dk-chip {
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-label);
+}
+
+.dk-settings-who-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-owner {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  margin-bottom: var(--x14);
+}
+
+.dk-settings-owner-name {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-bottom: var(--x8);
+}
+
+/* The owner's Edit stays in view while a narrow table scrolls sideways under it. */
+.dk-settings-people--edit .dk-table td:last-child,
+.dk-settings-people--edit .dk-table th:last-child {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background-color: var(--card);
+}
+
+.dk-settings-people--edit .dk-table tbody tr:hover td:last-child {
+  background-image: linear-gradient(var(--hover), var(--hover));
+}
+
+.dk-settings-signout {
+  display: flex;
+  justify-content: flex-start;
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* ---------- the edit dialog ---------- */
+.dk-settings-editcell {
+  display: inline-block;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  text-align: left;
+  white-space: normal;
+}
+
+.dk-settings-edit {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-settings-form .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-settings-form--part {
+  gap: var(--x8);
+  margin-top: var(--x20);
+  padding-top: var(--x16);
+  border-top: var(--x1) solid var(--line-2);
+}
+
+.dk-settings-parthead {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-semi);
+}
+
+.dk-settings-parttext {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-fixed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-settings-fixed-label {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-fixed-value {
+  color: var(--ink);
+  font-size: var(--t-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-fixed-hint {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-checkrow {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-settings-check {
+  flex: none;
+  width: var(--x16);
+  height: var(--x16);
+  margin-top: var(--x2);
+  accent-color: var(--green-2);
+  cursor: pointer;
+}
+
+.dk-settings-checktext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  cursor: pointer;
+}
+
+.dk-settings-checklabel {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-checkhint {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x10);
+}
+
+.dk-settings-said {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-said--ok {
+  color: var(--green);
+}
+
+.dk-settings-said--bad {
+  color: var(--red);
+}
+
+.dk-settings-linkpick {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+/* ---------- the owner's checklist ---------- */
+.dk-settings-steps {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-settings-step {
+  display: grid;
+  grid-template-columns: var(--x24) minmax(0, 1fr);
+  gap: var(--x12);
+  padding: var(--x14) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-settings-step:first-child {
+  border-top: 0;
+  padding-top: var(--x4);
+}
+
+.dk-settings-step-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-pill);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-settings-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-settings-step-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10);
+  min-height: var(--x24);
+}
+
+.dk-settings-step-title {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}
+
+.dk-settings-step-unlocks,
+.dk-settings-step-why {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-step-why {
+  color: var(--ink-3);
+}
+
+.dk-settings-step-key {
+  margin-right: var(--x4);
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-settings-step-text {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--x10);
+  align-items: start;
+  margin-top: var(--x4);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-step-copy {
+  margin: calc(var(--x4) * -1) calc(var(--x6) * -1) 0 0;
+}
+
+.dk-settings-cmd {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--x8);
+  align-items: center;
+  padding: var(--x4) var(--x6) var(--x4) var(--x12);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-field);
+  background: var(--bg);
+}
+
+.dk-settings-cmd-prompt {
+  color: var(--green);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+.dk-settings-cmd-text {
+  min-width: 0;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-settings-step-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+}
+
+/* ---------- side panels on Sources ---------- */
+/* Each card as tall as what it holds; only the last takes what is left of the checklist's height. */
+/* Two classes, so this outranks the shared `.dk-stack > *` whatever order the sheets load in. */
+.dk-stack.dk-settings-side > * {
+  flex: 0 0 auto;
+}
+
+.dk-stack.dk-settings-side > :last-child {
+  flex: 1 1 auto;
+}
+
+.dk-settings-keynote {
+  margin-top: var(--x10);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-copyline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-bottom: var(--x12);
+}
+
+.dk-settings-evt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+}
+
+.dk-settings-allows {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-settings-allow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x10) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-settings-allow:first-child {
+  border-top: 0;
+  padding-top: var(--x4);
+}
+
+.dk-settings-allow-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x4) var(--x12);
+}
+
+.dk-settings-allow-label {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-settings-allow-value {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-allow-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-allow .dk-bar {
+  width: 100%;
+}
+
+/* ---------- every source, and the checks ---------- */
+.dk-settings-src {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding: var(--x8) 0;
+  white-space: normal;
+}
+
+.dk-settings-src-name {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-src-err {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-settings-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-settings-checkline {
+  display: grid;
+  grid-template-columns: var(--x16) minmax(0, 1fr);
+  gap: var(--x8);
+  align-items: baseline;
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-settings-checkline:first-child {
+  border-top: 0;
+  padding-top: var(--x2);
+}
+
+.dk-settings-checkline-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-settings-checkline-name {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-settings-checkline-detail {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- writing ---------- */
+.dk-settings-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  margin-bottom: var(--x12);
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-settings-state-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+  letter-spacing: 0;
+}
+
+/* ---------- a phone ---------- */
+@media (max-width: 600px) {
+  /* The order is the list's own; the numbered column costs a phone too much width. */
+  .dk-settings-step {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-settings-step-n {
+    display: none;
+  }
+
+  .dk-settings-step-text {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-settings-step-copy {
+    justify-self: start;
+    margin: 0 0 0 calc(var(--x10) * -1);
+  }
+
+  .dk-settings-fact {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

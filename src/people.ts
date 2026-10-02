@@ -60,8 +60,17 @@ export interface Person {
    * moves by editing the box's .env, which needs the server.
    */
   owner: boolean;
-  /** Somebody an owner has switched off. They can sign in and do nothing. */
+  /** Somebody an owner has switched off. They can sign in, and every door answers 403. */
   revoked: boolean;
+  /**
+   * May read enquiries: names, contact details, messages.
+   *
+   * An enquiry is a stranger's personal data, and "has a @balkaris.ch
+   * account" is not a reason to read it. So this is off for everybody until
+   * the owner switches it on for them, the owner always has it, and a revoked
+   * person never does whatever the column says.
+   */
+  seesLeads: boolean;
 }
 
 /** The one account that can change other people. */
@@ -74,6 +83,7 @@ db.exec(`
     email      TEXT,
     author     TEXT NOT NULL DEFAULT 'balkaris',
     revoked    INTEGER NOT NULL DEFAULT 0,
+    sees_leads INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -89,24 +99,28 @@ db.exec(`
 `);
 
 /* Added after the table existed. */
-try {
-  db.exec("ALTER TABLE people ADD COLUMN revoked INTEGER NOT NULL DEFAULT 0");
-} catch {
-  /* already there */
+for (const column of ["revoked INTEGER NOT NULL DEFAULT 0", "sees_leads INTEGER NOT NULL DEFAULT 0"]) {
+  try {
+    db.exec(`ALTER TABLE people ADD COLUMN ${column}`);
+  } catch {
+    /* already there */
+  }
 }
 
-const row = (r: Record<string, unknown> | undefined): Person | null =>
-  r
-    ? {
-        telegram: Number(r.telegram),
-        name: String(r.name),
-        email: (r.email as string | null) ?? null,
-        author: String(r.author ?? "balkaris"),
-        canPublish: !!r.email && !r.revoked,
-        owner: String(r.email ?? "").toLowerCase() === OWNER_EMAIL,
-        revoked: !!r.revoked,
-      }
-    : null;
+const row = (r: Record<string, unknown> | undefined): Person | null => {
+  if (!r) return null;
+  const owner = String(r.email ?? "").toLowerCase() === OWNER_EMAIL;
+  return {
+    telegram: Number(r.telegram),
+    name: String(r.name),
+    email: (r.email as string | null) ?? null,
+    author: String(r.author ?? "balkaris"),
+    canPublish: !!r.email && !r.revoked,
+    owner,
+    revoked: !!r.revoked,
+    seesLeads: !r.revoked && (owner || !!r.sees_leads),
+  };
+};
 
 export const getPerson = (telegram: number): Person | null =>
   row(db.prepare("SELECT * FROM people WHERE telegram = ?").get(telegram) as Record<string, unknown> | undefined);
@@ -147,15 +161,8 @@ export function rememberGoogle(email: string, name: string): Person {
     "balkaris",
   );
   log("person.google", { email });
-  return {
-    telegram: id,
-    name,
-    email,
-    author: "balkaris",
-    canPublish: true,
-    owner: email.toLowerCase() === OWNER_EMAIL,
-    revoked: false,
-  };
+  const owner = email.toLowerCase() === OWNER_EMAIL;
+  return { telegram: id, name, email, author: "balkaris", canPublish: true, owner, revoked: false, seesLeads: owner };
 }
 
 export const everyone = (): Person[] =>
@@ -178,7 +185,7 @@ export function remember(telegram: number, name: string): Person {
   }
   db.prepare("INSERT INTO people (telegram, name) VALUES (?, ?)").run(telegram, name);
   log("person.new", { telegram, name });
-  return { telegram, name, email: null, author: "balkaris", canPublish: false, owner: false, revoked: false };
+  return { telegram, name, email: null, author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads: false };
 }
 
 export function setEmail(telegram: number, email: string | null): void {
@@ -189,6 +196,18 @@ export function setEmail(telegram: number, email: string | null): void {
 export function setRevoked(telegram: number, revoked: boolean): void {
   db.prepare("UPDATE people SET revoked = ? WHERE telegram = ?").run(revoked ? 1 : 0, telegram);
   log("person.revoked", { telegram, revoked });
+}
+
+/**
+ * Let somebody read enquiries, or stop them.
+ *
+ * It changes nothing for the owner (always yes) or for a revoked person
+ * (always no): see `Person.seesLeads`. The caller checks that it is the owner
+ * asking; this only writes it down and records that it happened.
+ */
+export function setSeesLeads(telegram: number, sees: boolean): void {
+  db.prepare("UPDATE people SET sees_leads = ? WHERE telegram = ?").run(sees ? 1 : 0, telegram);
+  log("person.leads", { telegram, sees });
 }
 
 /**
@@ -205,12 +224,15 @@ export function link(telegram: number, email: string): boolean {
   const acct = byEmail(email);
   if (!tg || !acct || tg.telegram === acct.telegram) return false;
 
-  db.prepare("UPDATE people SET email = ?, author = ?, revoked = ? WHERE telegram = ?").run(
-    acct.email,
-    acct.author,
-    acct.revoked ? 1 : 0,
-    telegram,
-  );
+  /* Everything the owner decided about the account comes across with it,
+     including whether it may read enquiries: joining two rows must not
+     quietly take a right away, or hand one out. The column is copied as it
+     is stored, not as `seesLeads` reads (which is always true for the owner). */
+  db.prepare(
+    `UPDATE people SET email = ?, author = ?, revoked = ?,
+            sees_leads = (SELECT sees_leads FROM people WHERE telegram = ?)
+      WHERE telegram = ?`,
+  ).run(acct.email, acct.author, acct.revoked ? 1 : 0, acct.telegram, telegram);
   db.prepare("DELETE FROM people WHERE telegram = ?").run(acct.telegram);
   log("person.linked", { telegram, email });
   return true;

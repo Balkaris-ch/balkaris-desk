@@ -1,0 +1,76 @@
+.dk-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: var(--x4);
+  max-width: 100%;
+  padding: var(--x3);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+  /* On a phone the strip scrolls sideways under the thumb; it never wraps. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.dk-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.dk-tab {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x8);
+  height: var(--ctl-sm);
+  padding: 0 var(--x16);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-tab:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-tab--on,
+.dk-tab--on:hover {
+  border-color: var(--green-4);
+  background: var(--tab-on);
+  color: var(--ink);
+}
+
+.dk-tab--on .dk-icon {
+  color: var(--green);
+}
+
+/* ---- inside a panel ---- */
+.dk-tabs--sm {
+  display: inline-flex;
+  gap: var(--x2);
+  padding: var(--x2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-tabs--sm .dk-tab {
+  height: var(--ctl-xs);
+  padding: 0 var(--x12);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-tabs--sm .dk-tab--on,
+.dk-tabs--sm .dk-tab--on:hover {
+  border-color: transparent;
+  background: var(--card-3);
+  color: var(--ink);
+}

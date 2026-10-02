@@ -1,0 +1,72 @@
+/*
+ * The countries map. On the boards: a dark world on the panel, the countries
+ * with visitors lit green, a soft glow at each. Here the land is a grid of
+ * dots, so at the board's size it reads as that dark shape and at a larger
+ * size as the dots it is made of.
+ *
+ * Each run of dots is one stroke, dashed "nothing, then one cell": a dash of
+ * no length with a round cap is a dot.
+ */
+.dk-map {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--x8);
+}
+
+/* The glows are clipped to the map (with a little room to fade): a country on
+   the map's edge, by the date line, must not push the page wider. */
+.dk-map-plot {
+  position: relative;
+  width: 100%;
+  overflow: clip;
+  overflow-clip-margin: var(--x8);
+}
+
+.dk-map-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.dk-map-land,
+.dk-map-lit {
+  fill: none;
+  stroke-width: var(--map-dot);
+  stroke-linecap: round;
+  stroke-dasharray: 0 1;
+}
+
+.dk-map-land {
+  stroke: var(--map-land);
+}
+
+/* --k is the country's strength, 0 to 1 (the square root of its share of the largest). */
+.dk-map-lit {
+  stroke: color-mix(in srgb, var(--green) calc((var(--map-lit-low) + (100 - var(--map-lit-low)) * var(--k)) * 1%), var(--map-land));
+}
+
+.dk-map-glow {
+  position: absolute;
+  width: calc(var(--map-glow) * (var(--map-glow-min) + (1 - var(--map-glow-min)) * var(--k)));
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--green) var(--map-glow-core), transparent) 0, var(--green-glow) var(--map-glow-edge), transparent 100%);
+  pointer-events: none;
+}
+
+.dk-map--none {
+  place-items: center;
+  min-height: var(--chart-h);
+  padding: var(--x16);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-field);
+}
+
+.dk-map-off {
+  margin: 0;
+  color: var(--ink-4);
+  font-family: var(--font);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}

@@ -1,0 +1,316 @@
+/*
+ * The frame: sidebar on the left, top bar across, the screen in between.
+ * Measured on the boards at 1672: sidebar 228, top bar 62, rows 36 high on a
+ * 42 step from x 30 to 217, the page 30 in from each side.
+ */
+.dk-shell {
+  display: grid;
+  grid-template-columns: var(--side) minmax(0, 1fr);
+  min-height: 100dvh;
+}
+
+.dk-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-main {
+  flex: 1;
+  min-width: 0;
+  padding: 0 var(--page-x) var(--x32);
+}
+
+/* A screen is a stack: its head, then rows of panels, the same gap between all. */
+.dk-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  width: 100%;
+  max-width: var(--page-max);
+  margin: 0 auto;
+}
+
+/* A screen that is loading keeps the same stack (app/(frame)/loading.tsx). */
+.dk-page-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* ---------- sidebar ---------- */
+.dk-side {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-side);
+  align-self: start;
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  border-right: var(--x1) solid var(--line);
+  background: var(--bg-side);
+  /* Only a window shorter than the closest rows can fit scrolls it, and then
+     the thin bar (its colour is the page's, base.css) shows there is more. */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  /*
+   * The rows' step for this window. The boards' 42 while the foot (Balkaris
+   * AI and the two live-site buttons) fits under the fourteen rows; on a
+   * shorter window the rows close up, a pixel at a time, just enough to keep
+   * it in sight, down to --row-step-least. Declared here, not on :root,
+   * because 100dvh and the gap derived from it must be worked out where they
+   * are used.
+   */
+  --side-step: clamp(var(--row-step-least), calc((100dvh - var(--side-rest)) / 14), var(--row-step));
+  --side-row: min(var(--row), calc(var(--side-step) - var(--row-gap-least)));
+}
+
+/* Whole pixels where the browser can round, so a row's edge stays crisp. */
+@supports (width: round(down, 1.5px, 1px)) {
+  .dk-side {
+    --side-step: clamp(var(--row-step-least), round(down, (100dvh - var(--side-rest)) / 14, var(--x1)), var(--row-step));
+  }
+}
+
+.dk-brand {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  height: var(--top);
+  padding: 0 var(--x16) 0 calc(var(--side-x) + var(--x14));
+  border-bottom: var(--x1) solid var(--line);
+  white-space: nowrap;
+}
+
+.dk-brand-name {
+  color: var(--ink);
+  font-size: var(--t-brand);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--track-brand);
+}
+
+.dk-brand-slash {
+  color: var(--ink-4);
+  font-size: var(--t-title);
+}
+
+.dk-brand-desk {
+  color: var(--ink-2);
+  font-size: var(--t-title);
+  font-weight: var(--w-regular);
+}
+
+.dk-nav {
+  flex: none;
+  padding: calc(var(--x10) + var(--x1)) var(--side-x-right) var(--x16) var(--side-x);
+}
+
+.dk-nav ul {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--side-step) - var(--side-row));
+}
+
+.dk-nav-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x16);
+  height: var(--side-row);
+  padding: 0 var(--x14);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  font-size: var(--t-nav);
+  font-weight: var(--w-regular);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-nav-row .dk-icon {
+  color: var(--ink-2);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-nav-row:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-nav-row:hover .dk-icon {
+  color: var(--ink);
+}
+
+.dk-nav-row--on,
+.dk-nav-row--on:hover {
+  border-color: var(--green-4);
+  background: var(--row-on);
+  color: var(--ink);
+}
+
+.dk-nav-row--on .dk-icon,
+.dk-nav-row--on:hover .dk-icon {
+  color: var(--green);
+}
+
+.dk-side-foot {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  margin-top: auto;
+  padding: var(--x8) var(--side-x-right) var(--x20) var(--side-x);
+}
+
+.dk-ai {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x14) var(--x10) var(--x14) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--card);
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-ai:hover {
+  background: var(--card-2);
+  border-color: var(--green-4);
+}
+
+.dk-ai-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border: var(--x1) solid var(--green-2);
+  border-radius: var(--r-pill);
+  background: var(--green-3);
+  box-shadow: 0 0 var(--x12) var(--green-glow);
+  color: var(--green);
+}
+
+.dk-ai-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-ai-name {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-ai-line {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-ai-go {
+  margin-top: var(--x20);
+  color: var(--ink-3);
+}
+
+/* Two buttons that share the sidebar's 187: the name is set a size smaller,
+   as on the boards, so "View live site" keeps its room without wrapping. */
+.dk-side-links {
+  display: flex;
+  gap: var(--x6);
+}
+
+.dk-side-link {
+  flex: 1 1 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x4);
+  min-width: 0;
+  height: var(--ctl-sm);
+  padding: 0 var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-side-link--name {
+  flex: 0 0 auto;
+  color: var(--ink);
+  font-size: var(--t-label);
+  font-weight: var(--w-semi);
+}
+
+.dk-side-link:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+/* ---------- the drawer's scrim ---------- */
+.dk-shell-scrim {
+  display: none;
+}
+
+/* ---------- narrow: the sidebar becomes a drawer ---------- */
+@media (max-width: 1023px) {
+  .dk-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-side {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: min(var(--drawer), 86vw);
+    box-shadow: var(--shadow-pop);
+    transform: translateX(-102%);
+    visibility: hidden;
+    transition:
+      transform var(--slow) var(--ease),
+      visibility 0s linear var(--slow);
+  }
+
+  .dk-shell[data-nav="open"] .dk-side {
+    transform: none;
+    visibility: visible;
+    transition:
+      transform var(--slow) var(--ease),
+      visibility 0s;
+  }
+
+  .dk-shell-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-scrim);
+    background: var(--scrim);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--slow) var(--ease);
+  }
+
+  .dk-shell[data-nav="open"] .dk-shell-scrim {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .dk-shell {
+    --page-x: var(--x16);
+    --head-inset: 0px;
+  }
+}

@@ -1,8 +1,17 @@
-# APPENDED to /etc/caddy/Caddyfile, never replacing it — the engine's block
-# lives in the same file and overwriting it takes operation.balkaris.ch down.
+# The desk's block in /etc/caddy/Caddyfile. deploy/caddy-block.mjs replaces
+# THIS block and nothing else: the engine's block lives in the same file and
+# losing it takes operation.balkaris.ch down.
 #
 # Not proxied at Cloudflare (the DNS record is grey): Caddy gets its own
 # certificate over HTTP-01, the same way operation.balkaris.ch does.
+#
+# Two processes behind one name:
+#   :3400  the desk server. The database, the queue, sign-in, the JSON API,
+#          Telegram's door, the runner's door, and the pages of the old
+#          console that are not rebuilt yet.
+#   :3401  the interface (Next.js). Everything a person looks at.
+# The machine doors are routed by path straight to :3400, so the interface
+# being down or mid-deploy never costs a Telegram message or a runner job.
 desk.balkaris.ch {
 	header {
 		# An internal workbench. It must never be indexed.
@@ -11,8 +20,19 @@ desk.balkaris.ch {
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; frame-ancestors 'none'; base-uri 'self'"
 		-Server
 	}
-	reverse_proxy localhost:3400
+
+	@server path /api/* /auth/* /logout /tg/* /runner/* /health /cover/* /console /console/* /draft/* /link/* /people /people/* /match
+	handle @server {
+		# The old console has no inline scripts, so 'self' is real there.
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; frame-ancestors 'none'; base-uri 'self'"
+		reverse_proxy localhost:3400
+	}
+
+	# The interface sends its own Content-Security-Policy, with a nonce per
+	# request (web/src/proxy.ts); Caddy cannot know the nonce, so it adds none.
+	handle {
+		reverse_proxy localhost:3401
+	}
 }

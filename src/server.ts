@@ -1,5 +1,5 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { beat, db, log, queueState, reclaim } from "./db.ts";
 import { match } from "./match.ts";
 import { settle, takeLink } from "./intake.ts";
@@ -14,7 +14,8 @@ import { everyone, getPerson, link, remember, rememberGoogle, setAuthor, setEmai
 import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
 import { coverPath, saveClip, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
-import { clear, issue, whoIs } from "./session.ts";
+import { clear, devUser, issue, whoIs } from "./session.ts";
+import type { Vars } from "./cc/access.ts";
 
 /**
  * desk.balkaris.ch — the part that is always on.
@@ -24,17 +25,21 @@ import { clear, issue, whoIs } from "./session.ts";
  * console and the publisher. See ARCHITECTURE.md for why the writing is
  * somewhere else.
  *
- * Three doors, and they are guarded three different ways:
+ * Four doors, and they are guarded four different ways:
  *
  *   /tg/<secret>   Telegram only. The secret is in the path because that is
  *                  what setWebhook gives you, and it is checked against the
  *                  header Telegram also sends. Nothing else is accepted.
  *   /runner/*      the workstation. Bearer DESK_RUNNER_SECRET, compared in
  *                  constant time.
- *   everything else the console. Behind Caddy, noindex, and for now read-only
- *                  to anybody who has the address — the box is not on the
- *                  public internet by accident, but this is the door to
- *                  harden first when the desk starts publishing on its own.
+ *   /api/*         the interface (web/, the Next.js app that draws the
+ *                  command center) asking for JSON. A signed-in person who is
+ *                  not revoked; and for anything that changes something, a
+ *                  request that came from the desk's own pages. It is refused
+ *                  in JSON too. The routes are in src/cc/.
+ *   everything else the old console: the same sign-in and the same rule for a
+ *                  change, server-rendered HTML. The interface owns "/" now,
+ *                  so the list lives at /console.
  */
 
 const PORT = Number(process.env.DESK_PORT ?? 3400);
@@ -42,9 +47,6 @@ const RUNNER_SECRET = process.env.DESK_RUNNER_SECRET ?? "";
 const TG_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
 /** Where a published article actually lives, for the "see it live" link. */
 const SITE_BASE = (process.env.SITE_BASE ?? "https://www.balkaris.ch").replace(/\/$/, "");
-
-/** What travels on a request: the signed-in person, set by the gate below. */
-type Vars = { Variables: { who: Person } };
 
 const app = new Hono<Vars>();
 
@@ -158,19 +160,120 @@ const refused = (why: string) =>
      <p style="margin:24px 0"><a class="btn" href="/auth/google">Try another account</a></p>`,
   );
 
+/* Shown to somebody the owner has switched off, on every page but the way out. */
+const REVOKED = page(
+  "Access switched off",
+  `<h1>Your access has been switched off</h1>
+   <p class="sub">The owner of the desk can switch it back on. Until then nothing here opens for this account.</p>
+   <form method="post" action="/logout" style="margin:26px 0"><button>Sign out</button></form>`,
+);
+
+/* Shown when a change arrives from somewhere that is not one of the desk's pages. */
+const FOREIGN = page(
+  "Refused",
+  `<h1>That did not come from the desk</h1>
+   <p class="sub">The desk only takes a change from its own pages, and this request named another site, or none.
+   Nothing was changed.</p>
+   <p style="margin:26px 0"><a class="btn" href="/console">Open the desk</a></p>`,
+);
+
+/** Is this path the interface's, where every answer is JSON? "/api" itself included. */
+const isApi = (p: string): boolean => p === "/api" || p.startsWith("/api/");
+
+/**
+ * Did this request come from one of the desk's own pages?
+ *
+ * A browser says where a request was made from, in `Origin` (or `Referer` when
+ * it sends no Origin), and a page on another site cannot make it lie. So a
+ * request that CHANGES something is taken only when that address is the
+ * desk's: DESK_URL, or the host this very request was sent to (which is what
+ * it is on a workstation, where DESK_URL may point somewhere else). Saying
+ * nothing at all is a no.
+ *
+ * The cookie being SameSite=Lax is NOT enough without this: "site" means the
+ * registrable domain, so a page on any other *.balkaris.ch name is the same
+ * site and its forms carry the cookie. And a development copy needs no cookie
+ * at all. This is the lock in both cases, for the console's forms as much as
+ * for the API.
+ *
+ * What it cannot catch is a page that re-points its own name at this machine
+ * (DNS rebinding): its Origin then matches its Host. That is shut a step
+ * earlier, where it matters, by the development door refusing any host that
+ * is not a loopback name (src/session.ts); the real desk has no such door,
+ * and its cookie is never sent to another name.
+ *
+ * It is about browsers. The interface's own server may send a request on a
+ * person's behalf, and must then pass their Origin along or state DESK_URL.
+ */
+function fromOurPages(c: { req: { header: (name: string) => string | undefined } }): boolean {
+  const said = c.req.header("origin") ?? c.req.header("referer");
+  if (!said) return false;
+  let from: URL;
+  try {
+    from = new URL(said);
+  } catch {
+    return false; /* "null", which is what a sandboxed page sends */
+  }
+  try {
+    if (from.origin === new URL(process.env.DESK_URL ?? "https://desk.balkaris.ch").origin) return true;
+  } catch {
+    /* a DESK_URL that is not an address matches nothing */
+  }
+  /* The host the browser sent this to. Behind a proxy that rewrites Host (the
+     interface's dev server does), the proxy reports the original beside it;
+     a page on another site cannot set either header on a request it makes. */
+  const sentTo = `${c.req.header("host") ?? ""},${c.req.header("x-forwarded-host") ?? ""}`
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
+  return sentTo.includes(from.host);
+}
+
+/**
+ * THE GATE. Everything that is not one of the machine doors passes it.
+ *
+ *   nobody signed in   401. The sign-in page, or `{ error }` under /api: the
+ *                      interface is the one asking there, and it reads JSON.
+ *   somebody revoked   403 everywhere except /logout. Until October 2026 a
+ *                      revoked person could still open every page and only
+ *                      publishing refused them, which was acceptable while
+ *                      the desk held articles and is not once it shows
+ *                      enquiries.
+ *   a change that did not come from the desk's own pages: 403, the console's
+ *                      forms as much as the API. Every method but GET, HEAD
+ *                      and OPTIONS is a change. The machine doors above never
+ *                      reach this (they carry no Origin and prove themselves
+ *                      by secret), and /logout and /auth are routed before it.
+ */
 app.use("*", async (c, next) => {
   const p = c.req.path;
   if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p.startsWith("/auth/")) return next();
 
+  const api = isApi(p);
+
   const who = whoIs(c);
-  if (!who) return c.html(SIGN_IN, 401);
+  if (!who) return api ? c.json({ error: "Sign in first." }, 401) : c.html(SIGN_IN, 401);
+
+  if (who.revoked && p !== "/logout") {
+    return api ? c.json({ error: "Your access to the desk has been switched off." }, 403) : c.html(REVOKED, 403);
+  }
+
+  if (!["GET", "HEAD", "OPTIONS"].includes(c.req.method) && !fromOurPages(c)) {
+    return api ? c.json({ error: "That request did not come from the desk's own pages." }, 403) : c.html(FOREIGN, 403);
+  }
+
   c.set("who", who);
   await next();
 });
 
 const me = (c: { get: (k: "who") => Person }) => c.get("who");
 
-app.get("/", (c) => c.html(listPage(me(c))));
+/* The interface owns "/" now; behind Caddy this server is never asked for
+   it. Where there is no interface in front (the box before it is deployed, a
+   workstation on :3400) it leads to the list, so the address is never dead. */
+app.get("/", (c) => c.redirect("/console", 302));
+
+app.get("/console", (c) => c.html(listPage(me(c))));
 
 /* The people the desk knows, and the one field that decides whether somebody
    can publish: an email, which must be the one on their Vercel account. */
@@ -208,7 +311,7 @@ app.post("/people/:telegram/link", async (c) => {
   return c.redirect("/people", 303);
 });
 
-/* Switched off: they can still sign in, and can do nothing. */
+/* Switched off: they can still sign in, and the gate answers 403 to everything. */
 app.post("/people/:telegram/revoke", (c) => {
   if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
   const id = Number(c.req.param("telegram"));
@@ -254,10 +357,34 @@ app.get("/link/:id", (c) => {
   return html ? c.html(html) : c.notFound();
 });
 
+/**
+ * Where a form below lands once it is done.
+ *
+ * The command center's article page (web/, /insights/<id> and
+ * /insights/link/<id>) posts these same forms, so every action keeps its
+ * checks in one place, and names itself in a `back` field to land on again.
+ * It is honoured only when it is a path on the interface's own /insights/
+ * pages: it starts "/insights/", has no "//", backslash or "..", and holds
+ * nothing but the characters of a path and a query. So it can never send
+ * anybody to another site. Anything else, or no field at all, and the form
+ * lands where it always did.
+ */
+const isBack = (s: string): boolean =>
+  s.length <= 300 && s.startsWith("/insights/") && !s.includes("//") && !s.includes("\\") && !s.includes("..") && /^[A-Za-z0-9\-._~/?=&%]+$/.test(s);
+
+async function backTo(c: Context<Vars>, fallback: string): Promise<string> {
+  try {
+    const back = (await c.req.parseBody()).back;
+    return typeof back === "string" && isBack(back) ? back : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 /* Re-queue a link the workstation could not finish. A paywall that lifts, a
    rate limit that passes, a model that fell over: none of them is permanent,
    and a person should not have to re-share the link to try again. */
-app.post("/link/:id/retry", (c) => {
+app.post("/link/:id/retry", async (c) => {
   const id = Number(c.req.param("id"));
   const link = db.prepare("SELECT * FROM links WHERE id = ?").get(id) as { kind: string; url: string } | undefined;
   if (!link) return c.notFound();
@@ -278,7 +405,7 @@ app.post("/link/:id/retry", (c) => {
   }
   db.prepare("UPDATE links SET state='queued', error=NULL, updated_at=datetime('now') WHERE id=?").run(id);
   log("link.retried", null, id);
-  return c.redirect(`/link/${id}`, 303);
+  return c.redirect(await backTo(c, `/link/${id}`), 303);
 });
 
 /* Ask the workstation to write a different ENDING, leaving the article alone.
@@ -296,7 +423,7 @@ app.post("/draft/:id/reclose", async (c) => {
     JSON.stringify({ draft: id, job }),
   );
   log("draft.reclose.queued", { draft: id, job }, d.link_id);
-  return c.redirect(`/draft/${id}`, 303);
+  return c.redirect(await backTo(c, `/draft/${id}`), 303);
 });
 
 
@@ -440,7 +567,7 @@ app.post("/draft/:id/attach", async (c) => {
       }
     }
   }
-  return c.redirect(`/draft/${id}`, 303);
+  return c.redirect(await backTo(c, `/draft/${id}`), 303);
 });
 
 /**
@@ -450,7 +577,7 @@ app.post("/draft/:id/attach", async (c) => {
  * ffmpeg could not make the first time. It does NOT re-ingest: the words are
  * already written and a picture is not worth rewriting them over.
  */
-app.post("/draft/:id/clip", (c) => {
+app.post("/draft/:id/clip", async (c) => {
   const id = Number(c.req.param("id"));
   const d = db.prepare("SELECT link_id, slug FROM drafts WHERE id = ?").get(id) as
     | { link_id: number; slug: string }
@@ -462,7 +589,7 @@ app.post("/draft/:id/clip", (c) => {
     JSON.stringify({ draft: id }),
   );
   log("clip.queued", { draft: id, slug: d.slug }, d.link_id);
-  return c.redirect(`/draft/${id}`, 303);
+  return c.redirect(await backTo(c, `/draft/${id}`), 303);
 });
 
 /**
@@ -478,7 +605,7 @@ app.post("/draft/:id/clip", (c) => {
  * Nothing else about the article is touched. The words are already written
  * and a picture is not worth rewriting them over.
  */
-app.post("/draft/:id/redraw", (c) => {
+app.post("/draft/:id/redraw", async (c) => {
   const id = Number(c.req.param("id"));
   const d = db.prepare("SELECT link_id, slug FROM drafts WHERE id = ?").get(id) as
     | { link_id: number; slug: string }
@@ -490,7 +617,7 @@ app.post("/draft/:id/redraw", (c) => {
     JSON.stringify({ draft: id }),
   );
   log("cover.redraw.queued", { draft: id, slug: d.slug }, d.link_id);
-  return c.redirect(`/draft/${id}`, 303);
+  return c.redirect(await backTo(c, `/draft/${id}`), 303);
 });
 
 /**
@@ -506,6 +633,8 @@ async function act(
   c: { req: { param: (k: string) => string }; get: (k: "who") => Person },
   action: PublishAction,
   nextState: string,
+  /* The page the form came from (`backTo`), for the way back from a failure; null is the old page. */
+  back: string | null = null,
 ) {
   const id = Number(c.req.param("id"));
   const by = me(c);
@@ -527,16 +656,21 @@ async function act(
   } catch (e) {
     const why = (e instanceof Error ? e.message : String(e)).split(/\r?\n/).slice(0, 3).join(" ").slice(0, 400);
     log(`draft.${action}.failed`, why, d.link_id);
+    /* "Try again" posts to the route of the action that failed. A take-down is
+       the publisher's "remove", and its route is /takedown: /remove is the one
+       that DELETES the draft. */
     return {
       ok: false as const,
       id,
       html: page(
         "It did not go out",
-        `<a class="back" href="/draft/${id}">← back to the article</a>
+        `<a class="back" href="${back ?? `/draft/${id}`}">← back to the article</a>
          <h1>The push did not go through</h1>
          <p class="sub">Nothing changed. The article is exactly where it was and nothing reached the site.</p>
          <p class="flag">${escHtml(why)}</p>
-         <form method="post" action="/draft/${id}/${action === "list" ? "list" : action}"><button class="go">Try again</button></form>`,
+         <form method="post" action="/draft/${id}/${action === "remove" ? "takedown" : action}">${
+           back ? `<input type="hidden" name="back" value="${back}">` : ""
+         }<button class="go">Try again</button></form>`,
       ),
     };
   }
@@ -546,29 +680,33 @@ const escHtml = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<":
 
 /* Live at its own url, in none of the menus. */
 app.post("/draft/:id/publish", async (c) => {
-  const r = await act(c, "publish", "unlisted");
-  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+  const back = await backTo(c, "");
+  const r = await act(c, "publish", "unlisted", back || null);
+  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
 });
 
 /* Into the menus, the shelves, the sitemap and search. */
 app.post("/draft/:id/list", async (c) => {
-  const r = await act(c, "list", "listed");
-  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+  const back = await backTo(c, "");
+  const r = await act(c, "list", "listed", back || null);
+  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
 });
 
 /* Out of them again. The url keeps working; noindex comes back. */
 app.post("/draft/:id/unlist", async (c) => {
-  const r = await act(c, "unlist", "unlisted");
-  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+  const back = await backTo(c, "");
+  const r = await act(c, "unlist", "unlisted", back || null);
+  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
 });
 
 /* Off the site entirely. The url 404s afterwards. */
 app.post("/draft/:id/takedown", async (c) => {
-  const r = await act(c, "remove", "draft");
-  return r.html ? c.html(r.html) : c.redirect(`/draft/${r.id}`, 303);
+  const back = await backTo(c, "");
+  const r = await act(c, "remove", "draft", back || null);
+  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
 });
 
-app.post("/draft/:id/remove", (c) => {
+app.post("/draft/:id/remove", async (c) => {
   const id = Number(c.req.param("id"));
   const d = db.prepare("SELECT link_id, slug, state FROM drafts WHERE id = ?").get(id) as
     | { link_id: number; slug: string; state: string }
@@ -581,7 +719,7 @@ app.post("/draft/:id/remove", (c) => {
      and a bad draft is a reason to write it again, not to forget the link. */
   db.prepare("UPDATE links SET state='queued', updated_at=datetime('now') WHERE id=?").run(d.link_id);
   log("draft.removed", { slug: d.slug }, d.link_id);
-  return c.redirect("/", 303);
+  return c.redirect(await backTo(c, "/console"), 303);
 });
 
 /* ---------- the runner's door ----------------------------------------------
@@ -845,6 +983,44 @@ runner.post("/result/:id", async (c) => {
   return c.json({ ok: true });
 });
 
+/* ---------- the AI Operator's questions, through the same door --------------
+   The command center queues questions for the workstation's model
+   (src/cc/operator/). The runner asks for one only when it has no article to
+   write, and the box refuses to hand one out while an article job is waiting.
+   Loaded with import(), like the rest of the command center, so a fault in
+   it costs these two routes and never the article runner's. */
+
+/** "Any question for me?" — the next task with its finished prompt, or none. */
+runner.post("/op/next", async (c) => {
+  const { name } = (await c.req.json().catch(() => ({}))) as { name?: string };
+  beat(name ?? "?");
+  try {
+    const { handOut } = await import("./cc/operator/queue.ts");
+    return c.json(await handOut(name ?? "runner"));
+  } catch (e) {
+    console.error("operator: handing out a task failed:", e);
+    return c.json({ task: null, error: "The operator's queue could not be read. The reason is in the desk's log." }, 503);
+  }
+});
+
+/** What the model answered. Checked on the box; a failure is a row, not a silence. */
+runner.post("/op/result/:id", async (c) => {
+  const id = Number(c.req.param("id"));
+  const body = (await c.req.json().catch(() => null)) as { ok?: boolean; text?: string; error?: string; model?: string; ms?: number } | null;
+  if (!Number.isInteger(id) || !body || typeof body.ok !== "boolean") return c.json({ error: "Send { ok, text } or { ok: false, error }." }, 400);
+  try {
+    const { takeResult } = await import("./cc/operator/queue.ts");
+    return c.json(await takeResult(id, { ok: body.ok, text: body.text, error: body.error, model: body.model, ms: body.ms }));
+  } catch (e) {
+    /* "no such task" and the like: an HTTPException carrying its own status. */
+    if (e && typeof e === "object" && "getResponse" in e && "status" in e) {
+      return c.json({ error: (e as unknown as Error).message }, (e as unknown as { status: 404 | 409 }).status);
+    }
+    console.error("operator: taking a result failed:", e);
+    return c.json({ error: "The operator could not keep that answer. The reason is in the desk's log." }, 500);
+  }
+});
+
 app.route("/runner", runner);
 
 /* ---------- Telegram -------------------------------------------------------
@@ -1055,8 +1231,71 @@ app.get("/match", (c) => {
   return c.json(match(q, c.req.query("body") ?? q));
 });
 
+/* ---------- the command center ---------------------------------------------
+   The JSON API under /api/v1, the collectors behind it and their scheduler:
+   everything in src/cc/.
+
+   A link shared on Telegram is written and published by the code above, and
+   that has to survive a mistake in a collector or a screen. What is actually
+   guaranteed, and what is not:
+
+     loading    src/cc/ is loaded here with `import()`, inside a try, and not
+                with an `import` at the top of this file: a static import is
+                evaluated before one line of this file runs, and a module that
+                throws while loading would keep the whole desk from starting
+                with no place to catch it. If it does not start, the desk says
+                so in the log and under /api, and carries on. Each collector
+                and screen is loaded the same way inside it (src/cc/index.ts).
+     requests   a handler that throws answers 500 `{ error }` (src/cc/api.ts
+                and app.onError below), and the process carries on.
+     jobs       a job's run() that throws is a failed run, kept and shown; a
+                ready() that throws is "not ready" (src/cc/index.ts wraps it).
+     NOT COVERED  the scheduler's own bookkeeping (src/cc/scheduler.ts) runs
+                from timers with no catch around it, so if the database itself
+                fails under it the rejection is unhandled and Node stops the
+                process, Telegram's door with it, and systemd restarts it.
+
+   Awaited before listening, because Hono takes no routes after its first
+   request.                                                                  */
+
+try {
+  const { mountCommandCenter } = await import("./cc/index.ts");
+  await mountCommandCenter(app);
+} catch (e) {
+  console.error("The command center did not start. The desk carries on without it:", e);
+  app.all("/api/*", (c) => c.json({ error: "The command center did not start. The reason is in the desk's log." }, 503));
+}
+
+/* Under /api the one asking is the interface, and it reads JSON: a path that
+   does not exist and a handler that threw both answer `{ error }`. (Inside
+   /api/v1 the API has already said so itself, in src/cc/api.ts; this is for
+   what falls outside it.) Everywhere else these two are what Hono does by
+   default, unchanged. */
+app.notFound((c) =>
+  isApi(c.req.path)
+    ? c.json({ error: `There is nothing at ${c.req.method} ${c.req.path}.` }, 404)
+    : c.text("404 Not Found", 404),
+);
+
+app.onError((err, c) => {
+  if ("getResponse" in err) return err.getResponse();
+  console.error(err);
+  return isApi(c.req.path)
+    ? c.json({ error: "The desk could not answer that. The reason is in its log." }, 500)
+    : c.text("Internal Server Error", 500);
+});
+
 serve({ fetch: app.fetch, port: PORT }, (i) => {
   console.log(`balkaris-desk on :${i.port}`);
   if (!RUNNER_SECRET) console.warn("  DESK_RUNNER_SECRET is empty — the runner door is shut until it is set.");
   if (!TG_SECRET) console.warn("  TELEGRAM_WEBHOOK_SECRET is empty — the Telegram door is shut until it is set.");
+  if (!process.env.DESK_SESSION_SECRET) {
+    console.warn("  DESK_SESSION_SECRET is empty — cookies are signed with the runner's secret until it is minted.");
+  }
+  const dev = devUser();
+  if (dev) {
+    console.warn(`  DESK_DEV_USER: a development copy. Every request to a loopback address without a cookie is signed in as ${dev.name}.`);
+  } else if (process.env.DESK_DEV_USER) {
+    console.warn("  DESK_DEV_USER is set and IGNORED: this is production, or DESK_URL is an https address. See src/session.ts.");
+  }
 });

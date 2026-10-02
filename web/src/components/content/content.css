@@ -1,0 +1,557 @@
+/*
+ * The Content screen. Every class is dk-content-…; every value is a token
+ * (styles/tokens.css) or one of the few named below, which only this screen
+ * needs.
+ */
+:root {
+  --dk-content-clip: 38ch;        /* a title or description as served, in one line of a table */
+  --dk-content-clip-title: 34ch;  /* an article's title in Freshness */
+  --dk-content-path: 30ch;        /* a page's address in a cell */
+  --dk-content-bar: 48px;         /* a share bar in a table cell */
+  --dk-content-served: 46ch;      /* a title or description as served, two lines at most */
+  --dk-content-query: 24ch;       /* a search query, two lines at most */
+  --dk-content-open-h: 560px;     /* a panel opened in full scrolls past this */
+  --dk-content-mix-w: 112px;      /* the same bar under a page's address */
+  --dk-content-mix-h: 8px;        /* the described / decorative / missing bar */
+  --dk-content-spin-time: 1.2s;       /* one turn of the refresh mark while the crawl runs */
+}
+
+/* ---------- the specimen ribbon -------------------------------------------- */
+
+.dk-content-ribbon {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x10) var(--pad);
+  border: var(--x1) dashed var(--violet-edge);
+  border-radius: var(--r-card);
+  background: var(--violet-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-content-ribbon .dk-icon {
+  flex: none;
+  color: var(--violet);
+}
+
+.dk-content-ribbon b {
+  color: var(--violet);
+  font-weight: var(--w-semi);
+}
+
+/* ---------- a panel's foot: the stamp, and "Show all" ------------------------ */
+
+.dk-content-stamp {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--x40);
+  padding: var(--x8) var(--pad);
+}
+
+.dk-content-stamp:empty {
+  display: none;
+}
+
+/* Two sources under one panel (Thin pages: the crawl and GA4), side by side, wrapping when narrow. */
+.dk-content-stamps {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  min-width: 0;
+}
+
+.dk-content-stamp-extra {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-content-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dk-content-foot > .dk-content-stamp {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-content-foot > .dk-content-more {
+  flex: none;
+  padding-right: var(--pad);
+}
+
+.dk-content-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-content-more:hover {
+  color: var(--ink);
+}
+
+.dk-content-more .dk-icon {
+  color: var(--ink-3);
+}
+
+/* ---------- an absent panel inside a flush card --------------------------------- */
+
+.dk-content-absent {
+  padding: var(--x4) var(--pad) var(--pad);
+  overflow-wrap: anywhere;
+}
+
+/* An opened list scrolls inside its panel. */
+.dk-content-scroll {
+  max-height: var(--dk-content-open-h);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---------- cells ------------------------------------------------------------- */
+
+/* Two lines in one cell: a figure and what it means. */
+.dk-content-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: inherit;
+  gap: var(--x2);
+  vertical-align: middle;
+}
+
+.dk-table-right .dk-content-stack {
+  align-items: flex-end;
+}
+
+/* A title or description exactly as served: two lines at most, the rest on hover. */
+.dk-content-served {
+  display: -webkit-box;
+  max-width: var(--dk-content-served);
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--ink-2);
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+.dk-content-query {
+  max-width: var(--dk-content-query);
+  color: var(--ink);
+}
+
+.dk-table td:has(> .dk-content-served) {
+  white-space: normal;
+}
+
+
+.dk-content-page {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  max-width: var(--dk-content-path);
+  vertical-align: middle;
+}
+
+.dk-content-page-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-content-page-title {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-content-strong {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-content-clip {
+  display: inline-block;
+  max-width: var(--dk-content-clip);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.dk-content-clip--title {
+  max-width: var(--dk-content-clip-title);
+  color: var(--ink);
+}
+
+.dk-content-none {
+  color: var(--ink-4);
+}
+
+.dk-content-quiet {
+  color: var(--ink-3);
+}
+
+.dk-content-warn {
+  color: var(--amber);
+}
+
+.dk-content-bad {
+  color: var(--red);
+}
+
+.dk-content-info {
+  color: var(--blue);
+}
+
+.dk-content-length {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--x4);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-content-length b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-content-length b.dk-content-bad {
+  color: var(--red);
+}
+
+.dk-content-length b.dk-content-info {
+  color: var(--blue);
+}
+
+.dk-content-length span {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-content-chips {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  gap: var(--x4);
+}
+
+.dk-content-share {
+  display: inline-grid;
+  grid-template-columns: var(--dk-content-bar) auto;
+  align-items: center;
+  gap: var(--x10);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-content-share-short {
+  color: var(--amber);
+}
+
+.dk-content-words {
+  display: inline-grid;
+  grid-template-columns: var(--x40) auto;
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-content-engaged {
+  display: inline-grid;
+  grid-template-columns: var(--x56) auto;
+  align-items: center;
+  justify-content: end;
+  gap: var(--x10);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-content-engaged--few {
+  display: inline-flex;
+  gap: var(--x4);
+  color: var(--ink-2);
+  cursor: help;
+  text-decoration: underline dotted var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-content-engaged i,
+.dk-content-src {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  font-style: normal;
+}
+
+/* ---------- strips of figures (Images, Internal linking) ---------------------------- */
+
+.dk-content-figures {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--x10);
+  padding: var(--x4) var(--pad) var(--x14);
+}
+
+.dk-content-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-content-figure-value {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-figure);
+}
+
+.dk-content-figure-label {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-content-figure--good .dk-content-figure-value {
+  color: var(--green);
+}
+
+.dk-content-figure--warn .dk-content-figure-value {
+  color: var(--amber);
+}
+
+.dk-content-figure--bad .dk-content-figure-value {
+  color: var(--red);
+}
+
+.dk-content-figure--quiet .dk-content-figure-value {
+  color: var(--ink-2);
+}
+
+/* ---------- Structured data ---------------------------------------------------------- */
+
+.dk-content-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x12);
+  padding: var(--x4) var(--pad) var(--x12);
+  font-size: var(--t-small);
+}
+
+.dk-content-line-label {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-content-types {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x6);
+  white-space: normal;
+}
+
+/* A table cell does not wrap; this one may. */
+.dk-table td:has(> .dk-content-types) {
+  white-space: normal;
+  padding-top: var(--x6);
+  padding-bottom: var(--x6);
+}
+
+.dk-content-type {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--x24);
+  padding: 0 var(--x4) 0 var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-content-verdict {
+  padding: var(--x12) var(--pad) var(--x4);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-content-fine,
+.dk-content-problems li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-content-fine .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--green);
+}
+
+.dk-content-fine--row {
+  padding: var(--x10) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-content-problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-content-problems .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+.dk-content-problems b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-content-sublabel {
+  padding: var(--x14) var(--pad) var(--x6);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+/* ---------- Images: described / decorative / missing ---------------------------------- */
+
+.dk-content-mix {
+  display: flex;
+  gap: var(--x2);
+  width: 100%;
+  min-width: var(--x56);
+  height: var(--dk-content-mix-h);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+  vertical-align: middle;
+}
+
+.dk-content-page .dk-content-mix {
+  width: var(--dk-content-mix-w);
+  margin-top: var(--x4);
+  height: var(--x6);
+}
+
+.dk-content-mix i {
+  display: block;
+  flex-basis: 0;
+  min-width: var(--x2);
+  height: 100%;
+}
+
+.dk-content-mix-written {
+  background: var(--green);
+}
+
+.dk-content-mix-empty {
+  background: var(--ink-4);
+}
+
+.dk-content-mix-absent {
+  background: var(--red);
+}
+
+/* ---------- the crawl's line under Quick actions --------------------------------------- */
+
+.dk-content-crawl {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin-top: var(--x12);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-content-crawl .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+}
+
+.dk-content-crawl--done .dk-icon {
+  color: var(--green);
+}
+
+.dk-content-crawl--refused .dk-icon {
+  color: var(--amber);
+}
+
+.dk-content-spin {
+  animation-name: dk-content-turn;
+  animation-duration: var(--dk-content-spin-time);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-content-turn {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-content-spin {
+    animation-name: none;
+  }
+}
+
+/* ---------- narrow --------------------------------------------------------------------- */
+
+@media (max-width: 520px) {
+  .dk-content-figures {
+    gap: var(--x6);
+  }
+
+  .dk-content-figure {
+    padding: var(--x8) var(--x10);
+  }
+
+  .dk-content-figure-value {
+    font-size: var(--t-figure-3);
+  }
+
+  .dk-content-stamp {
+    flex-wrap: wrap;
+  }
+}

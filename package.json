@@ -12,11 +12,14 @@
     "check:release": "tsx --env-file-if-exists=.env scripts/check-release.ts",
     "check:covers": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-covers.ts",
     "check:telegram": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-telegram.ts",
+    "check:cc": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-cc-core.ts",
     "typecheck": "tsc --noEmit",
     "server": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
     "start": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
     "runner": "tsx --env-file-if-exists=.env src/runner.ts",
-    "intake": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/intake.ts"
+    "intake": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/intake.ts",
+    "dev": "tsx watch --clear-screen=false --env-file=work/dev.env --experimental-sqlite --disable-warning=ExperimentalWarning src/server.ts",
+    "dev:web": "npm --prefix web run dev"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.1",

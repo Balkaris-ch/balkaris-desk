@@ -1,0 +1,167 @@
+/*
+ * The content calendar. Measured on the Insights board: seven columns of
+ * about 42px, rows of 31px, hairlines between the days, the day's number at
+ * 13px with a 5px dot under it, today in a green outlined cell, and the
+ * neighbouring months' days dimmed.
+ */
+.dk-cal {
+  container-type: inline-size;
+  display: grid;
+  gap: var(--x10);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+}
+
+.dk-cal-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-sub);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}
+
+.dk-cal-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-cal-btn {
+  display: grid;
+  place-items: center;
+  min-width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: 1;
+}
+
+.dk-cal-btn--text {
+  padding-inline: var(--x10);
+}
+
+.dk-cal-btn:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-cal-btn svg {
+  width: var(--x12);
+  height: var(--x12);
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--chart-icon-stroke);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Said when the month asked for was not a month and today's is shown instead. */
+.dk-cal-note {
+  margin: 0;
+  color: var(--amber);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+.dk-cal-week,
+.dk-cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.dk-cal-week {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: 1;
+  text-align: center;
+}
+
+/* The hairlines are the grid's own ground showing between the cells. */
+.dk-cal-grid {
+  gap: var(--x1);
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--line);
+  list-style: none;
+}
+
+.dk-cal-day {
+  background: var(--chart-ground, var(--card));
+}
+
+.dk-cal-cell {
+  display: grid;
+  grid-template-rows: auto var(--cal-dot);
+  justify-items: center;
+  align-content: center;
+  row-gap: var(--x3);
+  height: var(--cal-row);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-chip);
+  color: var(--ink);
+  font-size: var(--t-body);
+  line-height: 1;
+}
+
+a.dk-cal-cell:hover {
+  background: var(--card-3);
+}
+
+.dk-cal-day[data-outside] .dk-cal-cell {
+  color: var(--ink-4);
+}
+
+.dk-cal-day[data-outside] .dk-cal-dots {
+  opacity: var(--chart-dim);
+}
+
+.dk-cal-day[data-today] .dk-cal-cell {
+  border-color: var(--green-2);
+  background: var(--green-3);
+  color: var(--green);
+  font-weight: var(--w-semi);
+}
+
+.dk-cal-dots {
+  display: flex;
+  align-items: center;
+  gap: var(--x2);
+  height: var(--cal-dot);
+}
+
+.dk-cal-dots i {
+  width: var(--cal-dot);
+  height: var(--cal-dot);
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.dk-cal-dots b {
+  color: var(--ink-3);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+}
+
+.dk-cal .dk-cal-legend {
+  gap: var(--x6) var(--x14);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+@container (max-width: 250px) {
+  .dk-cal-cell {
+    font-size: var(--t-label);
+  }
+}

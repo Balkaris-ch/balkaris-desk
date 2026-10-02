@@ -1,0 +1,513 @@
+/*
+ * The Conversions screen. Measured on design/boards/conversions.png at
+ * 1672×941. Every value is a token from styles/tokens.css; the panels and
+ * charts are the shared primitives, and this sheet only lays them out.
+ */
+
+/* ---------- a panel's body: content, then the stamp at its foot ------------- */
+
+.dk-conversions-card {
+  min-height: 0;
+}
+
+.dk-conversions-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  height: 100%;
+  min-width: 0;
+}
+
+.dk-conversions-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+/* The stamp keeps to the foot's bottom edge even beside a button, so the
+   stamps of a row's panels stand on one line. */
+.dk-conversions-foot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--x6) var(--x12);
+  min-width: 0;
+  margin-top: auto;
+}
+
+.dk-conversions-foot--flush {
+  padding: var(--x10) var(--pad) var(--x12);
+}
+
+.dk-conversions-foot-note {
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+.dk-conversions-none {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-conversions-absent {
+  max-width: none;
+}
+
+/* A long title (Enquiries by channel (GA4)) takes a second line rather than losing its last word. */
+.dk-conversions-card--wrap .dk-card-title-text {
+  overflow: visible;
+  white-space: normal;
+  text-wrap: balance;
+}
+
+/* ---------- the absent state in a narrow panel ------------------------------------ */
+
+.dk-conversions-gap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  min-width: 0;
+  padding-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-conversions-gap-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-conversions-gap-head > .dk-icon {
+  color: var(--ink-4);
+}
+
+.dk-conversions-gap-from {
+  padding: var(--x2) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+}
+
+.dk-conversions-gap-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-2);
+  cursor: help;
+}
+
+.dk-conversions-gap-step > .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--green);
+}
+
+/* The step is cut to three lines here; the whole of it is in the bubble. */
+.dk-conversions-gap-step > span {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+/* The select in a panel's head keeps its place while the browser reads the address. */
+.dk-conversions-range-space {
+  display: inline-block;
+  width: calc(var(--x56) * 2);
+  height: var(--ctl-sm);
+}
+
+/* ---------- the specimen ribbon ----------------------------------------------- */
+
+.dk-conversions-ribbon {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--x8) var(--x12);
+  padding: var(--x10) var(--x16);
+  border: var(--x1) dashed var(--amber-edge);
+  border-radius: var(--r-card);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-conversions-ribbon > .dk-icon {
+  flex: none;
+  color: var(--amber);
+}
+
+.dk-conversions-ribbon > span {
+  flex: 1 1 var(--search-w);
+  min-width: 0;
+}
+
+.dk-conversions-ribbon b {
+  color: var(--amber);
+  font-weight: var(--w-semi);
+}
+
+.dk-conversions-ribbon-link {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+/* ---------- the tiles ------------------------------------------------------------ */
+
+/* The board draws a spark in every tile, and this screen's figures are short
+   ("11", "5.26%"), so a tile keeps its chart down to a narrower width than the
+   shared rule's 200px (at the board's 1672 a tile is about 193px inside). */
+@container (min-width: 150px) {
+  .dk-conversions-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: flex;
+  }
+}
+
+/* GA4's stand-in under an engine figure that is absent: the shared tile's foot line, set off by a dashed rule. */
+.dk-conversions-standin {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x8);
+  margin-top: var(--x4);
+  padding-top: var(--x8);
+  border-top: var(--x1) dashed var(--line-2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  cursor: help;
+}
+
+.dk-conversions-standin b {
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+}
+
+.dk-conversions-standin-name code,
+.dk-conversions-starts code {
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  color: var(--ink-3);
+}
+
+/* ---------- Conversion funnel ------------------------------------------------- */
+
+.dk-conversions-funnel {
+  container-type: inline-size;
+  /* The board's steps sit closer than the shared funnel's, and a step is as
+     wide as its label needs ("Enquiry (submitted)" is the widest). */
+  --funnel-gap: var(--x20);
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-conversions-funnel .dk-funnel-list {
+  grid-auto-columns: minmax(max-content, 1fr);
+}
+
+/* Each step names its event under its label ("invite_shown"): a little less
+   side padding gives the name its whole width at the board's 1672. Columns
+   only: on a phone the steps are rows with the shared padding. */
+@container (min-width: 521px) {
+  .dk-conversions-funnel .dk-funnel-step {
+    padding-inline: var(--x4);
+  }
+}
+
+/* ---------- the second row at a middle width ---------------------------------------
+   Two columns: the funnel takes the whole first line, where its steps stay
+   columns, and the donut and the pages share the second. */
+@container (701px <= width <= 1120px) {
+  .dk-conversions-row2 .dk-grid-row > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .dk-conversions-row2 .dk-grid-row[data-pair] > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+/* ---------- Enquiries by channel ----------------------------------------------- */
+
+.dk-conversions-donut {
+  container-type: inline-size;
+  display: flex;
+  align-items: center;
+  gap: var(--x16);
+  min-width: 0;
+  padding-top: var(--x8);
+}
+
+.dk-conversions-legend {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-conversions-donut .dk-conversions-legend {
+  column-gap: var(--x8);
+}
+
+@container (max-width: 300px) {
+  .dk-conversions-donut {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dk-conversions-donut > .dk-donut {
+    align-self: center;
+  }
+}
+
+/* ---------- Top converting pages ------------------------------------------------- */
+
+.dk-conversions-pages {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(var(--x56), var(--barlist-bar));
+  column-gap: var(--x14);
+  min-width: 0;
+  font-size: var(--t-body);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-conversions-pages[data-all] {
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(var(--x56), var(--barlist-bar));
+}
+
+.dk-conversions-pages-head,
+.dk-conversions-pages-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.dk-conversions-pages-head {
+  padding-bottom: var(--x6);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-conversions-pages-head > :not(:first-child),
+.dk-conversions-pages-row > :not(:first-child) {
+  text-align: right;
+}
+
+.dk-conversions-pages-row {
+  min-height: var(--x32);
+  color: var(--ink);
+}
+
+.dk-conversions-pages-page {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+/* The board's pictures in this list are smaller than a table row's. */
+.dk-conversions-pages-page .dk-thumb {
+  flex: none;
+  width: calc(var(--x12) * 3);
+  height: var(--x24);
+}
+
+.dk-conversions-pages-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-conversions-pages-rate {
+  display: grid;
+  grid-template-columns: auto minmax(var(--x24), 1fr);
+  align-items: center;
+  gap: var(--x10);
+}
+
+/* Under a rate resting on fewer than thirty enquiries: the two counts it is made of. */
+.dk-conversions-pages-counts {
+  grid-column: 1 / -1;
+  margin-top: calc(var(--x4) * -1);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+.dk-conversions-pages-few {
+  grid-column: 1 / -1;
+  color: var(--ink-4);
+  font-size: var(--t-small);
+  cursor: help;
+}
+
+/* ---------- Conversions over time ---------------------------------------------- */
+
+.dk-conversions-trend-legend {
+  margin-top: calc(var(--x6) * -1);
+}
+
+/* The chart takes whatever height the row gives the panel, and never less than a chart's own. */
+.dk-conversions-trend-plot {
+  position: relative;
+  flex: 1;
+  min-height: calc(var(--chart-h) + var(--x24));
+}
+
+.dk-conversions-trend-plot > * {
+  position: absolute;
+  inset: 0;
+}
+
+/* ---------- the bar lists -------------------------------------------------------- */
+
+.dk-conversions-bars {
+  padding-top: var(--x2);
+}
+
+/* ---------- Where enquiries start ------------------------------------------------ */
+
+.dk-conversions-starts {
+  display: grid;
+  gap: var(--x6);
+  margin: 0;
+  padding-top: var(--x8);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-conversions-starts > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+}
+
+.dk-conversions-starts dt {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--x2) var(--x6);
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.dk-conversions-starts dd {
+  margin: 0;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.dk-conversions-starts-of {
+  color: var(--ink-3);
+}
+
+.dk-conversions-clarity {
+  flex: none;
+}
+
+/* ---------- Recent leads & enquiries --------------------------------------------- */
+
+.dk-conversions-recent {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-conversions-person {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  max-width: 100%;
+}
+
+.dk-conversions-cancelled {
+  color: var(--ink-4);
+}
+
+/* A cell's text cut to its column; the whole of it is the title on hover.
+   The widths are chosen so the eight columns fit the panel at the board's
+   1672 and at 2000 without scrolling sideways. */
+.dk-conversions-cut {
+  display: inline-block;
+  max-width: calc(var(--x40) * 2 + var(--x8));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.dk-conversions-cut[data-wide] {
+  max-width: calc(var(--x56) * 2);
+}
+
+.dk-conversions-person .dk-conversions-cut {
+  max-width: calc(var(--x40) * 2);
+}
+
+/* Eight columns in the board's width: a little less air between them. */
+.dk-conversions-recent {
+  container-type: inline-size;
+}
+
+.dk-conversions-recent .dk-table th,
+.dk-conversions-recent .dk-table td {
+  padding-inline: var(--x10);
+}
+
+.dk-conversions-recent .dk-table th:first-child,
+.dk-conversions-recent .dk-table td:first-child {
+  padding-left: var(--pad);
+}
+
+/* At 1280 the panel takes the row alone at about 990px: a little less air
+   again, so the eight columns still fit without scrolling sideways. */
+@container (max-width: 1020px) {
+  .dk-conversions-recent .dk-table th,
+  .dk-conversions-recent .dk-table td {
+    padding-inline: var(--x8);
+  }
+}
+
+.dk-conversions-recent .dk-table th:last-child,
+.dk-conversions-recent .dk-table td:last-child {
+  padding-right: var(--pad);
+}
+
+/* On a wide screen the cells have room to say a little more. */
+@container (min-width: 1200px) {
+  .dk-conversions-cut {
+    max-width: calc(var(--x56) * 2);
+  }
+
+  .dk-conversions-cut[data-wide] {
+    max-width: calc(var(--x56) * 3);
+  }
+}

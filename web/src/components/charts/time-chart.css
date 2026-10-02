@@ -1,0 +1,124 @@
+/*
+ * The marks of a line or area chart, inside a frame.
+ * Measured on the boards: a 2px line a shade lighter than its series colour,
+ * a 7px dot with a 2px ring of the same and the panel showing through its
+ * middle, and an area that is about 70% of the series' colour at the top of
+ * the plot and almost none at the baseline.
+ */
+.dk-tc-area {
+  position: absolute;
+  inset: 0;
+  /* Mixed into the ground, not see-through: the second series covers the first. */
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--c) var(--chart-fill-top), var(--chart-ground)),
+    color-mix(in srgb, var(--c) var(--chart-fill-low), var(--chart-ground))
+  );
+  pointer-events: none;
+  animation: dk-tc-in var(--slow) var(--ease) both;
+}
+
+.dk-tc-area[data-fill="soft"] {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--c) var(--chart-soft-top), var(--chart-ground)),
+    color-mix(in srgb, var(--c) var(--chart-fill-low), var(--chart-ground))
+  );
+}
+
+/* Still being counted: half the strength of a settled day. */
+.dk-tc-area[data-provisional] {
+  background: linear-gradient(
+    to bottom,
+    color-mix(in srgb, var(--c) var(--chart-soft-top), var(--chart-ground)),
+    color-mix(in srgb, var(--c) var(--chart-fill-low), var(--chart-ground))
+  );
+}
+
+.dk-tc-area[data-fill="soft"][data-provisional] {
+  background: color-mix(in srgb, var(--c) var(--chart-fill-low), var(--chart-ground));
+}
+
+.dk-tc-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dk-tc-line,
+.dk-tc-prev {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-tc-line {
+  /* A little light mixed in, so the line reads over its own area as on the boards. */
+  stroke: color-mix(in srgb, var(--c), var(--ink) var(--chart-lift));
+  stroke-width: var(--chart-line);
+}
+
+.dk-tc-line[data-provisional] {
+  stroke-dasharray: var(--x4) var(--x4);
+  stroke-opacity: var(--chart-provisional-line);
+}
+
+/* The same days one period earlier: thinner, greyer, dashed, and under the line. */
+.dk-tc-prev {
+  stroke: var(--chart-prev);
+  stroke-width: var(--x1);
+  stroke-dasharray: var(--x3) var(--x3);
+}
+
+.dk-tc-prev-key {
+  --c: var(--chart-prev);
+}
+
+.dk-tc-dot {
+  position: absolute;
+  z-index: 2;
+  width: var(--chart-dot);
+  height: var(--chart-dot);
+  margin: calc(var(--chart-dot) / -2) 0 0 calc(var(--chart-dot) / -2);
+  border: var(--chart-line) solid color-mix(in srgb, var(--c), var(--ink) var(--chart-lift));
+  border-radius: 50%;
+  background: var(--chart-ground);
+  pointer-events: none;
+}
+
+.dk-tc-dot[data-provisional] {
+  border-style: dotted;
+  opacity: var(--chart-provisional-dot);
+}
+
+/* A long series keeps only the dots that carry something: its newest point,
+   and any reading that stands alone. A month keeps every second dot, counted
+   from the newest, while the chart is wide, and the same few when narrow. */
+.dk-frame[data-dots="last"] .dk-tc-dot:not([data-keep]),
+.dk-frame[data-dots="wide"] .dk-tc-dot[data-alt]:not([data-keep]) {
+  display: none;
+}
+
+@container (max-width: 460px) {
+  .dk-frame[data-dots="wide"] .dk-tc-dot:not([data-keep]) {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-tc-area {
+    animation: none;
+  }
+}
+
+@keyframes dk-tc-in {
+  from {
+    opacity: 0;
+  }
+}

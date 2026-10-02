@@ -1,0 +1,632 @@
+/*
+ * The Command Center ("/"), and its two lists (/attention, /activity).
+ * Every class is dk-overview-*, every value a token. The panels themselves
+ * are the kit's Card; this sheet only lays out what is inside them.
+ */
+
+/* ---------- small words that recur ---------- */
+.dk-overview-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-overview-good {
+  color: var(--green);
+}
+
+.dk-overview-warn {
+  color: var(--amber);
+}
+
+.dk-overview-bad {
+  color: var(--red);
+}
+
+.dk-overview-info {
+  color: var(--blue);
+}
+
+/* The source line at the foot of a panel. */
+.dk-overview-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  margin-top: auto;
+  padding-top: var(--x8);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+.dk-overview-foot--pad {
+  padding: var(--x10) var(--pad) var(--x12);
+}
+
+/* A panel's body is a column, so its foot can sit at the bottom of a row of equal panels. */
+.dk-overview-traffic .dk-card-body,
+.dk-overview-sources .dk-card-body,
+.dk-overview-live .dk-card-body,
+.dk-overview-attention .dk-card-body,
+.dk-overview-activity .dk-card-body,
+.dk-overview-performance .dk-card-body,
+.dk-overview-top .dk-card-body,
+.dk-overview-countries .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- the specimen ribbon ---------- */
+.dk-overview-ribbon {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x10) var(--x14);
+  border: var(--x1) dashed var(--violet-edge);
+  border-radius: var(--r-card);
+  background: var(--violet-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-overview-ribbon .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--violet);
+}
+
+.dk-overview-ribbon b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+/* A source line at the end of a panel's headline row, opposite the figure. */
+.dk-overview-stampend {
+  margin-left: auto;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+/* ---------- tiles ---------- */
+/* The stamp sits opposite the label (Tile's badge corner) and keeps its own
+   size. When the two do not fit on one line ("Organic clicks" beside "Search
+   Console · 3 hours ago") the stamp takes the next line, at the right, and
+   the label is never cut. */
+.dk-overview-tiles .dk-tile-top {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.dk-overview-tiles .dk-tile-badge {
+  margin-left: auto;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--x20);
+  white-space: nowrap;
+}
+
+/* A tile too narrow for the label and the stamp on one line: the stamp goes
+   to the tile's foot, under the figure, as a tile without a badge draws it. */
+@container (max-width: 210px) {
+  .dk-overview-tiles .dk-tile-top {
+    display: contents;
+  }
+
+  .dk-overview-tiles .dk-tile-badge {
+    order: 1;
+    align-self: flex-start;
+    margin-top: var(--x4);
+    margin-left: 0;
+    line-height: var(--lh-tight);
+  }
+
+  .dk-overview-tiles .dk-tile-badge:empty {
+    display: none;
+  }
+}
+
+.dk-overview-standin {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x2) var(--x6);
+}
+
+.dk-overview-standin b {
+  color: var(--ink-2);
+  font-weight: var(--w-semi);
+}
+
+/* ---------- the big figures in a panel ---------- */
+.dk-overview-headline,
+.dk-overview-livehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x10);
+  margin-bottom: var(--x8);
+}
+
+.dk-overview-big {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-overview-unit {
+  color: var(--ink-3);
+  font-size: var(--t-sub);
+}
+
+.dk-overview-versus {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- traffic sources ---------- */
+.dk-overview-donut {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x24);
+  min-width: 0;
+}
+
+.dk-overview-donut > .dk-legend {
+  flex: 1;
+  min-width: 0;
+  max-width: calc(var(--donut) + var(--x12));
+}
+
+/* ---------- live visitors ---------- */
+.dk-overview-livehead .dk-overview-unit {
+  font-size: var(--t-small);
+}
+
+.dk-overview-livelist {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-overview-liverow {
+  display: grid;
+  grid-template-columns: var(--x24) minmax(0, 1fr) calc(var(--x56) + var(--x40));
+  align-items: center;
+  column-gap: var(--x12);
+  min-height: calc(var(--x24) + var(--x4));
+  font-size: var(--t-body);
+}
+
+.dk-overview-livecount {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-overview-livepage {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-overview-livepage:hover {
+  color: var(--ink);
+}
+
+.dk-overview-livetitle {
+  color: var(--ink-3);
+}
+
+.dk-overview-livenone {
+  padding: var(--x8) 0;
+}
+
+/* ---------- attention required ---------- */
+.dk-overview-attn {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-overview-attnrow {
+  display: grid;
+  grid-template-columns: var(--x16) minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--x12);
+  /* The board's rows: about 55px each. */
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-overview-attnrow:last-child {
+  border-bottom: 0;
+}
+
+.dk-overview-attntext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-overview-attnsubject,
+.dk-overview-attnfound {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-overview-attnsubject {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-overview-attnfound {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* The buttons line up in one column, as on the board. */
+.dk-overview-attnact {
+  justify-content: center;
+  min-width: calc(var(--x56) + var(--x24));
+}
+
+.dk-overview-attnwait {
+  color: var(--ink-3);
+  text-decoration: underline dotted var(--ink-4);
+  text-underline-offset: var(--x3);
+}
+
+.dk-overview-attnwait:hover {
+  color: var(--ink);
+}
+
+/* A narrow panel keeps the address and the button; the area chip goes under the text. */
+@container (max-width: 460px) {
+  .dk-overview-attnrow {
+    grid-template-columns: var(--x16) minmax(0, 1fr) auto;
+    row-gap: var(--x6);
+  }
+
+  .dk-overview-attnarea {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: start;
+  }
+
+  .dk-overview-attnact {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+}
+
+/* ---------- the rules (on /attention) ---------- */
+.dk-overview-rules {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-overview-rule {
+  display: grid;
+  grid-template-columns: var(--x16) minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--x12);
+  padding: var(--x12) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-overview-rule:last-child {
+  border-bottom: 0;
+}
+
+.dk-overview-rule > .dk-dot {
+  margin-top: var(--x4);
+}
+
+.dk-overview-ruletext {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  /* A step can hold a long console address: it wraps instead of widening the page. */
+  overflow-wrap: anywhere;
+}
+
+.dk-overview-rulehead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-overview-rulehead b {
+  font-weight: var(--w-medium);
+}
+
+.dk-overview-rulewhat {
+  color: var(--ink-2);
+}
+
+.dk-overview-rulestate {
+  color: var(--ink-3);
+}
+
+.dk-overview-rulestep {
+  display: block;
+  min-width: 0;
+  margin-top: var(--x2);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- quick actions ---------- */
+.dk-overview-auditline {
+  margin-top: var(--x10);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* "Last audit 13:42" in the panel's head. */
+.dk-overview-lastaudit {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+  cursor: help;
+}
+
+.dk-overview-lastaudit.dk-overview-warn {
+  color: var(--amber);
+}
+
+/* ---------- performance overview ---------- */
+.dk-overview-perfwrap {
+  container-type: inline-size;
+}
+
+/* The third heading is the longest and the uptime figure the narrowest: the columns follow. */
+.dk-overview-perf {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.85fr);
+}
+
+.dk-overview-perfcell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x2);
+  min-width: 0;
+  padding: var(--x4) var(--x10);
+  border-left: var(--x1) solid var(--line-2);
+}
+
+.dk-overview-perfcell:first-child {
+  padding-left: var(--x4);
+  border-left: 0;
+}
+
+.dk-overview-perfcell:last-child {
+  padding-right: 0;
+}
+
+/* The full name always shows: a cell too narrow for it breaks it in two rather than cutting it. */
+.dk-overview-perflabel {
+  max-width: 100%;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+  line-height: var(--x20);
+  cursor: help;
+}
+
+/* Each cell says only "Not available"; why, and the step, are said once under the cells. */
+.dk-overview-perf .dk-overview-perfsaid .dk-absent-why {
+  display: none;
+}
+
+/* The one absent line under the cells: no mark, the reason and the step at the panel's width. */
+.dk-overview-perfabsent.dk-absent--panel {
+  gap: var(--x4);
+  min-height: 0;
+  max-width: none;
+  margin-top: var(--x14);
+  padding: var(--x12) 0 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-overview-perfabsent .dk-absent-mark {
+  display: none;
+}
+
+.dk-overview-perffig {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  margin-top: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-overview-perfkind {
+  padding: 0 var(--x4);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  line-height: var(--x16);
+  text-transform: uppercase;
+}
+
+.dk-overview-perfrate {
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-overview-perfbars {
+  display: flex;
+  max-width: 100%;
+  margin: var(--x6) 0 var(--x2);
+  --spark-row-w: calc(var(--x56) * 2 + var(--x24));
+  --spark-row-h: var(--x16);
+}
+
+.dk-overview-perfbars .dk-bars {
+  max-width: 100%;
+}
+
+.dk-overview-perfstand,
+.dk-overview-perfcount {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+.dk-overview-perfstand {
+  margin-top: var(--x6);
+}
+
+.dk-overview-perfstand b {
+  color: var(--ink-2);
+  font-weight: var(--w-semi);
+}
+
+/* Two by two when four will not fit: under about 470px the third heading,
+   "Visual stability (CLS)", no longer has its line. */
+@container (max-width: 470px) {
+  .dk-overview-perf {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--x16);
+  }
+
+  .dk-overview-perfcell:nth-child(3) {
+    padding-left: var(--x4);
+    border-left: 0;
+  }
+}
+
+/* ---------- top pages ---------- */
+.dk-overview-toppage {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-overview-toppath {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-overview-tophead {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-overview-topwrap {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+/* A phone: the share picture goes and the columns close up, so the last
+   column (the enquiries, or GA4's form sends) stays on screen. */
+@container (max-width: 420px) {
+  .dk-overview-topwrap .dk-thumb {
+    display: none;
+  }
+
+  .dk-overview-topwrap .dk-table th,
+  .dk-overview-topwrap .dk-table td {
+    padding-inline: var(--x6);
+  }
+
+  .dk-overview-topwrap .dk-table th:first-child,
+  .dk-overview-topwrap .dk-table td:first-child {
+    padding-left: var(--pad);
+  }
+
+  .dk-overview-topwrap .dk-table th:last-child,
+  .dk-overview-topwrap .dk-table td:last-child {
+    padding-right: var(--pad);
+  }
+}
+
+/* ---------- countries ---------- */
+.dk-overview-world {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x14);
+  min-width: 0;
+}
+
+/* The map never grows past the size the board gives it, however wide the panel. */
+.dk-overview-map {
+  width: 100%;
+  max-width: calc(var(--x56) * 7);
+  justify-self: center;
+}
+
+.dk-overview-countrylist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-overview-country {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-overview-code {
+  min-width: var(--x20);
+  padding: 0 var(--x2);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-micro);
+  letter-spacing: var(--track-label);
+  line-height: var(--x14);
+  text-align: center;
+}
+
+.dk-overview-countryname {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-overview-share {
+  color: var(--ink);
+}
+

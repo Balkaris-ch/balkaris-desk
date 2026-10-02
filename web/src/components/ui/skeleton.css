@@ -1,0 +1,55 @@
+.dk-skel {
+  display: block;
+  width: 100%;
+  height: var(--x12);
+  border-radius: var(--x4);
+  background-color: var(--card-3);
+  background-image: linear-gradient(100deg, transparent 30%, var(--shine) 50%, transparent 70%);
+  background-size: 200% 100%;
+  background-repeat: no-repeat;
+  animation-name: dk-skel-sweep;
+  animation-duration: 1.6s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.dk-skel--round {
+  border-radius: var(--r-pill);
+}
+
+@keyframes dk-skel-sweep {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+.dk-skel-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: var(--tile-h);
+  padding: var(--x16) var(--x20);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-skel-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x20);
+  padding: var(--pad);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-skel-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}

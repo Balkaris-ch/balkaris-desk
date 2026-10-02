@@ -1,0 +1,62 @@
+.dk-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  color: var(--ink);
+}
+
+.dk-select select {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: var(--ctl);
+  padding: 0 var(--x32) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: inherit;
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: 1;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-select--sm select {
+  height: var(--ctl-sm);
+  padding-left: var(--x10);
+  padding-right: var(--x24);
+  border-radius: var(--r-ctl);
+  font-size: var(--t-small);
+}
+
+.dk-select select:hover {
+  background: var(--card-3);
+  border-color: var(--pop-edge);
+}
+
+.dk-select select:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The list the browser opens is its own; give it the desk's ground at least. */
+.dk-select option {
+  background: var(--pop);
+  color: var(--ink);
+}
+
+.dk-select .dk-icon {
+  position: absolute;
+  right: var(--x8);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.dk-select--busy {
+  opacity: 0.7;
+}

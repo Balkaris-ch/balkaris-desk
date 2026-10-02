@@ -1,0 +1,880 @@
+/*
+ * The Insights screen. Laid out to the Insights board (design/boards/insights.png):
+ * at 1672 the content runs 1383px; the overview is a left area of 1058 and a
+ * right column of 313. The left area's first row is Article traffic (700) and
+ * Top performing (345); its second, the inbox (333) and All insights (715).
+ * The right column stacks the calendar, the recommendations and the quick
+ * actions. Every value is a token.
+ */
+
+.dk-insights {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+/* ---- specimen ribbon ---------------------------------------------------- */
+
+.dk-insights-specimen {
+  padding: var(--x10) var(--x14);
+  border: var(--x1) dashed var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+.dk-insights-specimen b {
+  font-weight: var(--w-semi);
+}
+
+/* ---- the tiles and the line under them ------------------------------------ */
+
+.dk-insights-tilerow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+/* Where the figures come from, said once for the row: the desk's under its four, GA4's under its two. */
+.dk-insights-tilestamps {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--gap);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-insights-tilestamp {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  min-width: 0;
+  padding-left: var(--x16);
+}
+
+.dk-insights-tilestamp--desk {
+  grid-column: 1 / 9;
+}
+
+.dk-insights-tilestamp--ga4 {
+  grid-column: 9 / 13;
+}
+
+@container (max-width: 1100px) {
+  .dk-insights-tilestamps {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--x4) var(--x16);
+  }
+}
+
+/* ---- tabs: one strip across the page, the board's even spacing ---------- */
+
+.dk-insights-tabs .dk-tab {
+  flex: 1 0 auto;
+  position: relative;
+}
+
+.dk-insights-tabs .dk-tab + .dk-tab::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--x3) * -1);
+  top: var(--x8);
+  bottom: var(--x8);
+  border-left: var(--x1) solid var(--line-2);
+}
+
+.dk-insights-tabs .dk-tab--on::before,
+.dk-insights-tabs .dk-tab--on + .dk-tab::before {
+  display: none;
+}
+
+/* ---- the overview's layout ---------------------------------------------- */
+
+.dk-insights-radar {
+  display: grid;
+  grid-template-columns: minmax(0, 1058fr) minmax(0, 313fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+.dk-insights-main,
+.dk-insights-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-insights-row1 {
+  display: grid;
+  grid-template-columns: minmax(0, 700fr) minmax(0, 345fr);
+  gap: var(--gap);
+}
+
+.dk-insights-row2 {
+  display: grid;
+  grid-template-columns: minmax(0, 333fr) minmax(0, 715fr);
+  gap: var(--gap);
+}
+
+.dk-insights-row1 > *,
+.dk-insights-row2 > *,
+.dk-insights-side > * {
+  min-width: 0;
+}
+
+/* Under about 1300px of content the right column moves under the rest, its three panels side by side. */
+@container (max-width: 1300px) {
+  .dk-insights-radar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-insights-side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+
+@container (max-width: 1100px) {
+  .dk-insights-row2 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-insights-side {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dk-insights-quick {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 760px) {
+  .dk-insights-row1,
+  .dk-insights-side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---- shared small parts --------------------------------------------------- */
+
+.dk-insights-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  margin-top: var(--x8);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-insights-foot:empty {
+  display: none;
+}
+
+.dk-insights-foot--pad {
+  margin: 0;
+  padding: var(--x8) var(--pad) var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* The overview's "Show all", at the end of the table's line of sources. */
+.dk-insights-more {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-insights-more:hover {
+  color: var(--ink);
+}
+
+.dk-insights-selects,
+.dk-insights-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+.dk-insights-none {
+  color: var(--ink-4);
+}
+
+.dk-insights-quiet {
+  color: var(--ink-2);
+}
+
+/* ---- Article traffic -------------------------------------------------------- */
+
+.dk-insights-traffic > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-insights-traffic-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-insights-chart {
+  flex: 1;
+  min-height: var(--chart-h);
+}
+
+.dk-insights-traffic-body > .dk-insights-foot {
+  margin-top: 0;
+}
+
+.dk-insights-traffic-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+  /* The headline sits up beside the title, as on the board. */
+  margin-top: calc(var(--x8) * -1);
+}
+
+.dk-insights-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x6) var(--x10);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-insights-headline b {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-insights-vs {
+  color: var(--ink-3);
+}
+
+/* ---- Top performing ------------------------------------------------------------ */
+
+.dk-insights-top-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-insights-top-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x14);
+  padding: var(--x4) 0;
+}
+
+.dk-insights-top-row + .dk-insights-top-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-insights-top-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-insights-top-title {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}
+
+.dk-insights-top-title:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-insights-top-meta {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-insights-badge {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  padding: var(--x4) var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+}
+
+/* ---- Content inbox ------------------------------------------------------------------ */
+
+.dk-insights-sources {
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  margin-bottom: var(--x8);
+}
+
+.dk-insights-sources .dk-tab {
+  gap: var(--x6);
+  padding: 0 var(--x8);
+}
+
+.dk-insights-inbox-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-insights-inbox-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x8) 0;
+}
+
+.dk-insights-inbox > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-insights-inbox-foot {
+  margin-top: auto;
+  padding-top: var(--x8);
+}
+
+/* The board's portrait picture beside each shared link. */
+.dk-insights-inbox-row .dk-thumb {
+  width: var(--x32);
+  height: var(--x40);
+}
+
+.dk-insights-inbox-row + .dk-insights-inbox-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-insights-inbox-mark {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-3);
+}
+
+.dk-insights-inbox-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-insights-inbox-title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-tight);
+}
+
+.dk-insights-inbox-title:hover {
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-insights-inbox-meta {
+  display: flex;
+  gap: 0 var(--x6);
+  min-width: 0;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-insights-inbox-meta > * {
+  flex: none;
+}
+
+.dk-insights-inbox-meta > .dk-insights-inbox-handle {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-insights-inbox-meta > * + *::before {
+  content: "·";
+  margin-right: var(--x6);
+  color: var(--ink-4);
+}
+
+.dk-insights-inbox-problem {
+  margin-top: var(--x2);
+  overflow: hidden;
+  color: var(--red);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-insights-word--published {
+  color: var(--green);
+}
+
+.dk-insights-word--review,
+.dk-insights-word--writing {
+  color: var(--amber);
+}
+
+.dk-insights-word--draft {
+  color: var(--violet);
+}
+
+.dk-insights-word--stuck {
+  color: var(--red);
+}
+
+.dk-insights-retry {
+  flex: none;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x2);
+}
+
+.dk-insights-retry-said {
+  max-width: calc(var(--x56) * 3);
+  color: var(--red);
+  font-size: var(--t-label);
+  text-align: right;
+}
+
+/* ---- All insights -------------------------------------------------------------------- */
+
+.dk-insights-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  width: calc(var(--x56) * 3);
+  max-width: 100%;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-insights-search:focus-within {
+  border-color: var(--green-2);
+  box-shadow: 0 0 0 var(--x3) var(--green-glow);
+}
+
+.dk-insights-search--busy {
+  opacity: 0.7;
+}
+
+.dk-insights-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-insights-search input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-insights-cell-title {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-insights-cell-title .dk-thumb {
+  flex: none;
+}
+
+.dk-insights-cell-name {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: 0;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  white-space: normal;
+}
+
+.dk-insights-cell-name {
+  min-width: calc(var(--x56) * 2);
+}
+
+/* A shelf's name can be long ("Creative & Content"): the chip stops and says the rest on hover. */
+.dk-insights-shelf > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The Inbox tab: why a link is stuck, in two lines at most. */
+.dk-insights-why {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  min-width: calc(var(--x56) * 4);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  color: var(--red);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  white-space: normal;
+}
+
+/* The board's All insights is dense: eleven columns in 715px. Tighter cells,
+   smaller chips, for this screen's tables only. */
+.dk-insights-dense .dk-table th,
+.dk-insights-dense .dk-table td {
+  padding: 0 var(--x4);
+}
+
+.dk-insights-dense .dk-table thead th {
+  height: var(--x24);
+  font-size: var(--t-micro);
+  letter-spacing: 0;
+}
+
+.dk-insights-dense .dk-table-sort {
+  gap: var(--x2);
+}
+
+.dk-insights-dense .dk-table th:first-child,
+.dk-insights-dense .dk-table td:first-child {
+  padding-left: var(--x14);
+}
+
+.dk-insights-dense .dk-table th:last-child,
+.dk-insights-dense .dk-table td:last-child {
+  padding-right: var(--x10);
+}
+
+.dk-insights-dense .dk-table tbody td {
+  font-size: var(--t-label);
+}
+
+.dk-insights-dense .dk-thumb--sm {
+  width: var(--x32);
+  height: var(--x24);
+}
+
+.dk-insights-dense .dk-insights-cell-title {
+  gap: var(--x8);
+}
+
+.dk-insights-dense .dk-insights-cell-name {
+  min-width: calc(var(--x40) * 2);
+  font-size: var(--t-label);
+}
+
+.dk-insights-dense .dk-table .dk-chip {
+  gap: var(--x3);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-insights-dense .dk-insights-shelf {
+  max-width: calc(var(--x40) * 2);
+}
+
+/* The overview's table measures itself: at the board's 715px the shelf is cut and the date has no
+   year; on a wider screen (Fini's 2000, or 1280 where the table takes the whole row) both come back. */
+.dk-insights-all {
+  container: dk-insights-all / inline-size;
+}
+
+.dk-insights-dense .dk-insights-date-year {
+  display: none;
+}
+
+@container dk-insights-all (min-width: 820px) {
+  .dk-insights-dense .dk-insights-shelf {
+    max-width: none;
+  }
+
+  .dk-insights-dense .dk-insights-date-year {
+    display: inline;
+  }
+}
+
+.dk-insights-foot-absent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+/* ---- Recommendations --------------------------------------------------------------------- */
+
+.dk-insights-recs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+}
+
+.dk-insights-rec {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x3) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-insights-rec:hover {
+  background: var(--card-3);
+}
+
+.dk-insights-rec-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--tone);
+}
+
+.dk-insights-rec-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-insights-rec-text b {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-insights-rec-text span {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-insights-rec .dk-chip {
+  flex: none;
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-label);
+}
+
+.dk-insights-rec-text {
+  gap: var(--x2);
+  line-height: var(--lh-tight);
+}
+
+/* ---- Content calendar: rows of 28px, two under the board's 30 so the overview fits Fini's 1155px screen ------------------------------------------------- */
+
+.dk-insights-calendar {
+  --cal-row: calc(var(--x24) + var(--x4));
+}
+
+.dk-insights-calendar .dk-cal {
+  gap: var(--x6);
+}
+
+/* ---- Quick actions: two across, as on the board; an odd last one takes the row ------------------ */
+
+.dk-insights-quick .dk-actions--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dk-insights-quick .dk-actions--two > li:first-child:nth-last-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.dk-insights-quick .dk-action {
+  padding: var(--x3) var(--x8);
+  gap: var(--x8);
+}
+
+/* Create new insight is the board's lit row: green ground and edge. */
+.dk-insights-quick .dk-action[href*="create=1"] {
+  border-color: var(--green-4);
+  background: var(--green-3);
+}
+
+.dk-insights-quick .dk-action[href*="create=1"] .dk-action-icon {
+  color: var(--green);
+}
+
+/* A half-width row keeps its words; the whole row is the link. */
+.dk-insights-quick .dk-actions--two > li:not(:first-child:nth-last-child(odd)) .dk-action-go {
+  display: none;
+}
+
+/* ---- Create insight ---------------------------------------------------------------------------- */
+
+.dk-insights-truth {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  margin-bottom: var(--x16);
+  padding: var(--x12) var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-insights-truth--live {
+  border-color: var(--amber-edge);
+  background: var(--amber-ground);
+}
+
+.dk-insights-truth p {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+}
+
+.dk-insights-truth .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--ink-3);
+}
+
+.dk-insights-truth--live p:first-child .dk-icon {
+  color: var(--amber);
+}
+
+.dk-insights-truth b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-insights-formats {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x8);
+  margin: var(--x14) 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.dk-insights-formats legend {
+  margin-bottom: var(--x6);
+  padding: 0;
+}
+
+.dk-insights-format {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  cursor: pointer;
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-insights-format:has(input:checked) {
+  border-color: var(--green-4);
+  background: var(--green-3);
+}
+
+.dk-insights-format input {
+  margin-top: var(--x3);
+  accent-color: var(--green-2);
+}
+
+.dk-insights-format span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+}
+
+.dk-insights-format b {
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-insights-format small {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-insights-made-head {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--green);
+  font-size: var(--t-body);
+  font-weight: var(--w-semi);
+}
+
+.dk-insights-made-text {
+  margin-top: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-insights-made-error {
+  margin-top: var(--x12);
+  color: var(--red);
+  font-size: var(--t-small);
+}
+
+@media (max-width: 520px) {
+  /* The head wraps on a phone (card.css); the filters then take their own line and wrap inside it. */
+  .dk-insights-tablecard > .dk-card-head > .dk-card-right {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+
+  .dk-insights-formats {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-insights-search {
+    width: 100%;
+  }
+
+  .dk-insights-filters {
+    justify-content: flex-start;
+  }
+}

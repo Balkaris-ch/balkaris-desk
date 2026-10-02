@@ -1,0 +1,119 @@
+/* The absent state is quiet on purpose: it is information, not an alarm. */
+.dk-absent {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-absent-head {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+/* ---- in a panel ---- */
+.dk-absent--panel {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--x6);
+  min-height: var(--absent-min);
+  max-width: var(--measure-note);
+  padding: var(--x8) 0;
+}
+
+.dk-absent-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x32);
+  height: var(--x32);
+  margin-bottom: var(--x4);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--ink-4);
+}
+
+.dk-absent-from {
+  padding: var(--x2) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+}
+
+.dk-absent--panel .dk-absent-why {
+  color: var(--ink-3);
+}
+
+.dk-absent-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-2);
+}
+
+.dk-absent-step .dk-icon {
+  margin-top: var(--x2);
+  color: var(--green);
+}
+
+/* A step can hold a long address (a console link): it wraps instead of
+   pushing the panel, and the page, wider than the screen. */
+.dk-absent-step > span,
+.dk-absent-why {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- where a tile's figure would be ---- */
+.dk-absent--tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+  padding: var(--x6) 0 var(--x2);
+  cursor: help;
+}
+
+.dk-absent--tile .dk-absent-head .dk-icon {
+  color: var(--ink-4);
+}
+
+.dk-absent--tile .dk-absent-why {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---- in a table cell or a sentence ---- */
+.dk-absent-inline {
+  color: var(--ink-4);
+  cursor: help;
+  border-radius: var(--r-chip);
+}
+
+/* ---- inside the tooltip ---- */
+.dk-absent-tip-head {
+  display: block;
+  margin-bottom: var(--x2);
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-absent-tip-step {
+  display: block;
+  margin-top: var(--x6);
+  color: var(--ink);
+}

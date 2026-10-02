@@ -1,0 +1,88 @@
+.dk-dialog {
+  width: min(var(--dialog-md), calc(100vw - var(--x32)));
+  max-width: none;
+  max-height: calc(100dvh - var(--x56));
+  margin: auto;
+  padding: 0;
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-card);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  overflow: auto;
+}
+
+.dk-dialog--sm {
+  width: min(var(--dialog-sm), calc(100vw - var(--x32)));
+}
+
+.dk-dialog::backdrop {
+  background: var(--scrim);
+}
+
+.dk-dialog[open] {
+  animation-name: dk-dialog-in;
+  animation-duration: var(--slow);
+  animation-timing-function: var(--ease);
+}
+
+@keyframes dk-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--x8));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.dk-dialog-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x16);
+  padding: var(--x20) var(--x20) var(--x12);
+}
+
+.dk-dialog-title {
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+}
+
+.dk-dialog-desc {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-dialog-x {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  margin: calc(var(--x4) * -1) calc(var(--x6) * -1) 0 0;
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-dialog-x:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-dialog-body {
+  padding: var(--x4) var(--x20) var(--x20);
+}
+
+.dk-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--x8);
+  margin-top: var(--x20);
+}

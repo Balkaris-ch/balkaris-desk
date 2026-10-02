@@ -1,0 +1,50 @@
+.dk-tip-anchor {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dk-tip {
+  position: fixed;
+  z-index: var(--z-tip);
+  left: 0;
+  top: 0;
+  max-width: min(var(--tip-w), calc(100vw - var(--x16)));
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-body);
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  /* Measured before it is shown: it is placed once its size is known. */
+  visibility: hidden;
+}
+
+.dk-tip--on {
+  visibility: visible;
+}
+
+.dk-info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink-4);
+  cursor: help;
+  border-radius: var(--r-pill);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-info:hover,
+.dk-info:focus-visible {
+  color: var(--ink-2);
+}

@@ -1,0 +1,716 @@
+/*
+ * The Traffic screen. No board of its own: drawn in the Command Center's and
+ * Conversions' measures, from the tokens only. Every class is dk-traffic-.
+ */
+
+/* ---------- the note under the head, and the specimen ribbon ---------- */
+
+.dk-traffic-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin-top: calc(var(--gap) * -1 + var(--x2));
+  padding: 0 var(--x4) 0 var(--head-inset);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
+}
+
+.dk-traffic-note .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--ink-4);
+}
+
+.dk-traffic-ribbon {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  padding: var(--x8) var(--x14);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-ribbon b {
+  color: var(--amber);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  font-size: var(--t-label);
+}
+
+.dk-traffic-ribbon .dk-icon {
+  color: var(--amber);
+}
+
+/* ---------- small words ---------- */
+
+.dk-traffic-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-pad {
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-traffic-foot-note {
+  padding: var(--x8) var(--pad) var(--x12);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* An absent table panel has no padding of its own: give it the panel's. */
+:is(.dk-traffic-sources, .dk-traffic-landing, .dk-traffic-events, .dk-traffic-all) > .dk-card-body > .dk-absent {
+  margin: 0 var(--pad) var(--pad);
+}
+
+/* ---------- visitors per day ---------- */
+
+.dk-traffic-visitors > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-traffic-chart {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-height: 0;
+}
+
+/* As on the boards, a panel's headline figure sits close under its title. */
+.dk-traffic-headline,
+.dk-traffic-live-head {
+  margin-top: calc(var(--x12) * -1);
+}
+
+.dk-traffic-headline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x16);
+}
+
+.dk-traffic-headline-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-sub);
+}
+
+.dk-traffic-headline-figure b {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}
+
+.dk-traffic-headline-delta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-headline-legend {
+  margin-left: auto;
+}
+
+.dk-traffic-area {
+  flex: 1;
+}
+
+/* Filling the panel, the plot is never lower than a panel chart's own height. */
+.dk-traffic-visitors .dk-frame--fill .dk-frame-plot {
+  min-height: var(--chart-h);
+}
+
+/* ---------- donuts ---------- */
+
+.dk-traffic-donut {
+  display: flex;
+  align-items: center;
+  gap: var(--x24);
+  min-height: 100%;
+}
+
+.dk-traffic-donut-legend {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-traffic-donut--small {
+  gap: var(--x20);
+}
+
+.dk-traffic-channels,
+.dk-traffic-devices {
+  container-type: inline-size;
+}
+
+/* Too narrow for the donut beside its legend: the legend goes under it. */
+@container (max-width: 340px) {
+  .dk-traffic-donut:not(.dk-traffic-donut--small) {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: var(--x20);
+  }
+
+  .dk-traffic-donut:not(.dk-traffic-donut--small) .dk-donut {
+    align-self: center;
+  }
+
+  .dk-traffic-donut:not(.dk-traffic-donut--small) .dk-traffic-donut-legend {
+    flex: none;
+  }
+}
+
+@container (max-width: 250px) {
+  .dk-traffic-donut--small {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dk-traffic-donut--small .dk-donut {
+    align-self: center;
+  }
+
+  .dk-traffic-donut--small .dk-traffic-donut-legend {
+    flex: none;
+  }
+}
+
+/* Six tiles in a row leave each a little under the 200px at which a tile
+   drops its spark; on this screen the figures are short, so the spark stays
+   and shares the row, down to 150px. */
+@container (min-width: 150px) {
+  .dk-traffic-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: flex;
+    min-width: 0;
+  }
+}
+
+/* ---------- live ---------- */
+
+.dk-traffic-live-body,
+.dk-traffic-live-now,
+.dk-traffic-live-where {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-traffic-live-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-live-figure {
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}
+
+.dk-traffic-minutes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-bars.dk-traffic-minutes-bars {
+  width: 100%;
+  height: var(--x32);
+  justify-content: space-between;
+}
+
+.dk-bars.dk-traffic-minutes-bars i {
+  max-width: var(--x6);
+}
+
+.dk-traffic-minutes-axis {
+  display: flex;
+  justify-content: space-between;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+}
+
+.dk-traffic-live-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-traffic-live-row {
+  display: grid;
+  grid-template-columns: var(--x24) minmax(0, 1fr) minmax(var(--x40), 30%);
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--barlist-row);
+  font-size: var(--t-body);
+}
+
+.dk-traffic-live-n {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-traffic-live-title {
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-traffic-live-split {
+  display: grid;
+  gap: var(--x4);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-live-split > div {
+  display: grid;
+  grid-template-columns: calc(var(--x56) + var(--x16)) minmax(0, 1fr);
+  gap: var(--x8);
+}
+
+.dk-traffic-live-split dt {
+  color: var(--ink-3);
+}
+
+.dk-traffic-live-split dd {
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-traffic-live-err {
+  margin-top: var(--x10);
+  color: var(--amber);
+  font-size: var(--t-label);
+}
+
+/* ---------- tables ---------- */
+
+.dk-traffic-page {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--lh-tight);
+}
+
+.dk-traffic-page-path {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-traffic-page-title {
+  margin-top: var(--x3);
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-traffic-landing-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-traffic-landing .dk-table td:first-child,
+.dk-traffic-all .dk-table td:first-child,
+.dk-traffic-events .dk-table td:first-child,
+.dk-traffic-clarity .dk-table td:first-child {
+  max-width: 0;
+  width: 100%;
+}
+
+.dk-traffic-pair {
+  display: inline-flex;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-traffic-pair-medium {
+  color: var(--ink-3);
+}
+
+.dk-traffic-event {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-traffic-event-name {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-traffic-event-name code {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-events .dk-bars {
+  margin-left: auto;
+}
+
+/* The rows past the first few wait behind "Show all". */
+.dk-traffic-expand:not([data-open])[data-shown="5"] .dk-table tbody tr:nth-child(n + 6),
+.dk-traffic-expand:not([data-open])[data-shown="6"] .dk-table tbody tr:nth-child(n + 7),
+.dk-traffic-expand:not([data-open])[data-shown="8"] .dk-table tbody tr:nth-child(n + 9),
+.dk-traffic-expand:not([data-open])[data-shown="10"] .dk-table tbody tr:nth-child(n + 11) {
+  display: none;
+}
+
+.dk-traffic-expand-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  width: 100%;
+  padding: var(--x10) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-traffic-expand-btn:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+/* ---------- all pages, with its search ---------- */
+
+.dk-traffic-search {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8) var(--x12);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-traffic-search-box {
+  display: inline-flex;
+  flex: 1 1 var(--search-w);
+  align-items: center;
+  gap: var(--x8);
+  max-width: var(--search-w);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-4);
+}
+
+.dk-traffic-search-box:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-traffic-search-input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-traffic-search-input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-traffic-search-input:focus-visible {
+  outline: none;
+}
+
+.dk-traffic-search-count {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- countries ---------- */
+
+.dk-traffic-geo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-traffic-map {
+  width: 100%;
+}
+
+.dk-traffic-geo-lists {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x24);
+  min-width: 0;
+}
+
+.dk-traffic-geo-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-traffic-geo-row {
+  display: grid;
+  grid-template-columns: var(--x24) minmax(0, 1fr) auto minmax(var(--x32), auto);
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--barlist-row) - var(--x4));
+  font-size: var(--t-small);
+}
+
+.dk-traffic-geo-code {
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  letter-spacing: var(--track-label);
+}
+
+.dk-traffic-geo-name {
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-traffic-geo-share {
+  color: var(--ink-3);
+}
+
+.dk-traffic-geo-n {
+  color: var(--ink);
+  text-align: right;
+}
+
+.dk-traffic-geo-row--city {
+  grid-template-columns: var(--x24) minmax(0, 1fr) minmax(var(--x32), auto);
+}
+
+/* "and 4 more countries": quiet like the line it replaces, and it opens the rest. */
+.dk-traffic-geo-more {
+  align-self: flex-start;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-align: left;
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-traffic-geo-more:hover {
+  color: var(--ink);
+  text-decoration-color: currentColor;
+}
+
+.dk-traffic-sub-head {
+  margin-bottom: var(--x2);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-traffic-countries {
+  container-type: inline-size;
+}
+
+@container (max-width: 420px) {
+  .dk-traffic-geo-lists {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Clarity ---------- */
+
+.dk-traffic-cfigs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--x10);
+  padding: 0 var(--pad) var(--x10);
+}
+
+.dk-traffic-cfig {
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-traffic-cfig dt {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-traffic-cfig dd {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+}
+
+.dk-traffic-cnote {
+  padding: 0 var(--pad) var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-traffic-clarity {
+  container-type: inline-size;
+}
+
+.dk-traffic-clarity-off {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-traffic-clarity-will {
+  padding-top: var(--x14);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-traffic-clarity-measures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-top: var(--x8);
+}
+
+@container (max-width: 560px) {
+  .dk-traffic-cfigs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- what is not measured ---------- */
+
+.dk-traffic-unknowns {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-traffic-unknown {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x12);
+}
+
+.dk-traffic-unknown-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--amber);
+}
+
+.dk-traffic-unknown-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
+}
+
+.dk-traffic-unknown-text b {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+/* ---------- the middle width ---------- */
+
+/*
+ * Under about 1120px a row of three becomes two columns. In the rows led by a
+ * wide panel (the chart, the landing pages) that panel takes the whole row and
+ * the other two share the next one, instead of the last one standing alone.
+ */
+@container (max-width: 1120px) {
+  .dk-traffic-lead > .dk-grid-row > :first-child {
+    grid-column: 1 / -1;
+  }
+
+  .dk-traffic-lead > .dk-grid-row[data-pair] > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+@container (max-width: 700px) {
+  .dk-traffic-lead > .dk-grid-row > :first-child {
+    grid-column: auto;
+  }
+}
+
+/* A countries panel with a whole row to itself: the map beside its lists. */
+@container (min-width: 760px) {
+  .dk-traffic-geo {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr);
+    align-items: center;
+    gap: var(--x24);
+  }
+}
+
+/* A live panel with a whole row to itself: the count and minutes beside the titles. */
+.dk-traffic-live {
+  container-type: inline-size;
+}
+
+@container (min-width: 640px) {
+  .dk-traffic-live-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--x32);
+  }
+}

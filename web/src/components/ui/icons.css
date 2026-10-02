@@ -1,0 +1,6 @@
+/* An icon never shrinks in a row and sits on the text's middle line. */
+.dk-icon {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+}

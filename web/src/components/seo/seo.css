@@ -1,0 +1,993 @@
+/*
+ * The SEO screen. Measured on design/boards/seo.png (1672×941): seven tiles of
+ * unequal width, then three rows of panels whose edges do not line up from row
+ * to row (five tracks: 464, 224, 182, 100 and 359 wide at the board's size).
+ * The board's tables are denser than the kit's default rows.
+ */
+:root {
+  --dk-seo-row: 26px;          /* a table row on this board */
+  --dk-seo-row-slim: 22px;     /* a row of the bottom panels (movements, landing pages), as dense as the board's */
+  --dk-seo-thumb-w: 36px;      /* the board's slim page picture in a landing row */
+  --dk-seo-thumb-h: 16px;
+  --dk-seo-action-row: 26px;   /* one quick action: icon, action, what it does, chevron */
+  --dk-seo-check-row: 21px;    /* a check row in Indexation & technical SEO */
+  --dk-seo-mark: 14px;         /* a check's status circle */
+  --dk-seo-trend-h: 136px;     /* the ranking plot at the board's size */
+  --dk-seo-console-h: 84px;    /* the clicks and impressions plot */
+  --dk-seo-move-dot: 7px;      /* the dot before a moved query */
+  --dk-seo-open-fig: 112px;    /* one figure of an opened keyword */
+  --dk-seo-bar-w: 120px;       /* the audit's progress bar */
+  --dk-seo-spin: 1.2s;         /* one turn of the audit's icon while it runs */
+}
+
+/* ---------- the tiles ---------------------------------------------------------------- */
+.dk-seo-tilerow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+/* The board's proportions while all seven fit in a row, widened where a label
+   needs it: the board's widest tile (Critical Issues) gives up the most. */
+@container (min-width: 1301px) {
+  .dk-seo-tiles .dk-tiles-grid[data-n="7"] {
+    grid-template-columns: minmax(0, 200fr) minmax(0, 160fr) minmax(0, 176fr) minmax(0, 196fr) minmax(0, 178fr) minmax(0, 166fr) minmax(0, 224fr);
+  }
+}
+
+/* Seven figures in a row: labels a step smaller, and a narrow tile keeps its
+   spark as long as there is room beside the figure. */
+.dk-seo-tiles .dk-tile {
+  padding-right: var(--x14);
+  padding-left: var(--x16);
+}
+
+.dk-seo-tiles .dk-tile-label {
+  font-size: var(--t-small);
+}
+
+.dk-seo-tile-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x20);
+  padding: 0 var(--x4);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-tile-stamp {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x6);
+}
+
+@container (max-width: 200px) {
+  .dk-seo-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: flex;
+    min-width: var(--x24);
+  }
+}
+
+@container (max-width: 96px) {
+  .dk-seo-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: none;
+  }
+}
+
+/* ---------- the board's grid -------------------------------------------------------- */
+.dk-seo-board {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.dk-seo-grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "trend" "kw" "gap" "tech" "sc" "move" "land" "quick";
+  align-items: stretch;
+}
+
+.dk-seo-grid > * {
+  min-width: 0;
+}
+
+.dk-seo-a-trend {
+  grid-area: trend;
+}
+.dk-seo-a-kw {
+  grid-area: kw;
+}
+.dk-seo-a-gap {
+  grid-area: gap;
+}
+.dk-seo-a-tech {
+  grid-area: tech;
+}
+.dk-seo-a-sc {
+  grid-area: sc;
+}
+.dk-seo-a-move {
+  grid-area: move;
+}
+.dk-seo-a-land {
+  grid-area: land;
+}
+.dk-seo-a-quick {
+  grid-area: quick;
+}
+
+@container (min-width: 701px) {
+  .dk-seo-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-areas:
+      "trend trend"
+      "kw kw"
+      "gap tech"
+      "move sc"
+      "land land"
+      "quick quick";
+  }
+}
+
+@container (min-width: 1180px) {
+  .dk-seo-grid {
+    grid-template-columns: minmax(0, 464fr) minmax(0, 224fr) minmax(0, 182fr) minmax(0, 100fr) minmax(0, 359fr);
+    grid-template-areas:
+      "trend trend kw kw kw"
+      "gap tech tech sc sc"
+      "move land land land quick";
+  }
+}
+
+/* ---------- panels ---------------------------------------------------------------- */
+
+/* A flush panel's absent state still sits inside the panel's margins. */
+.dk-seo-panel.dk-card--flush > .dk-card-body > .dk-absent--panel {
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+/* Bodies that hold a chart grow with the row, so the chart takes the height the row has. */
+.dk-seo-a-trend > .dk-card-body,
+.dk-seo-a-sc > .dk-card-body,
+.dk-seo-panel.dk-card--flush > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-panel .dk-table--dense tbody td {
+  height: var(--dk-seo-row);
+}
+
+.dk-seo-panel .dk-table thead th {
+  height: var(--x24);
+}
+
+.dk-seo-flush {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-flush > .dk-table-wrap {
+  flex: 1;
+}
+
+.dk-seo-flush-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x12);
+  padding: var(--x8) var(--pad) var(--x12);
+}
+
+.dk-seo-foot-note {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+.dk-seo-cell-text {
+  display: block;
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Fixed columns: every figure column has its width, the first takes the rest
+   and cuts its text, so a long query never pushes the figures out of the panel. */
+.dk-seo-panel .dk-table {
+  table-layout: fixed;
+}
+
+/* The bottom panels' tables (movements, landing pages): the board sets their
+   figure columns close together, so the cells between the edges keep 8px a
+   side and the page or query keeps the room. The column widths are measured
+   for this padding. */
+.dk-seo-tight .dk-table :is(th, td):not(:first-child) {
+  padding-left: var(--x8);
+}
+
+.dk-seo-tight .dk-table :is(th, td):not(:last-child) {
+  padding-right: var(--x8);
+}
+
+.dk-seo-a-move .dk-table--dense tbody td,
+.dk-seo-a-land .dk-table--dense tbody td {
+  height: var(--dk-seo-row-slim);
+}
+
+/* A long column head wraps onto a second line instead of being cut. */
+.dk-seo-wraphead {
+  display: block;
+  padding: var(--x4) 0;
+  line-height: var(--lh-tight);
+  white-space: normal;
+}
+
+.dk-seo-window {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* ---------- position change --------------------------------------------------------- */
+.dk-seo-move {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x3);
+  font-weight: var(--w-medium);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.dk-seo-move--up {
+  color: var(--green);
+}
+
+.dk-seo-move--down {
+  color: var(--red);
+}
+
+.dk-seo-move--flat,
+.dk-seo-move--new {
+  color: var(--ink-3);
+  font-weight: var(--w-regular);
+}
+
+/* ---------- ranking trend ------------------------------------------------------------- */
+.dk-seo-trend {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-trend-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x6) var(--x20);
+  margin-top: calc(-1 * var(--x6));
+}
+
+.dk-seo-trend-figure {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x10);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-seo-trend-figure b {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-trend-figure .dk-delta {
+  margin-left: var(--x10);
+}
+
+.dk-seo-trend-vs {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-trend-legend {
+  display: flex;
+  gap: var(--x24);
+  font-size: var(--t-small);
+}
+
+.dk-seo-trend-legend .dk-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-trend-plot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--dk-seo-trend-h);
+}
+
+.dk-seo-trend-plot > * {
+  flex: 1;
+}
+
+/* ---------- content gaps ---------------------------------------------------------------- */
+.dk-seo-gapbar {
+  display: grid;
+  grid-template-columns: auto minmax(var(--x40), 1fr);
+  align-items: center;
+  gap: var(--x14);
+}
+
+.dk-seo-gapbar b {
+  min-width: var(--x40);
+  color: var(--green);
+  font-weight: var(--w-medium);
+  text-align: right;
+}
+
+/* ---------- indexation & technical ---------------------------------------------------- */
+.dk-seo-checks {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-checks-head,
+.dk-seo-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) var(--x40) minmax(0, 1fr) var(--x14);
+  align-items: center;
+  column-gap: var(--x8);
+  padding: 0 var(--pad);
+}
+
+.dk-seo-checks-head {
+  min-height: var(--ctl-xs);
+  margin-top: calc(-1 * var(--x6));
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-checks-head > span:nth-child(2) {
+  justify-self: start;
+}
+
+.dk-seo-checks-report {
+  grid-column: 3 / span 2;
+  justify-self: end;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: var(--font);
+}
+
+.dk-seo-checks-list {
+  margin: var(--x2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The stamp under the ten lines sits close, as the board's last line does. */
+.dk-seo-checks > .dk-seo-flush-foot {
+  padding-top: var(--x4);
+  padding-bottom: var(--x10);
+}
+
+.dk-seo-check {
+  min-height: var(--dk-seo-check-row);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-check--link {
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-check--link:hover {
+  background: var(--hover);
+}
+
+.dk-seo-check-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-check-value {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-check-value--plain {
+  color: var(--ink);
+}
+
+.dk-seo-check-value--good {
+  color: var(--green);
+}
+
+.dk-seo-check-value--warn {
+  color: var(--amber);
+}
+
+.dk-seo-check-value--bad {
+  color: var(--red);
+}
+
+.dk-seo-check-value--absent {
+  color: var(--ink-3);
+}
+
+.dk-seo-check-go {
+  color: var(--ink-3);
+}
+
+.dk-seo-check--link:hover .dk-seo-check-go {
+  color: var(--ink);
+}
+
+.dk-seo-absent-line {
+  border-bottom: var(--x1) dotted var(--ink-4);
+  cursor: help;
+}
+
+.dk-seo-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--dk-seo-mark);
+  height: var(--dk-seo-mark);
+  border-radius: var(--r-pill);
+  color: var(--bg);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-bold);
+  line-height: 1;
+}
+
+.dk-seo-mark--good {
+  background: var(--green);
+}
+
+.dk-seo-mark--warn {
+  background: var(--amber);
+}
+
+.dk-seo-mark--bad {
+  background: var(--red);
+}
+
+.dk-seo-mark--absent {
+  border: var(--x1) dashed var(--ink-4);
+  color: var(--ink-4);
+}
+
+.dk-seo-mark .dk-icon {
+  stroke-width: 3;
+}
+
+/* ---------- search console overview -------------------------------------------------- */
+.dk-seo-console {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-minis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x12);
+}
+
+.dk-seo-mini {
+  min-width: 0;
+}
+
+.dk-seo-mini-label {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-mini-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--x6);
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dk-seo-mini-row > div {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-seo-mini-value {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-seo-mini-none {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-mini-spark.dk-spark {
+  flex: 1 1 0;
+  width: auto;
+  min-width: 0;
+  max-width: var(--spark-row-w);
+  height: var(--x24);
+  margin-bottom: var(--x2);
+}
+
+.dk-seo-console-plot {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--dk-seo-console-h);
+}
+
+.dk-seo-console-plot > * {
+  flex: 1;
+}
+
+.dk-seo-console-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x6) var(--x16);
+}
+
+.dk-seo-console-foot .dk-legend {
+  display: flex;
+  gap: var(--x24);
+  font-size: var(--t-small);
+}
+
+.dk-seo-console-foot .dk-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+@container (max-width: 360px) {
+  .dk-seo-minis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* ---------- movements ------------------------------------------------------------------- */
+.dk-seo-moved {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-moved-dot {
+  flex: none;
+  width: var(--dk-seo-move-dot);
+  height: var(--dk-seo-move-dot);
+  border-radius: var(--r-pill);
+}
+
+.dk-seo-moved-dot--up {
+  background: var(--green);
+}
+
+.dk-seo-moved-dot--down {
+  background: var(--red);
+}
+
+/* ---------- landing pages ----------------------------------------------------------------- */
+.dk-seo-page {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+/* The board's slim picture: a strip of the page's share image, not a card. */
+.dk-seo-page .dk-seo-page-thumb {
+  flex: none;
+  width: var(--dk-seo-thumb-w);
+  height: var(--dk-seo-thumb-h);
+  border-radius: var(--x3);
+}
+
+.dk-seo-page .dk-seo-page-thumb .dk-icon {
+  width: var(--x10);
+  height: var(--x10);
+}
+
+/* ---------- quick actions ------------------------------------------------------------------ */
+/* One line each, as on the board: icon, the action, what it does in small grey
+   type on the same line, a chevron; a hairline between rows, no boxes. */
+.dk-seo-actions {
+  margin: 0;
+  padding: 0 0 var(--x8);
+  list-style: none;
+}
+
+.dk-seo-actions > li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-action {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  width: 100%;
+  min-height: var(--dk-seo-action-row);
+  padding: var(--x3) var(--pad);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-seo-action:hover {
+  background: var(--hover);
+}
+
+.dk-seo-action-icon {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.dk-seo-action-text {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-action-label {
+  flex: none;
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+
+.dk-seo-action-desc {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-action-go {
+  flex: none;
+  color: var(--ink-4);
+  transition:
+    transform var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-seo-action:hover .dk-seo-action-go {
+  color: var(--ink-2);
+  transform: translateX(var(--x2));
+}
+
+.dk-seo-audit:disabled {
+  cursor: progress;
+}
+
+.dk-seo-audit--busy .dk-seo-action-label {
+  color: var(--green);
+}
+
+/* What the desk said back (a refusal, the run's result) is read whole, not cut:
+   it goes under the action, at the panel's width. */
+.dk-seo-audit:has(.dk-seo-audit-said) .dk-seo-action-text {
+  flex-wrap: wrap;
+  row-gap: var(--x2);
+}
+
+.dk-seo-audit .dk-seo-action-desc.dk-seo-audit-said {
+  white-space: normal;
+}
+
+.dk-seo-audit .dk-seo-action-desc.dk-seo-audit-refused {
+  color: var(--amber);
+}
+
+.dk-seo-audit-bar {
+  flex: none;
+  width: var(--dk-seo-bar-w);
+  max-width: 30%;
+  height: var(--bar);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-seo-audit-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green);
+  transition: width var(--slow) var(--ease);
+}
+
+.dk-seo-spin {
+  animation-name: dk-seo-spin;
+  animation-duration: var(--dk-seo-spin);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes dk-seo-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-seo-spin {
+    animation-name: none;
+  }
+}
+
+/* ---------- the specimen ribbon ------------------------------------------------------------- */
+.dk-seo-specimen {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x12);
+  padding: var(--x10) var(--x16);
+  border: var(--x1) solid var(--violet-edge);
+  border-radius: var(--r-card);
+  background: var(--violet-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-specimen > .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--violet);
+}
+
+.dk-seo-specimen p {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-specimen b {
+  color: var(--violet);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-specimen-go {
+  flex: none;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+/* ---------- an opened keyword ----------------------------------------------------------------- */
+.dk-seo-open-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x12) var(--x32);
+}
+
+.dk-seo-open-fig {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: var(--dk-seo-open-fig);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-open-fig b {
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-open-fig--page b {
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-open-stamp {
+  align-self: flex-end;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* ---------- the full report ------------------------------------------------------------------- */
+.dk-seo-rtitle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-seo-rsection {
+  scroll-margin-top: calc(var(--top) + var(--gap));
+}
+
+.dk-seo-rbody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-seo-rfacts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-rgroup {
+  overflow: hidden;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+}
+
+.dk-seo-rgroup-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x12);
+  padding: var(--x10) var(--pad);
+  background: var(--card-2);
+}
+
+.dk-seo-rgroup-head h3 {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-rgroup-cost {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-rgroup-count {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-rgroup-rule {
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+}
+
+.dk-seo-rgroup .dk-table td {
+  white-space: normal;
+}
+
+.dk-seo-rgroup .dk-table tbody td {
+  padding-top: var(--x6);
+  padding-bottom: var(--x6);
+}
+
+.dk-seo-rtext {
+  display: block;
+  min-width: 0;
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-rrelated {
+  color: var(--ink-3);
+}
+
+.dk-seo-rsummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x8) var(--x32);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-seo-rsummary b {
+  color: var(--ink);
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-rsummary b.dk-seo-rcrit {
+  color: var(--red);
+}
+
+.dk-seo-rsummary b.dk-seo-rwarn {
+  color: var(--amber);
+}
+
+.dk-seo-rsummary b.dk-seo-ropp {
+  color: var(--blue);
+}
+
+/* ---------- the compact absent state's step ---------------------------------------------------- */
+.dk-seo-step {
+  max-width: 100%;
+  color: var(--ink-2);
+}
+
+.dk-seo-step > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-step > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-step > summary .dk-icon {
+  color: var(--green);
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-seo-step[open] > summary .dk-icon {
+  transform: rotate(90deg);
+}
+
+.dk-seo-step > summary:hover span {
+  color: var(--ink);
+}
+
+.dk-seo-step > p {
+  margin-top: var(--x6);
+  padding-left: var(--x20);
+  overflow-wrap: anywhere;
+}

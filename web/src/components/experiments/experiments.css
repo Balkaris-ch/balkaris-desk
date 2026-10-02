@@ -1,0 +1,801 @@
+/*
+ * The Experiments screen. There is no board for it: it is drawn in the
+ * boards' language (Command Center, Conversions) with the desk's primitives,
+ * and this sheet only places what the primitives do not: the rows of Recent
+ * changes, the comparison's form, chart marks and figures, and the three
+ * needs of a real experiment. Every value is a token.
+ */
+
+/* ---------- small type shared by the tables ------------------------------- */
+
+.dk-experiments-quiet {
+  color: var(--ink-3);
+}
+
+.dk-experiments-change {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  /* Adds nothing to the column's least width, then fills it: a long subject is
+     cut with an ellipsis instead of widening the table past its panel. */
+  width: 0;
+  min-width: 100%;
+}
+
+.dk-experiments-subject,
+.dk-experiments-asked {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-experiments-asked {
+  color: var(--ink-2);
+  font-weight: var(--w-regular);
+}
+
+.dk-experiments-subject[data-on] {
+  color: var(--green);
+}
+
+.dk-experiments-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-experiments-sha {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+}
+
+a.dk-experiments-sha:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+.dk-experiments-when {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  white-space: nowrap;
+}
+
+.dk-experiments-when .dk-experiments-quiet {
+  font-size: var(--t-small);
+}
+
+/* ---------- pages touched ------------------------------------------------ */
+
+.dk-experiments-touched {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x6);
+  /* As the change column: the column's share is decided by the table, the chips are cut to fit it. */
+  width: 0;
+  min-width: 100%;
+  font-size: var(--t-small);
+}
+
+.dk-experiments-path {
+  display: inline-block;
+  max-width: min(100%, var(--measure-empty));
+  overflow: hidden;
+  padding: var(--x2) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-experiments-path:hover {
+  border-color: var(--pop-edge);
+  color: var(--ink);
+}
+
+.dk-experiments-path--template {
+  border-style: dashed;
+  background: none;
+  color: var(--ink-3);
+}
+
+.dk-experiments-more {
+  color: var(--ink-3);
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* ---- Recent changes and Saved comparisons: a table while the panel is wide,
+        the same rows stacked under a phone's width, so a row's buttons are
+        never scrolled out of sight ---- */
+
+.dk-experiments-changes > .dk-card-body,
+.dk-experiments-saved > .dk-card-body {
+  container-type: inline-size;
+}
+
+.dk-experiments-narrow {
+  display: none;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@container (max-width: 640px) {
+  .dk-experiments-wide {
+    display: none;
+  }
+
+  .dk-experiments-narrow {
+    display: block;
+  }
+}
+
+.dk-experiments-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x12) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+}
+
+.dk-experiments-item-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+}
+
+.dk-experiments-item-subject {
+  min-width: 0;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-experiments-item-subject[data-on] {
+  color: var(--green);
+}
+
+.dk-experiments-item-head .dk-btn,
+.dk-experiments-item-head .dk-experiments-acts {
+  flex: none;
+}
+
+.dk-experiments-item .dk-experiments-meta {
+  flex-wrap: wrap;
+  row-gap: var(--x4);
+  white-space: normal;
+}
+
+.dk-experiments-item .dk-experiments-touched {
+  width: auto;
+  min-width: 0;
+}
+
+.dk-experiments-acts {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+/* A panel's source line, under its table. */
+.dk-experiments-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x6) var(--x16);
+  padding: var(--x10) var(--pad);
+  font-size: var(--t-label);
+}
+
+.dk-experiments-foot--inset {
+  margin-top: var(--x16);
+  padding: var(--x12) 0 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+/* ---------- the comparison's form ---------------------------------------- */
+
+.dk-experiments-saved-line {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  margin: var(--x10) 0 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-experiments-saved-line .dk-icon {
+  flex: none;
+  color: var(--green);
+}
+
+.dk-experiments-form {
+  display: grid;
+  grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(0, 0.8fr) auto;
+  align-items: end;
+  gap: var(--x12);
+  margin-top: var(--x14);
+}
+
+/* Side by side, a field's usual space above the next one would stagger the row. */
+.dk-experiments-form .dk-field + .dk-field {
+  margin-top: 0;
+}
+
+.dk-experiments-form .dk-select select {
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
+/*
+ * The change and page lists: the browser's own select, drawn as the desk's
+ * Select draws a form field (36px), but with what that primitive does not
+ * take: option groups, and a value the "change or date" pair sets.
+ */
+.dk-experiments-select {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 100%;
+  color: var(--ink);
+}
+
+.dk-experiments-select select {
+  appearance: none;
+  width: 100%;
+  min-width: 0;
+  height: var(--ctl);
+  padding: 0 var(--x32) 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: inherit;
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: 1;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-experiments-select select:hover {
+  background: var(--card-3);
+  border-color: var(--pop-edge);
+}
+
+.dk-experiments-select select:focus-visible {
+  outline: none;
+  border-color: var(--green-2);
+  box-shadow: 0 0 0 var(--x3) var(--green-glow);
+}
+
+.dk-experiments-select option,
+.dk-experiments-select optgroup {
+  background: var(--pop);
+  color: var(--ink);
+}
+
+.dk-experiments-select .dk-icon {
+  position: absolute;
+  right: var(--x8);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+/* The date box: the browser's own calendar, in the desk's dark, as tall as the selects beside it. */
+.dk-experiments-form input[type="date"] {
+  height: var(--ctl);
+  color-scheme: dark;
+}
+
+.dk-experiments-go {
+  min-width: calc(var(--x56) * 2);
+}
+
+@container (max-width: 1100px) {
+  .dk-experiments-form {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dk-experiments-field-change {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Narrow (the panel beside Recent changes, a phone): the change and the page
+   across, the date and the window side by side, the button across. */
+@container (max-width: 560px) {
+  .dk-experiments-form {
+    grid-auto-flow: row dense;
+  }
+
+  .dk-experiments-field-page,
+  .dk-experiments-go {
+    grid-column: 1 / -1;
+  }
+
+  .dk-experiments-go {
+    width: 100%;
+  }
+}
+
+@container (max-width: 300px) {
+  .dk-experiments-form {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-experiments-refused {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin: var(--x12) 0 0;
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--red-edge);
+  border-radius: var(--r-field);
+  background: var(--red-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-experiments-refused .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--red);
+}
+
+/* Nothing asked yet: the same quiet shape as an absent panel. */
+.dk-experiments-prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  min-height: var(--absent-min);
+  justify-content: center;
+  margin-top: var(--x16);
+  padding: var(--x16) 0 var(--x4);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-experiments-prompt-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x32);
+  height: var(--x32);
+  margin-bottom: var(--x4);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--ink-4);
+}
+
+.dk-experiments-prompt-head {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-experiments-prompt-why {
+  max-width: var(--measure-note);
+  margin: 0;
+}
+
+/* A comparison that cannot be worked out: under the form as the result would be, behind the same hairline. */
+.dk-experiments-absent {
+  margin-top: var(--x16);
+  padding-top: var(--x4);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* The comparison card's body is a size container, so the form and the result fold by the panel's width. */
+.dk-experiments-compare > .dk-card-body {
+  container-type: inline-size;
+}
+
+/* ---------- the result: chart left, figures right ------------------------- */
+
+.dk-experiments-result {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: var(--x24);
+  margin-top: var(--x16);
+  padding-top: var(--x16);
+  border-top: var(--x1) solid var(--line);
+}
+
+@container (max-width: 900px) {
+  .dk-experiments-result {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-experiments-plot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+  min-width: 0;
+}
+
+.dk-experiments-plot .dk-tabs {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.dk-experiments-legend {
+  font-size: var(--t-small);
+}
+
+.dk-experiments-metrics {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-experiments-metric {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding: var(--x12) var(--x14);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-field);
+}
+
+.dk-experiments-metric + .dk-experiments-metric {
+  margin-top: var(--x4);
+}
+
+.dk-experiments-metric[data-on] {
+  border-color: var(--line-2);
+  background: var(--card-2);
+}
+
+.dk-experiments-metric-head {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-experiments-metric-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.dk-experiments-metric-label:hover {
+  color: var(--ink);
+}
+
+.dk-experiments-metric[data-on] .dk-experiments-metric-label {
+  color: var(--ink);
+}
+
+.dk-experiments-verdict {
+  flex: none;
+  margin-left: auto;
+}
+
+.dk-experiments-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x4) var(--x8);
+  margin: 0;
+  color: var(--ink);
+}
+
+.dk-experiments-figures .dk-icon {
+  align-self: center;
+  color: var(--ink-4);
+}
+
+.dk-experiments-figure-before,
+.dk-experiments-figure-after {
+  font-size: var(--t-figure-3);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}
+
+.dk-experiments-figure-before {
+  color: var(--ink-2);
+}
+
+.dk-experiments-unit {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-experiments-unit + .dk-experiments-unit::before {
+  content: "· ";
+}
+
+.dk-experiments-says {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* ---------- what it can and cannot tell -------------------------------- */
+
+.dk-experiments-caveats {
+  margin-top: var(--x4);
+  padding: var(--x14) var(--x16);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-experiments-caveats-title {
+  margin: 0 0 var(--x8);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-experiments-caveats-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--x8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-experiments-caveats-list li {
+  position: relative;
+  padding-left: var(--x14);
+}
+
+.dk-experiments-caveats-list li::before {
+  content: "";
+  position: absolute;
+  /* Centred on the first line. */
+  top: calc((var(--t-small) * var(--lh-body) - var(--x4)) / 2);
+  left: 0;
+  width: var(--x4);
+  height: var(--x4);
+  border-radius: 50%;
+  background: var(--ink-4);
+}
+
+.dk-experiments-caveats-list b {
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+}
+
+/* ---------- the chart's own marks ---------------------------------------- */
+
+.dk-experiments-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: var(--x2);
+  /* See-through, so the grid's dashed lines still cross the window. */
+  background: color-mix(in srgb, var(--c) var(--chart-band), transparent);
+  pointer-events: none;
+}
+
+.dk-experiments-rule {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 0;
+  border-left: var(--x1) dashed var(--ink-3);
+  pointer-events: none;
+}
+
+.dk-experiments-rule-label {
+  position: absolute;
+  top: calc(var(--x6) * -1);
+  left: 0;
+  padding: var(--x1) var(--x6);
+  transform: translate(-50%, -100%);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card);
+  color: var(--ink-2);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+/* Room above the plot, axis and all, for the change's label. */
+.dk-experiments-chart {
+  padding-top: calc(var(--t-label) + var(--x10));
+}
+
+.dk-experiments-lines {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dk-experiments-bridge,
+.dk-experiments-line,
+.dk-experiments-mean {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-experiments-bridge {
+  stroke: var(--chart-prev);
+  stroke-width: var(--x1);
+  stroke-dasharray: var(--x2) var(--x3);
+}
+
+.dk-experiments-line {
+  stroke: color-mix(in srgb, var(--c), var(--ink) var(--chart-lift));
+  stroke-width: var(--chart-line);
+}
+
+.dk-experiments-mean {
+  stroke: color-mix(in srgb, var(--c), var(--ink) var(--chart-lift));
+  stroke-width: var(--x1);
+  stroke-dasharray: var(--x6) var(--x4);
+}
+
+.dk-experiments-dot {
+  position: absolute;
+  z-index: 2;
+  width: var(--chart-dot);
+  height: var(--chart-dot);
+  margin: calc(var(--chart-dot) / -2) 0 0 calc(var(--chart-dot) / -2);
+  border: var(--chart-line) solid color-mix(in srgb, var(--c), var(--ink) var(--chart-lift));
+  border-radius: 50%;
+  background: var(--chart-ground);
+  pointer-events: none;
+}
+
+.dk-experiments-dot[data-side="change"] {
+  border-style: dashed;
+}
+
+.dk-experiments-dot[data-provisional] {
+  border-style: dotted;
+  opacity: var(--chart-provisional-dot);
+}
+
+/* ---------- saved comparisons ---------------------------------------------- */
+
+/* Beside the taller needs panel, an empty list sits in the middle of its panel, not under its head. */
+.dk-experiments-saved > .dk-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-experiments-saved > .dk-card-body > .dk-empty {
+  flex: 1;
+}
+
+/* ---------- saving -------------------------------------------------------- */
+
+.dk-experiments-save {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- what a real experiment needs ---------------------------------- */
+
+.dk-experiments-needs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--x16);
+  margin: var(--x12) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The panel's own width decides: beside Saved comparisons it is a narrow column, alone in its row (1280, a phone) it may be wide. */
+.dk-experiments-needs-card > .dk-card-body {
+  container-type: inline-size;
+}
+
+/* Side by side while the panel is wide. */
+@container (min-width: 900px) {
+  .dk-experiments-needs {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--x32);
+  }
+}
+
+.dk-experiments-need {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-experiments-need-body {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-experiments-need-n {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border: var(--x1) solid var(--blue-edge);
+  border-radius: var(--r-pill);
+  background: var(--blue-ground);
+  color: var(--blue);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-experiments-need-title {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-height: var(--x24);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-experiments-need-text {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-experiments-need-figure {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+  line-height: var(--lh-tight);
+}

@@ -1,0 +1,146 @@
+/*
+ * The specimen sheet's own arrangements (app/kit/page.tsx). Only how the
+ * specimens are laid out side by side: the primitives bring their own looks.
+ * Prefixed dk-spec- so nothing here meets the charts' sheet (dk-kit-).
+ */
+.dk-spec-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-spec-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-spec-text {
+  color: var(--ink-2);
+  line-height: var(--lh-body);
+}
+
+.dk-spec-stamps {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  margin-top: var(--x14);
+}
+
+.dk-spec-figure {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-spec-figure p {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  color: var(--ink-3);
+}
+
+.dk-spec-figure b {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-spec-pairs {
+  display: grid;
+  grid-template-columns: fit-content(50%) minmax(0, 1fr);
+  overflow-wrap: anywhere;
+  align-items: center;
+  gap: var(--x10) var(--x20);
+}
+
+.dk-spec-pairs dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-spec-pairs--wide dt {
+  font-family: var(--font-mono);
+}
+
+.dk-spec-pairs dd {
+  color: var(--ink);
+}
+
+.dk-spec-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  max-width: var(--gate-w);
+}
+
+.dk-spec-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-spec-cell > span:last-child {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-spec-cell b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-spec-cell small {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-spec-hover {
+  color: var(--ink-2);
+  text-decoration: underline dotted var(--ink-4);
+  text-underline-offset: var(--x3);
+  cursor: help;
+}
+
+.dk-spec-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-spec-icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--x56) + var(--x32)), 1fr));
+  gap: var(--x4);
+}
+
+.dk-spec-icons li {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--x6);
+  padding: var(--x10) var(--x2);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+}
+
+.dk-spec-icons li:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-spec-icons span {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--ink-4);
+  font-family: var(--font-mono);
+  font-size: var(--t-micro);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

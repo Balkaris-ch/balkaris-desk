@@ -1,0 +1,64 @@
+/*
+ * A threshold meter. Measured on Site Health's Core Web Vitals: a 6px track,
+ * the fill in the zone's colour, and two dashed marks standing 7px above and
+ * below the track: light for the edge of good, red for the edge of poor.
+ */
+.dk-meter {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: var(--x56);
+  padding-block: var(--meter-mark);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-meter[data-ticks] {
+  padding-bottom: calc(var(--meter-mark) + var(--t-tiny) + var(--x4));
+}
+
+.dk-meter-track {
+  display: block;
+  height: var(--bar);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-meter-fill {
+  display: block;
+  min-width: var(--bar);
+  height: 100%;
+  border-radius: inherit;
+  background: var(--c);
+}
+
+/* Past the end of the scale: the bar is full and its end is cut square. */
+.dk-meter-fill[data-over] {
+  border-radius: var(--r-pill) 0 0 var(--r-pill);
+}
+
+.dk-meter-mark {
+  position: absolute;
+  top: 0;
+  height: calc(var(--bar) + var(--meter-mark) * 2);
+  border-left: var(--x1) dashed var(--ink-2);
+}
+
+.dk-meter-mark[data-edge="poor"] {
+  border-left-color: var(--red);
+}
+
+.dk-meter-tick {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  color: var(--ink-4);
+  font-size: var(--t-tiny);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dk-meter-tick[data-edge="poor"] {
+  color: color-mix(in srgb, var(--red) var(--meter-poor-ink), var(--ink-4));
+}

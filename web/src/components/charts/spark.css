@@ -1,0 +1,70 @@
+/*
+ * A sparkline. Measured on the boards' tiles: about 96 by 40, a 1.5px line,
+ * and an area that starts at a third of the line's colour and is gone by the
+ * floor. The area is see-through here (a spark sits on tiles and on table
+ * rows that change colour under the pointer).
+ */
+.dk-spark {
+  position: relative;
+  display: block;
+  flex: none;
+  width: var(--spark-w);
+  height: var(--spark-h);
+}
+
+.dk-spark--row {
+  width: var(--spark-row-w);
+  height: var(--spark-row-h);
+}
+
+.dk-spark-area {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--c) var(--spark-fill-top), transparent), transparent);
+}
+
+.dk-spark-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  overflow: visible;
+}
+
+.dk-spark-line {
+  fill: none;
+  stroke: var(--c);
+  stroke-width: var(--chart-spark-line);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.dk-spark--row .dk-spark-line {
+  stroke-width: var(--x1);
+}
+
+.dk-spark-dot {
+  position: absolute;
+  width: var(--x4);
+  height: var(--x4);
+  margin: calc(var(--x4) / -2) 0 0 calc(var(--x4) / -2);
+  border-radius: 50%;
+  background: var(--c);
+}
+
+/* No readings: a dashed floor. Every reading zero: a grey floor. Neither is in
+   the series colour, because neither is a trend. */
+.dk-spark[data-state="empty"]::after,
+.dk-spark[data-state="zero"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-top: var(--x1) solid var(--chart-axis);
+}
+
+.dk-spark[data-state="empty"]::after {
+  border-top-style: dashed;
+}

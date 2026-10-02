@@ -1,0 +1,1082 @@
+/*
+ * Automations. Every class here is prefixed dk-automations- and every value
+ * is a token (styles/tokens.css). Laid out in Site Health's language: the
+ * jobs panel is that board's "Background jobs & automations" grown to its
+ * full width, the log is its "Recent incidents & logs".
+ */
+
+/* ---- this screen's measures, each built from the spacing scale ---- */
+.dk-automations-jobs,
+.dk-automations-more,
+.dk-automations-work,
+.dk-automations-qa-order {
+  --dk-automations-w-every: calc(var(--x8) * 13);   /* "every 15 minutes" */
+  --dk-automations-w-status: calc(var(--x10) * 15); /* "Waiting for access" and its source */
+  --dk-automations-w-last: calc(var(--x4) * 43);    /* "16 min ago · 164ms" and its line */
+  --dk-automations-w-next: calc(var(--x4) * 23);    /* "in 24 hours" */
+  --dk-automations-w-runs: calc(var(--x40) * 2);    /* "none failed" */
+  --dk-automations-w-spark: calc(var(--x4) * 19);   /* a row's spark */
+  --dk-automations-w-time: calc(var(--x32) * 3);    /* "Yesterday 13:42" */
+  --dk-automations-w-took: calc(var(--x32) * 2);    /* "1m 24s", "cut off" */
+  --dk-automations-w-clock: var(--x40);             /* "13:42" */
+}
+
+/* ---- small words ---- */
+.dk-automations-quiet {
+  color: var(--ink-3);
+}
+
+.dk-automations-good {
+  color: var(--green);
+}
+
+.dk-automations-warn {
+  color: var(--amber);
+}
+
+.dk-automations-bad {
+  color: var(--red);
+}
+
+.dk-automations-link {
+  color: inherit;
+  text-decoration: underline dotted var(--ink-4);
+  text-underline-offset: var(--x3);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-automations-link:hover {
+  color: var(--green);
+}
+
+.dk-automations-num {
+  text-align: right;
+}
+
+.dk-automations-more-head {
+  margin-bottom: var(--x6);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-automations-tip-step {
+  display: block;
+  margin-top: var(--x6);
+  color: var(--ink);
+}
+
+/* The log is only as tall as its rows: a filter that matches little leaves no empty box. */
+.dk-automations-anchor {
+  align-self: start;
+  min-width: 0;
+  scroll-margin-top: calc(var(--top) + var(--gap));
+}
+
+/* What the server said after a button asked. */
+.dk-automations-said {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--green);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-automations-said .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+.dk-automations-said--bad {
+  color: var(--red);
+}
+
+/* ---- the "Next run" tile: Tile's shape, drawn here ---- */
+.dk-automations-tile {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: var(--tile-h);
+  padding: var(--x14) var(--x20) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-automations-tile-label {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+  line-height: var(--x20);
+}
+
+.dk-automations-tile-figure {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-automations-tile-under {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-height: var(--x20);
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-delta);
+}
+
+.dk-automations-tile-sub {
+  margin-top: var(--x2);
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-automations-tile .dk-stamp {
+  margin-top: var(--x4);
+}
+
+/* ---- the jobs ---- */
+
+/*
+ * One grid for the head and every row: the list, each row and its line are
+ * subgrids of it, so the controls column is as wide as the widest row's
+ * controls and no wider, and every column still lines up.
+ */
+.dk-automations-jobs {
+  container-type: inline-size;
+}
+
+.dk-automations-jobs-grid {
+  --dk-automations-cols: minmax(0, 1fr) var(--dk-automations-w-every) var(--dk-automations-w-status) var(--dk-automations-w-last)
+    var(--dk-automations-w-next) var(--dk-automations-w-runs) var(--dk-automations-w-spark) max-content;
+  display: grid;
+  grid-template-columns: var(--dk-automations-cols);
+  column-gap: var(--x12);
+}
+
+.dk-automations-jobs-head,
+.dk-automations-jobs-list,
+.dk-automations-job,
+.dk-automations-job-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
+.dk-automations-job > * {
+  grid-column: 1 / -1;
+}
+
+.dk-automations-jobs-head,
+.dk-automations-job-row {
+  align-items: center;
+  padding: 0 var(--pad);
+}
+
+.dk-automations-jobs-head {
+  height: var(--x32);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dk-automations-job {
+  border-top: var(--x1) solid var(--line);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-automations-job:hover,
+.dk-automations-job--open {
+  background: var(--hover);
+}
+
+.dk-automations-job-row {
+  min-height: calc(var(--table-row-roomy) + var(--x6));
+  padding-top: var(--x8);
+  padding-bottom: var(--x8);
+  row-gap: var(--x10);
+}
+
+.dk-automations-job-name {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-automations-job-icon {
+  flex: none;
+  display: inline-flex;
+  margin-top: var(--x1);
+  color: var(--ink-3);
+}
+
+.dk-automations-job[data-state="failed"] .dk-automations-job-icon {
+  color: var(--red);
+}
+
+.dk-automations-job[data-state="running"] .dk-automations-job-icon {
+  color: var(--blue);
+}
+
+.dk-automations-job-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+/* A job's name is never cut: on a narrow table it takes a second line. */
+.dk-automations-job-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-automations-job-does {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-automations-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-automations-cell > small {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+}
+
+.dk-automations-cell > small.dk-automations-bad {
+  color: var(--red);
+}
+
+.dk-automations-cell > small.dk-automations-warn {
+  color: var(--amber);
+}
+
+/* A source's name or warning takes a second line rather than being cut. */
+.dk-automations-cell > small.dk-automations-wrap {
+  line-height: var(--lh-snug);
+  white-space: normal;
+}
+
+.dk-automations-cell--runs {
+  align-items: flex-end;
+}
+
+/* Read out always; seen only when a row is laid out as a card. */
+.dk-automations-cell-label {
+  position: absolute;
+  width: var(--x1);
+  height: var(--x1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.dk-automations-cell--controls {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+.dk-automations-cell--controls form {
+  display: contents;
+}
+
+/* The owner's on/off switch. */
+.dk-automations-switch {
+  position: relative;
+  flex: none;
+  width: calc(var(--x32) + var(--x2));
+  height: var(--x20);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--track);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-automations-switch-knob {
+  position: absolute;
+  top: var(--x2);
+  left: var(--x2);
+  width: var(--x14);
+  height: var(--x14);
+  border-radius: var(--r-pill);
+  background: var(--ink-3);
+  transition:
+    transform var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.dk-automations-switch--on {
+  border-color: var(--green-4);
+  background: var(--green-2);
+}
+
+.dk-automations-switch--on .dk-automations-switch-knob {
+  background: var(--ink-on-green);
+  transform: translateX(var(--x14));
+}
+
+.dk-automations-switch:hover {
+  border-color: var(--ink-4);
+}
+
+.dk-automations-switch:focus-visible,
+.dk-automations-open:focus-visible,
+.dk-automations-qa-row:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+/* Asking: the knob greys out until the desk has answered. */
+.dk-automations-switch:disabled {
+  border-color: var(--line);
+  cursor: progress;
+}
+
+.dk-automations-switch:disabled .dk-automations-switch-knob {
+  background: var(--ink-4);
+}
+
+/* Opens the row. */
+.dk-automations-open {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-automations-open:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-automations-open .dk-icon {
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-automations-open[aria-expanded="true"] .dk-icon {
+  transform: rotate(90deg);
+}
+
+.dk-automations-job > .dk-automations-said {
+  padding: 0 var(--pad) var(--x10) calc(var(--pad) + var(--x16) + var(--x10));
+}
+
+/* ---- an opened row ---- */
+.dk-automations-more[hidden] {
+  display: none !important;
+}
+
+.dk-automations-more {
+  container-type: inline-size;
+  padding: var(--x14) var(--pad) var(--pad) calc(var(--pad) + var(--x16) + var(--x10));
+  border-top: var(--x1) dashed var(--line-2);
+}
+
+.dk-automations-more-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--x24);
+}
+
+@container (max-width: 760px) {
+  .dk-automations-more-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x16);
+  }
+}
+
+.dk-automations-more-does {
+  max-width: var(--measure-sub);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-automations-facts {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--x4) var(--x14);
+  margin-top: var(--x12);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-automations-facts dt {
+  color: var(--ink-3);
+}
+
+.dk-automations-facts dd {
+  min-width: 0;
+  color: var(--ink-2);
+}
+
+.dk-automations-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  max-width: var(--measure-sub);
+  margin-top: var(--x12);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-field);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-automations-step-do {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-2);
+}
+
+.dk-automations-step-do .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--green);
+}
+
+.dk-automations-runs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-automations-runs li {
+  display: grid;
+  grid-template-columns: var(--dk-automations-w-time) var(--x8) var(--dk-automations-w-took) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--x24);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-automations-runs li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-runs time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-automations-run-note {
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the jobs, narrower ---- */
+
+/* No room for every column: the durations and the interval go (both are in the opened row). */
+@container (max-width: 1180px) {
+  /* Set on the grid inside, not on .dk-automations-jobs: a container query never styles the container itself. */
+  .dk-automations-jobs-grid {
+    --dk-automations-cols: minmax(0, 1fr) var(--dk-automations-w-status) var(--dk-automations-w-last) var(--dk-automations-w-next)
+      var(--dk-automations-w-runs) max-content;
+  }
+
+  .dk-automations-jobs-head > :nth-child(2),
+  .dk-automations-jobs-head > :nth-child(7),
+  .dk-automations-cell--every,
+  .dk-automations-cell--spark {
+    display: none;
+  }
+}
+
+/* A card per job: the name and the controls on top, the figures under them with their labels. */
+@container (max-width: 860px) {
+  .dk-automations-jobs-head {
+    display: none;
+  }
+
+  /* Each row its own grid: the shared columns end here. */
+  .dk-automations-jobs-grid,
+  .dk-automations-jobs-list,
+  .dk-automations-job {
+    display: block;
+  }
+
+  .dk-automations-job-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name name name controls"
+      "status last next runs";
+    align-items: start;
+  }
+
+  .dk-automations-job-name {
+    grid-area: name;
+  }
+
+  .dk-automations-cell--status {
+    grid-area: status;
+  }
+
+  .dk-automations-cell--last {
+    grid-area: last;
+  }
+
+  .dk-automations-cell--next {
+    grid-area: next;
+  }
+
+  .dk-automations-cell--runs {
+    grid-area: runs;
+    align-items: flex-start;
+  }
+
+  .dk-automations-cell--controls {
+    grid-area: controls;
+  }
+
+  .dk-automations-cell-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    color: var(--ink-4);
+    font-family: var(--font-label);
+    font-size: var(--t-tiny);
+    letter-spacing: var(--track-label);
+    text-transform: uppercase;
+  }
+
+  .dk-automations-job > .dk-automations-said,
+  .dk-automations-more {
+    padding-left: var(--pad);
+  }
+}
+
+@container (max-width: 520px) {
+  .dk-automations-job-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas:
+      "name name"
+      "status runs"
+      "last next"
+      "controls controls";
+  }
+
+  .dk-automations-cell--controls {
+    justify-content: flex-start;
+  }
+
+  .dk-automations-job-does {
+    white-space: normal;
+  }
+}
+
+/* ---- the article writer ---- */
+.dk-automations-runner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+  min-width: 0;
+}
+
+.dk-automations-runner-seen {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-automations-runner-seen .dk-dot {
+  white-space: normal;
+}
+
+.dk-automations-queue {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x8);
+}
+
+.dk-automations-queue > div {
+  min-width: 0;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-automations-queue dt {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-automations-queue dd {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-automations-queue dd.dk-automations-bad {
+  color: var(--red);
+}
+
+.dk-automations-work {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-automations-work-row {
+  display: grid;
+  grid-template-columns: var(--dk-automations-w-took) var(--x8) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--x40);
+  font-size: var(--t-small);
+}
+
+.dk-automations-work-row + .dk-automations-work-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-work-row time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-automations-work-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-automations-work-kind {
+  color: var(--ink-2);
+}
+
+.dk-automations-work-what {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-automations-work-detail {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-automations-work-detail.dk-automations-bad {
+  color: var(--red);
+}
+
+.dk-automations-foot {
+  padding: var(--x10) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* ---- the website's workflow ---- */
+.dk-automations-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-automations-flow-when {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  color: var(--ink);
+}
+
+.dk-automations-flow-when .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--green);
+}
+
+.dk-automations-flow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-left: var(--x24);
+  list-style: decimal;
+}
+
+.dk-automations-flow-steps li::marker {
+  color: var(--ink-4);
+}
+
+.dk-automations-flow-cannot {
+  color: var(--ink-3);
+}
+
+.dk-automations-flow-status {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  padding: var(--x8) var(--x10);
+  border: var(--x1) dashed var(--line-2);
+  border-radius: var(--r-field);
+  color: var(--ink-3);
+}
+
+.dk-automations-flow-status .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--ink-4);
+}
+
+.dk-automations-files {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  font-size: var(--t-label);
+}
+
+.dk-automations-files li {
+  overflow-wrap: anywhere;
+}
+
+.dk-automations-files code {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+}
+
+/* ---- quick actions ---- */
+.dk-automations-qa-list {
+  display: grid;
+  gap: var(--x6);
+}
+
+.dk-automations-qa-list form {
+  display: contents;
+}
+
+.dk-automations-qa-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  width: 100%;
+  min-height: calc(var(--ctl) + var(--x12));
+  padding: var(--x8) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-row);
+  background: var(--card-2);
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+button.dk-automations-qa-row:hover {
+  border-color: var(--line-2);
+  background: var(--card-3);
+}
+
+button.dk-automations-qa-row:disabled {
+  cursor: progress;
+}
+
+.dk-automations-qa-row--still {
+  border-style: dashed;
+  background: transparent;
+  cursor: default;
+}
+
+.dk-automations-qa-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-2);
+}
+
+.dk-automations-qa-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-automations-qa-label {
+  font-weight: var(--w-medium);
+}
+
+.dk-automations-qa-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.dk-automations-qa-go {
+  flex: none;
+  color: var(--green);
+  transition: transform var(--fast) var(--ease);
+}
+
+button.dk-automations-qa-row:hover .dk-automations-qa-go {
+  transform: translateX(var(--x2));
+}
+
+.dk-automations-qa-list > li {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+/* A row's own answer, under it. */
+.dk-automations-qa-said {
+  padding: 0 var(--x4) var(--x4);
+  font-size: var(--t-label);
+}
+
+.dk-automations-qa-note {
+  margin-top: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-body);
+}
+
+/* The scheduler's order, under the actions. */
+.dk-automations-qa-next {
+  margin-top: var(--x16);
+  padding-top: var(--x14);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-qa-order {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-automations-qa-order li {
+  display: grid;
+  grid-template-columns: var(--dk-automations-w-clock) var(--x8) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x24) + var(--x4));
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-automations-qa-order li + li {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-qa-order time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-automations-qa-order li > :last-child {
+  white-space: nowrap;
+}
+
+.dk-automations-qa-order-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- alert rules ---- */
+.dk-automations-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-automations-rules-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-automations-rule {
+  padding: var(--x10) 0;
+}
+
+.dk-automations-rule + .dk-automations-rule {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-rule:first-child {
+  padding-top: 0;
+}
+
+.dk-automations-rule-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-automations-rule-head b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-automations-rule-state {
+  margin-left: auto;
+  font-size: var(--t-label);
+}
+
+.dk-automations-rule-text {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* ---- the log ---- */
+.dk-automations-filters {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+/* A grid column that may shrink to nothing, so the table gives this column
+   what the others leave and its lines end in an ellipsis there, instead of
+   the table growing past its panel and scrolling sideways. */
+.dk-automations-log-what {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--x2);
+  padding: var(--x4) 0;
+}
+
+.dk-automations-log-text,
+.dk-automations-log-detail {
+  display: block;
+  max-width: var(--measure-sub);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-automations-log-text {
+  color: var(--ink-2);
+}
+
+.dk-automations-log-detail {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-automations-log-by {
+  display: block;
+  max-width: var(--measure-name);
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+}
+
+.dk-automations-log {
+  container-type: inline-size;
+}
+
+.dk-automations-log-list {
+  display: none;
+  padding: var(--x4) var(--pad) var(--x8);
+}
+
+@container (max-width: 640px) {
+  .dk-automations-log-table {
+    display: none;
+  }
+
+  .dk-automations-log-list {
+    display: block;
+  }
+}
+
+.dk-automations-log-stamp {
+  padding: var(--x10) var(--pad) var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-automations-pager {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  padding: var(--x8) var(--pad);
+  font-size: var(--t-small);
+}
+
+.dk-automations-pager-go {
+  display: flex;
+  gap: var(--x8);
+}
+
+@media (max-width: 520px) {
+  .dk-automations-filters {
+    justify-content: flex-start;
+  }
+}

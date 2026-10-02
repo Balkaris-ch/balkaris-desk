@@ -1,0 +1,63 @@
+/*
+ * Bar sparks. Measured on the boards' tiles: bars 3px wide every 6px, up to
+ * about 44px tall, the oldest in the track's grey and the newest in full
+ * colour.
+ *
+ * SparkBars never sends more bars than fit (it folds a long series into
+ * buckets), so the bars share the width and none leaves the box. The clip is
+ * only a guard: a spark must never draw across the figure beside it.
+ */
+.dk-bars {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: var(--x3);
+  width: var(--spark-w);
+  height: var(--spark-h);
+  overflow: hidden;
+}
+
+.dk-bars--row {
+  gap: var(--x2);
+  width: var(--spark-row-w);
+  height: var(--spark-row-h);
+}
+
+/* A month of days: thinner gaps, so the bars keep their width. */
+.dk-bars[data-dense] {
+  gap: var(--x1);
+}
+
+.dk-bars i {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: var(--x3);
+  min-height: var(--x2);
+  border-radius: var(--x1) var(--x1) 0 0;
+  background: color-mix(in srgb, var(--c) calc((var(--spark-bar-old) + (100 - var(--spark-bar-old)) * var(--k, 1)) * 1%), var(--track));
+}
+
+/* Read, and nothing there. */
+.dk-bars i[data-zero] {
+  height: var(--x1);
+  min-height: 0;
+  border-radius: 0;
+  background: var(--chart-axis);
+}
+
+/* Not read. The slot stays so that the days keep their places. */
+.dk-bars i[data-gap] {
+  height: 0;
+  min-height: 0;
+  background: none;
+}
+
+.dk-bars[data-state="empty"]::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0;
+  border-top: var(--x1) dashed var(--chart-axis);
+}

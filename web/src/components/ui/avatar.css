@@ -1,0 +1,33 @@
+.dk-avatar {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--card-3);
+  color: var(--ink);
+  font-family: var(--font-label);
+  font-weight: var(--w-semi);
+  line-height: 1;
+  letter-spacing: var(--track-chip);
+  user-select: none;
+}
+
+.dk-avatar--sm {
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  font-size: var(--t-micro);
+}
+
+.dk-avatar--md {
+  width: var(--avatar-md);
+  height: var(--avatar-md);
+  font-size: var(--t-label);
+}
+
+.dk-avatar--lg {
+  width: var(--x40);
+  height: var(--x40);
+  font-size: var(--t-sub);
+}

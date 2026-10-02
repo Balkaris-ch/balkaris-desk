@@ -1,0 +1,913 @@
+/*
+ * Site Health. Measured on design/boards/site-health.png (1672×941): tiles
+ * about 100px, then rows of about 235, 200 and 205, 12 apart vertically and
+ * 10 across. Each panel here also carries its stamp, which the board does not
+ * draw, so the rows run a little taller.
+ *
+ * Every value is a token; the class names all begin dk-health-. The shared
+ * primitives are tightened only under this screen's own classes.
+ */
+
+/* ---- the screen ---- */
+.dk-health {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-health .dk-grid-row,
+.dk-health .dk-tiles-grid {
+  gap: var(--x12) var(--x10);
+}
+
+.dk-health .dk-stack {
+  gap: var(--x10);
+}
+
+/* ---- head and ribbon ---- */
+.dk-health-domain {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-health-specimen {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x10) var(--x16);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-card);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-health-specimen .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+.dk-health-specimen b {
+  font-weight: var(--w-semi);
+}
+
+/* ---- the panels: heads, bodies and controls as drawn ---- */
+.dk-health-card > .dk-card-head {
+  min-height: 0;
+  padding: var(--x8) var(--pad) var(--x4);
+}
+
+/* The title centred on the head's controls, which are a size down here (26px, as drawn). */
+.dk-health-card > .dk-card-head .dk-card-heading {
+  padding-top: calc((var(--ctl-xs) - var(--x20)) / 2);
+}
+
+.dk-health-card > .dk-card-head .dk-card-right {
+  min-height: var(--ctl-xs);
+}
+
+.dk-health-card > .dk-card-head .dk-select--sm select {
+  height: var(--ctl-xs);
+}
+
+.dk-health-card:not(.dk-card--flush) > .dk-card-body {
+  padding: var(--x4) var(--pad) var(--x10);
+}
+
+/* A panel with nothing to show keeps every part of its absent state (mark,
+   what is missing and from where, why, the step), with the mark beside the
+   head instead of over it, so the row keeps the board's height. */
+.dk-health-card .dk-absent--panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  min-height: 0;
+  padding: var(--x4) 0;
+}
+
+.dk-health-card .dk-absent--panel .dk-absent-mark {
+  margin-bottom: 0;
+}
+
+.dk-health-card .dk-absent--panel .dk-absent-why,
+.dk-health-card .dk-absent--panel .dk-absent-step {
+  grid-column: 1 / -1;
+}
+
+/* ---- shared bits ---- */
+.dk-health-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+
+.dk-health-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-health-pad {
+  padding: var(--x8) 0;
+}
+
+.dk-health-chev {
+  color: var(--ink-3);
+}
+
+.dk-health-foot {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  min-width: 0;
+  margin-top: var(--x6);
+  overflow: hidden;
+}
+
+.dk-health-foot--wrap {
+  flex-wrap: wrap;
+  column-gap: var(--x16);
+  row-gap: var(--x2);
+}
+
+/* Under a table: inside the panel's edge, as close under the last row as reads well. */
+.dk-health-foot--pad {
+  margin-top: 0;
+  padding: var(--x4) var(--pad) var(--x6);
+}
+
+/* Under a chart: the chart box's own gap is the space above it. */
+.dk-health-foot--chart {
+  margin-top: 0;
+}
+
+.dk-health-since {
+  flex: none;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-health-since::before {
+  content: "·";
+  margin-right: var(--x8);
+}
+
+/* A row's own source and age, at the foot of its tooltip. */
+.dk-health-tip-stamp {
+  display: block;
+  margin-top: var(--x6);
+  color: var(--ink-3);
+}
+
+/* ---- the tiles ---- */
+.dk-health-tiles .dk-tile {
+  min-height: 0;
+  padding: var(--x10) var(--pad) var(--x8);
+}
+
+.dk-health-tiles .dk-tile-figure {
+  margin-top: 0;
+}
+
+.dk-health-tiles .dk-tile-under {
+  min-height: 0;
+  margin-top: 0;
+  line-height: var(--lh-tight);
+}
+
+.dk-health-tiles .dk-tile .dk-stamp {
+  margin-top: var(--x2);
+}
+
+/*
+ * The board draws the spark beside the figure and its change only. Here the
+ * figures column is taken apart (display: contents) so the small line and the
+ * stamp run under both, across the tile, and the spark gets the board's room.
+ */
+.dk-health-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas:
+    "figure chart"
+    "under chart"
+    "sub sub"
+    "stamp stamp";
+  align-items: end;
+  gap: 0 var(--x12);
+}
+
+.dk-health-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-figures {
+  display: contents;
+}
+
+.dk-health-tiles .dk-tile-figures > .dk-tile-figure {
+  grid-area: figure;
+}
+
+.dk-health-tiles .dk-tile-figures > .dk-tile-under {
+  grid-area: under;
+}
+
+.dk-health-tiles .dk-tile-figures > .dk-tile-sub {
+  grid-area: sub;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The stamp: a bare span, or the tooltip's anchor around it. */
+.dk-health-tiles .dk-tile-figures > span {
+  grid-area: stamp;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dk-health-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+  grid-area: chart;
+  min-height: 0;
+  padding-bottom: var(--x2);
+}
+
+/* The Tile primitive lets its chart go under 200px of tile; this screen's
+   charts sit beside two short lines and keep their room down to 150px. A
+   container query's condition cannot read a custom property, so the width is
+   written here and nowhere else. */
+@container (min-width: 150px) {
+  .dk-health-tiles .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: flex;
+    min-width: var(--x40);
+  }
+}
+
+/* The tiles' chips, a size down, so the board's labels fit beside them at 1672. */
+.dk-health-tiles .dk-tile-badge .dk-badge {
+  gap: var(--x4);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-label);
+}
+
+/* ---- the deployment tile ---- */
+.dk-health-deploy .dk-tile-value {
+  font-size: var(--t-figure-2);
+}
+
+/* The bars beside the figure, and where they begin under them, at the age's end. */
+.dk-health-tiles .dk-tile.dk-health-deploy:not(.dk-tile--icon) .dk-tile-row {
+  grid-template-areas:
+    "figure chart"
+    "under since";
+  overflow: hidden;
+}
+
+/* The figure is set smaller than a tile's number: its line keeps a number's height, so the six tiles' lines meet. */
+.dk-health-deploy .dk-tile-figure {
+  min-height: calc(var(--t-figure) * var(--lh-figure));
+  align-items: flex-end;
+}
+
+/* Set on the change's line (line-height 1, as the Delta is), so the subject and stamp meet the other tiles' lines. */
+.dk-health-deploy-age {
+  color: var(--ink-3);
+  font-size: var(--t-delta);
+  line-height: 1;
+}
+
+/* The bars a little shorter than a spark, so they stand on the figure's line alone. */
+.dk-health-deploy .dk-bars {
+  height: var(--x32);
+}
+
+/* Where the desk's record of commits begins: right-aligned under the bars, free to run left over the age's empty end. */
+.dk-health-bars-since {
+  grid-area: since;
+  justify-self: end;
+  align-self: center;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.dk-health-deploy-subject {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-deploy-subject .dk-health-mono {
+  font-size: var(--t-label);
+  color: var(--ink-3);
+}
+
+/* ---- the chart panels ---- */
+.dk-health-chartbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+/* The plot's top label hangs half above it: room for it under the figures. */
+.dk-health-chartbox > .dk-frame {
+  margin-top: var(--x6);
+}
+
+.dk-health-figs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x6) var(--x20);
+  min-width: 0;
+}
+
+.dk-health-fig {
+  min-width: 0;
+}
+
+.dk-health-fig-value {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-health-fig-name {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  margin-top: var(--x2);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+/* Performance trend: the legend beside the figures, as drawn; under them when the panel is too narrow for both. */
+.dk-health-legend {
+  align-self: center;
+  margin-left: auto;
+}
+
+/* Its items as close as the board sets them (about 14px), so the three figures and it share the line at 1672. */
+.dk-health-legend.dk-legend--row {
+  column-gap: var(--x14);
+}
+
+/* Response time: a line's colour key before its figure's name, the size of a legend's dot. */
+.dk-health-key {
+  display: inline-block;
+  width: var(--x8);
+  height: var(--x8);
+  margin-right: var(--x6);
+  border-radius: var(--r-pill);
+  background: var(--c);
+  vertical-align: middle;
+}
+
+/* ---- Core Web Vitals ---- */
+.dk-health-window {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-health-vitals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+}
+
+.dk-health-vital-name {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-tight);
+}
+
+.dk-health-kind {
+  height: var(--x16);
+  padding: 0 var(--x6);
+  font-size: var(--t-tiny);
+}
+
+.dk-health-vital-row {
+  display: grid;
+  grid-template-columns: minmax(var(--x56), auto) auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x14);
+  margin-top: var(--x2);
+}
+
+.dk-health-vital-value {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-health-vital-none {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-health-meter {
+  min-width: 0;
+}
+
+.dk-health-vital-edge {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+/* ---- the three tables ---- */
+.dk-health-table .dk-table {
+  table-layout: fixed;
+}
+
+.dk-health-table td,
+.dk-health-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-health-table th:not(:first-child),
+.dk-health-table td:not(:first-child) {
+  padding-left: var(--x8);
+}
+
+.dk-health-table th:not(:last-child),
+.dk-health-table td:not(:last-child) {
+  padding-right: var(--x8);
+}
+
+/* The last column (a spark, a link out, a chevron) runs to the panel's own right padding, as drawn. */
+.dk-health-table th:last-child,
+.dk-health-table td:last-child {
+  padding-left: 0;
+}
+
+/* The board's heads and rows are closer than the dense default: about 22px each. */
+.dk-health-table .dk-table thead th {
+  height: calc(var(--x20) + var(--x2));
+}
+
+.dk-health-table .dk-table--dense tbody td {
+  height: calc(var(--x20) + var(--x2));
+}
+
+/* A row's spark gives way to its column rather than being cut. */
+.dk-health-table .dk-spark--row {
+  width: 100%;
+  max-width: var(--spark-row-w);
+  margin-left: auto;
+}
+
+/* ---- Endpoint health ---- */
+.dk-health-path {
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-small);
+}
+
+.dk-health-code {
+  height: var(--x16);
+  padding: 0 var(--x8);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-health-failed {
+  color: var(--red);
+}
+
+.dk-health-iconlink {
+  display: inline-flex;
+  color: var(--ink-3);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-health-iconlink:hover,
+.dk-health-iconlink:focus-visible {
+  color: var(--ink);
+}
+
+/* ---- Deployment history, in full ---- */
+.dk-health-subject {
+  color: var(--ink-2);
+}
+
+.dk-health-more {
+  display: flex;
+  justify-content: center;
+  padding: var(--x12) var(--pad) var(--x16);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* ---- Background jobs ---- */
+.dk-health-job {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+  max-width: 100%;
+  color: var(--ink);
+}
+
+.dk-health-job .dk-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* Above the row's link layer, so its title (the full name) shows on hover; it is inside the link, so a click still opens the row. */
+.dk-health-job-name {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- Technical checks ---- */
+.dk-health-checks {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-health-check {
+  display: grid;
+  grid-template-columns: var(--x16) minmax(0, 1fr) minmax(0, 1.2fr) var(--x32) var(--x14);
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x16) + var(--x2));
+  font-size: var(--t-small);
+}
+
+.dk-health-check-icon {
+  color: var(--ink-3);
+}
+
+.dk-health-check-label {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-check-value {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dk-health-check-view {
+  text-align: right;
+}
+
+.dk-health-view {
+  color: var(--blue);
+  font-size: var(--t-small);
+}
+
+.dk-health-view:hover,
+.dk-health-view:focus-visible {
+  text-decoration: underline;
+}
+
+.dk-health-check-go {
+  display: inline-flex;
+  color: var(--ink-3);
+}
+
+.dk-health-check-go:hover,
+.dk-health-check-go:focus-visible {
+  color: var(--ink);
+}
+
+/* ---- Infrastructure ---- */
+.dk-health-infra {
+  display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(0, 0.92fr);
+  gap: var(--x16);
+}
+
+.dk-health-infra-col {
+  min-width: 0;
+}
+
+/* The desk's own server stands apart from the website's hosting, behind a hairline. */
+.dk-health-infra-col--desk {
+  padding-left: var(--x20);
+  border-left: var(--x1) solid var(--line);
+}
+
+.dk-health-subhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  min-width: 0;
+  height: calc(var(--x16) + var(--x2));
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dk-health-subhead .dk-stamp {
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dk-health-kvs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-health-kv {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--x56) + var(--x40))) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x16) + var(--x2));
+  font-size: var(--t-label);
+}
+
+.dk-health-infra-col--desk .dk-health-kv {
+  grid-template-columns: minmax(0, calc(var(--x56) + var(--x24))) minmax(0, 1fr);
+}
+
+.dk-health-kv dt {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-kv dd {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-kv--bar dd {
+  display: grid;
+  grid-template-columns: auto minmax(var(--x32), 1fr);
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-health-kv-figure {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-health-note {
+  margin-top: var(--x6);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+/* ---- Recent incidents & logs ---- */
+.dk-health-log {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-health-log-row {
+  display: grid;
+  grid-template-columns: var(--timeline-time) calc(var(--x56) + var(--x20)) minmax(0, 1fr) var(--x14);
+  align-items: center;
+  gap: var(--x12);
+  min-height: calc(var(--x16) + var(--x2));
+  border-radius: var(--r-chip);
+  font-size: var(--t-small);
+}
+
+.dk-health-log-row--link:hover {
+  background: var(--hover);
+}
+
+.dk-health-log-time {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-health-log-tone {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dk-health-log-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Quick actions ---- */
+.dk-stack > .dk-health-qas {
+  flex: 0 0 auto;
+  flex-direction: row;
+}
+
+.dk-health-qas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--x8);
+  padding: var(--x6);
+}
+
+.dk-health-qas-head {
+  flex: 1 1 calc(var(--x56) * 2 + var(--x16));
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+  padding: 0 var(--x8);
+}
+
+.dk-health-qas-head > span {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-health-qas-icon {
+  flex: none;
+  color: var(--green);
+}
+
+.dk-health-qas-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+
+.dk-health-qa {
+  flex: 1 1 calc(var(--x56) * 2 + var(--x24) + var(--x4));
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+  padding: var(--x4) var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.dk-health-qa:hover,
+.dk-health-qa:focus-visible {
+  border-color: var(--green-4);
+  background: var(--card-3);
+}
+
+.dk-health-qa .dk-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.dk-health-qa-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-health-qa-label {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-qa-desc {
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the diagnostics dialog ---- */
+.dk-health-diag {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-health-diag-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-health-diag-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding-bottom: var(--x12);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-health-diag-title {
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-health-diag-said {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-health-diag-said--run {
+  display: grid;
+  grid-template-columns: auto minmax(var(--x56), 1fr);
+}
+
+.dk-health-diag-what {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-health-diag-error {
+  color: var(--red);
+  font-size: var(--t-small);
+}
+
+.dk-health-diag-foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---- narrower screens (a media query cannot read a custom property: the width is written here only) ---- */
+@media (max-width: 560px) {
+  .dk-health-infra {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-health-infra-col--desk {
+    padding: var(--x12) 0 0;
+    border-top: var(--x1) solid var(--line);
+    border-left: 0;
+  }
+
+  .dk-health-legend {
+    margin-left: 0;
+  }
+
+  .dk-health-check {
+    grid-template-columns: var(--x16) minmax(0, 1fr) minmax(0, 1.3fr) var(--x32) var(--x14);
+    gap: var(--x8);
+  }
+
+  /* On a phone the tone keeps its dot and drops its word. */
+  .dk-health-log-row {
+    grid-template-columns: var(--x40) var(--x8) minmax(0, 1fr) var(--x14);
+  }
+
+  .dk-health-log-tone .dk-dot-label {
+    display: none;
+  }
+}

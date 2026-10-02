@@ -1,0 +1,39 @@
+/*
+ * The tones, once. A component that takes a tone sets `dk-tone-<name>` and
+ * reads these three: the colour itself, its dark ground and the ground's edge.
+ */
+.dk-tone-good {
+  --tone: var(--green);
+  --tone-ground: var(--green-3);
+  --tone-edge: var(--green-4);
+}
+
+.dk-tone-warn {
+  --tone: var(--amber);
+  --tone-ground: var(--amber-ground);
+  --tone-edge: var(--amber-edge);
+}
+
+.dk-tone-bad {
+  --tone: var(--red);
+  --tone-ground: var(--red-ground);
+  --tone-edge: var(--red-edge);
+}
+
+.dk-tone-info {
+  --tone: var(--blue);
+  --tone-ground: var(--blue-ground);
+  --tone-edge: var(--blue-edge);
+}
+
+.dk-tone-violet {
+  --tone: var(--violet);
+  --tone-ground: var(--violet-ground);
+  --tone-edge: var(--violet-edge);
+}
+
+.dk-tone-quiet {
+  --tone: var(--ink-2);
+  --tone-ground: var(--card-2);
+  --tone-edge: var(--line-2);
+}

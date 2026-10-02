@@ -1,0 +1,33 @@
+.dk-thumb {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--x4);
+  background: var(--card-2);
+  color: var(--ink-4);
+}
+
+.dk-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.dk-thumb--sm {
+  width: var(--thumb-sm-w);
+  height: var(--thumb-sm-h);
+}
+
+.dk-thumb--md {
+  width: var(--thumb-md-w);
+  height: var(--thumb-md-h);
+}
+
+.dk-thumb--lg {
+  width: var(--thumb-lg-w);
+  height: var(--thumb-lg-h);
+  border-radius: var(--x6);
+}

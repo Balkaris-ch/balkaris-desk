@@ -1,0 +1,153 @@
+.dk-palette {
+  width: min(var(--palette-w), calc(100vw - var(--x24)));
+  max-width: none;
+  max-height: none;
+  /* Hung from the top third, where the eye already is after the search field. */
+  margin: min(14dvh, calc(var(--top) + var(--x56))) auto auto;
+  padding: 0;
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-card);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  color: var(--ink-2);
+  overflow: hidden;
+}
+
+.dk-palette::backdrop {
+  background: var(--scrim);
+}
+
+.dk-palette-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: min(var(--palette-h), calc(100dvh - 28dvh));
+}
+
+.dk-palette-field {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  height: calc(var(--ctl) + var(--x16));
+  padding: 0 var(--x16);
+  border-bottom: var(--x1) solid var(--line-2);
+  color: var(--ink-3);
+}
+
+.dk-palette-field input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-sub);
+  outline: none;
+}
+
+.dk-palette-list {
+  flex: 1;
+  min-height: 0;
+  padding: var(--x6);
+  overflow-y: auto;
+}
+
+.dk-palette-group {
+  padding: var(--x10) var(--x10) var(--x4);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-palette-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  min-height: var(--ctl);
+  padding: 0 var(--x10);
+  border-radius: var(--r-row);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  cursor: pointer;
+}
+
+.dk-palette-row .dk-icon {
+  color: var(--ink-3);
+}
+
+.dk-palette-title {
+  flex: none;
+  max-width: 60%;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-palette-sub {
+  flex: 1;
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-palette-go {
+  margin-left: auto;
+  opacity: 0;
+}
+
+.dk-palette-row--on {
+  background: var(--row-on);
+}
+
+.dk-palette-row--on .dk-icon {
+  color: var(--green);
+}
+
+.dk-palette-row--on .dk-palette-go {
+  opacity: 1;
+}
+
+.dk-palette-note {
+  padding: var(--x12) var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-palette-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--x16);
+  padding: var(--x8) var(--x16);
+  border-top: var(--x1) solid var(--line-2);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-palette-foot span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+@media (max-width: 520px) {
+  .dk-palette {
+    margin-top: var(--x12);
+  }
+
+  .dk-palette-panel {
+    max-height: calc(100dvh - var(--x24));
+  }
+
+  .dk-palette-foot {
+    display: none;
+  }
+}

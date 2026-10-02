@@ -36,8 +36,12 @@ printf '%s' "$HOOK" > "$SECRETS/desk-webhook-secret.txt"
 printf '%s' "$RUN"  > "$SECRETS/desk-runner-secret.txt"
 echo "-> minted, and written to $SECRETS (webhook, runner)"
 
-# The .env is rewritten whole, from stdin, with nothing else in it. The desk
-# has no other state in that file — the database is beside it, not in it.
+# These nine lines are MERGED into the box's .env, not written over it. This
+# script used to rewrite the file whole, which was right when these nine were
+# all it held; since then Google sign-in, the analytics key and the owner have
+# been added to it, and a rewrite would have dropped them on the next rotation
+# and left the desk unable to sign anybody in. env-put.sh changes the lines it
+# is given and leaves every other one as it is.
 {
   printf 'NODE_ENV=production\n'
   printf 'DESK_PORT=3400\n'
@@ -48,10 +52,9 @@ echo "-> minted, and written to $SECRETS (webhook, runner)"
   printf 'TELEGRAM_BOT_TOKEN=%s\n' "$TG"
   printf 'TELEGRAM_WEBHOOK_SECRET=%s\n' "$HOOK"
   printf 'DESK_RUNNER_SECRET=%s\n' "$RUN"
-} | ssh -i "$KEY" -o StrictHostKeyChecking=no -o IdentitiesOnly=yes "$HOST" \
-    "sudo mkdir -p $DIR && sudo tee $DIR/.env >/dev/null && sudo chmod 600 $DIR/.env && sudo chown deploy:deploy $DIR/.env && sudo systemctl restart balkaris-desk" >/dev/null
+} | bash "$(dirname "$0")/env-put.sh" >/dev/null
 
-echo "-> .env placed (0600) and the service restarted"
+echo "-> the nine lines placed in .env (0600, every other line kept) and the service restarted"
 sleep 3
 
 # Point Telegram at us. The secret goes in the path AND as the header token,

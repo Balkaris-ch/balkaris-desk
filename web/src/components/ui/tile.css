@@ -1,0 +1,285 @@
+.dk-tile {
+  container-type: inline-size;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x14);
+  min-width: 0;
+  min-height: var(--tile-h);
+  padding: var(--x14) var(--x20) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+/* With an icon square, as on the Insights board: 16 in from each side, so the
+   figure, its change and the spark still share a sixth of the row. */
+.dk-tile--icon {
+  padding-inline: var(--x16);
+}
+
+.dk-tile-icon {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl);
+  height: var(--ctl);
+  margin-top: var(--x2);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-tile-icon);
+  background: var(--tone-ground);
+  color: var(--tone);
+}
+
+.dk-tile-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-tile-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-height: var(--x20);
+}
+
+.dk-tile-label {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  font-weight: var(--w-regular);
+  line-height: var(--x20);
+}
+
+.dk-tile-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-tile-badge {
+  flex: none;
+}
+
+.dk-tile-row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-tile-figures {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dk-tile-figure {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  margin-top: var(--x2);
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.dk-tile-value {
+  font-size: var(--t-figure);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-tile-of {
+  color: var(--ink-3);
+  font-size: var(--t-title);
+}
+
+.dk-tile-under {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--x2) var(--x8);
+  min-height: var(--x20);
+  margin-top: var(--x2);
+}
+
+/* delta="inline": the change on the figure's own line ("48 ↑ 26%"), as on the
+   Insights board. A tile too narrow for both drops it under the figure rather
+   than past the tile's edge. */
+.dk-tile-figure--beside {
+  flex-wrap: wrap;
+  row-gap: 0;
+}
+
+.dk-tile-beside {
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.dk-tile-sub {
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+}
+
+.dk-tile .dk-stamp {
+  margin-top: var(--x4);
+}
+
+/* The `foot` line: a stand-in under an absent figure, in the quiet small type. */
+.dk-tile-foot {
+  margin-top: auto;
+  padding-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+/* The chart takes what is left of the row and sits on the figure's baseline. */
+.dk-tile-chart {
+  flex: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  min-width: 0;
+  min-height: var(--x40);
+  padding-bottom: var(--x4);
+  /* A chart wider than the room left beside the figure is cut, never drawn over it. */
+  overflow: hidden;
+}
+
+.dk-tile-chart > * {
+  max-width: 100%;
+}
+
+/* A tile too narrow for both keeps the figure and lets the chart go. An icon
+   tile's figures are short ("48 ↑ 26%") and the Insights board draws its
+   spark at a sixth of the row, so it keeps the chart down to a narrower width. */
+@container (max-width: 200px) {
+  .dk-tile:not(.dk-tile--icon) .dk-tile-chart {
+    display: none;
+  }
+}
+
+@container (max-width: 170px) {
+  .dk-tile--icon .dk-tile-chart {
+    display: none;
+  }
+}
+
+/* ---- the row of tiles ---- */
+.dk-tiles {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.dk-tiles-grid {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+}
+
+/* Each tile's share of a twelve-part row when all of them fit side by side. */
+.dk-tiles-grid[data-n="3"] > * {
+  grid-column: span 4;
+}
+
+.dk-tiles-grid[data-n="4"] > * {
+  grid-column: span 3;
+}
+
+.dk-tiles-grid[data-n="6"] > * {
+  grid-column: span 2;
+}
+
+/* Five and seven do not divide twelve: they get their own track count. */
+.dk-tiles-grid[data-n="5"] {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.dk-tiles-grid[data-n="7"] {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.dk-tiles-grid[data-n="5"] > *,
+.dk-tiles-grid[data-n="7"] > * {
+  grid-column: span 1;
+}
+
+/* Seven no longer fit: four over three, the three wider. */
+@container (max-width: 1300px) {
+  .dk-tiles-grid[data-n="7"] {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+
+  .dk-tiles-grid[data-n="7"] > * {
+    grid-column: span 3;
+  }
+
+  .dk-tiles-grid[data-n="7"] > :nth-child(n + 5) {
+    grid-column: span 4;
+  }
+}
+
+/* Six no longer fit: three over three. */
+@container (max-width: 1100px) {
+  .dk-tiles-grid[data-n="6"] > * {
+    grid-column: span 4;
+  }
+}
+
+/* Five no longer fit: three over two, the two wider. */
+@container (max-width: 920px) {
+  .dk-tiles-grid[data-n="5"] {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+
+  .dk-tiles-grid[data-n="5"] > * {
+    grid-column: span 2;
+  }
+
+  .dk-tiles-grid[data-n="5"] > :nth-child(n + 4) {
+    grid-column: span 3;
+  }
+}
+
+/* Two columns. An odd last tile takes the whole row. The `:nth-child(n)`
+   matches every tile; it is there to outweigh the wider spans above, which
+   name tiles by position, so a phone never inherits a span of three. */
+@container (max-width: 740px) {
+  .dk-tiles-grid[data-n] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-tiles-grid[data-n] > :nth-child(n) {
+    grid-column: span 1;
+  }
+
+  .dk-tiles-grid[data-n] > :last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+}
+
+/* One column. */
+@container (max-width: 420px) {
+  .dk-tiles-grid[data-n] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-tiles-grid[data-n] > :nth-child(n),
+  .dk-tiles-grid[data-n] > :last-child:nth-child(odd) {
+    grid-column: span 1;
+  }
+}

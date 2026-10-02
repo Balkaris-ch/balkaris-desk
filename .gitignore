@@ -3,3 +3,6 @@ node_modules/
 work/
 out/
 *.log
+
+# Fini's boards: generated pictures with invented figures. Not for a public repo.
+design/

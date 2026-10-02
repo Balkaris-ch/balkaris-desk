@@ -472,6 +472,77 @@ ${count} generated article${count === 1 ? "" : "s"} in content/posts after this.
   return { sha, url: `/insights/${post.slug}`, listed };
 }
 
+/* ---------- the one other folder the desk may write ------------------------ */
+
+/**
+ * What the command center may change on the website, and nothing else.
+ *
+ * An approved change (a page's title and description, a redirect) is a line
+ * in a JSON file under content/desk/, which the website reads at build time.
+ * The desk never edits a page's source: it could not be trusted to, and a
+ * person reading the site's history must be able to tell a designed change
+ * from an applied suggestion at a glance. Everything outside this folder and
+ * content/posts/ is refused here, whatever the caller asks.
+ */
+const DESK_DIR = "content/desk";
+
+const deskFile = (rel: string): string => {
+  const clean = path.posix.normalize(rel.replace(/\\/g, "/"));
+  if (!clean.startsWith(`${DESK_DIR}/`) || clean.includes("..") || !/^[a-z0-9/_.-]+$/i.test(clean)) {
+    throw new Error(`the desk may only write under ${DESK_DIR}/, not ${rel}`);
+  }
+  return clean;
+};
+
+/** A file under content/desk/ as it is on the branch right now, or null. */
+export async function readSiteFile(rel: string): Promise<string | null> {
+  const clean = deskFile(rel);
+  return serialise(async () => {
+    await ensureRepo();
+    const f = path.join(REPO, clean);
+    return existsSync(f) ? readFile(f, "utf8") : null;
+  });
+}
+
+/**
+ * Write files under content/desk/ and push them, as the person who approved.
+ *
+ * The same guarantees as an article: one git operation at a time, started
+ * from what is on the branch, authored by a person Vercel knows, and the push
+ * last, so a failure leaves nothing half-applied on the site. `changed` is
+ * false when the files already said this, and then nothing was committed.
+ */
+export async function commitSiteFiles(
+  files: { path: string; content: string }[],
+  subject: string,
+  body: string,
+  by: Person,
+): Promise<{ sha: string; changed: boolean }> {
+  if (!by.email) {
+    throw new Error(
+      `${by.name} has no email on the desk yet, and Vercel refuses a commit from somebody who is not on the team. Add it on the people page first.`,
+    );
+  }
+  const paths = files.map((f) => deskFile(f.path));
+  return serialise(async () => {
+    await ensureRepo();
+    for (let i = 0; i < files.length; i++) {
+      const f = path.join(REPO, paths[i]!);
+      await mkdir(path.dirname(f), { recursive: true });
+      await writeFile(f, files[i]!.content, "utf8");
+    }
+    const dirty = await git(["status", "--porcelain", "--", DESK_DIR], by);
+    if (!dirty) return { sha: await git(["rev-parse", "--short", "HEAD"], by), changed: false };
+
+    await git(["add", "--", DESK_DIR], by);
+    await git(["commit", "-m", subject, "-m", body], by);
+    const sha = await git(["rev-parse", "--short", "HEAD"], by);
+    await git(["push", "origin", `HEAD:${BRANCH}`], by);
+    log("publish.desk-files", { sha, paths });
+    return { sha, changed: true };
+  });
+}
+
 /** Is the publisher able to work at all? Used by the console before it offers. */
 export async function publishReady(): Promise<{ ok: boolean; why?: string }> {
   try {

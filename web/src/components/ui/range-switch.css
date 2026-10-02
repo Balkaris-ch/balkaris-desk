@@ -1,0 +1,37 @@
+.dk-range {
+  display: inline-flex;
+  align-items: stretch;
+  height: calc(var(--ctl-sm) + var(--x4));
+  padding: var(--x1);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card);
+}
+
+.dk-range-item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--x40);
+  padding: 0 var(--x12);
+  border-radius: var(--r-ctl);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-chip);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-range-item:hover {
+  color: var(--ink);
+}
+
+.dk-range-item--on,
+.dk-range-item--on:hover {
+  background: var(--track);
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}

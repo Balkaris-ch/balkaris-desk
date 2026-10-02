@@ -1,0 +1,109 @@
+/*
+ * A screen's head. On the boards: eyebrow 28 under the top bar, the title 30
+ * under that, the subtitle 35 under the title, and the first row of panels 20
+ * under the subtitle; the date sits level with the eyebrow on the right and
+ * the period switch level with the title.
+ */
+.dk-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x24);
+  padding: var(--head-top) var(--x4) var(--x6) var(--head-inset);
+}
+
+.dk-head-text {
+  min-width: 0;
+}
+
+.dk-eyebrow {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  line-height: var(--x14);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-head-title {
+  margin-top: var(--x4);
+  font-size: var(--t-display);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-display);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-head-sub {
+  margin-top: var(--x4);
+  max-width: var(--measure-sub);
+  color: var(--ink-2);
+  font-size: var(--t-sub);
+  line-height: var(--lh-body);
+  text-wrap: pretty;
+}
+
+.dk-head-side {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x12);
+}
+
+.dk-head-date {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--x14);
+  white-space: nowrap;
+}
+
+.dk-head-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+/* The grey blocks of a head that is loading, at the heights of the real lines. */
+.dk-head-text--skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  width: min(100%, var(--gate-w));
+}
+
+.dk-head-text--skeleton > .dk-skel {
+  max-width: 100%;
+}
+
+/* The switch's place, kept while the browser reads the address. */
+.dk-head-range-space {
+  display: block;
+  height: calc(var(--ctl-sm) + var(--x4));
+}
+
+@media (max-width: 760px) {
+  .dk-head {
+    flex-direction: column;
+    gap: var(--x12);
+  }
+
+  .dk-head-title {
+    font-size: var(--t-figure);
+  }
+
+  /* The date first, quiet, then the switch and the action, wrapping as they must. */
+  .dk-head-side {
+    align-items: flex-start;
+    gap: var(--x10);
+    width: 100%;
+  }
+
+  .dk-head-tools {
+    flex-wrap: wrap;
+  }
+
+  .dk-head-date {
+    color: var(--ink-3);
+  }
+}

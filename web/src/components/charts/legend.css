@@ -1,0 +1,100 @@
+/*
+ * A legend. Measured on the boards: a row legend is 12px type with an 8px dot
+ * (Ranking trend); a column legend is 13px type with a 9px dot, 25px from one
+ * row to the next, its figures right-aligned in their own columns (Traffic
+ * sources, Leads by source).
+ */
+.dk-legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-2);
+  font-family: var(--font);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-legend-mark {
+  flex: none;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: 50%;
+  background: var(--c);
+}
+
+.dk-legend-mark[data-mark="line"],
+.dk-legend-mark[data-mark="dash"] {
+  width: var(--x14);
+  height: 0;
+  border-radius: 0;
+  border-top: var(--x2) solid var(--c);
+  background: none;
+}
+
+.dk-legend-mark[data-mark="dash"] {
+  border-top-style: dashed;
+}
+
+.dk-legend-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- side by side -------------------------------------------------- */
+
+.dk-legend--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x20);
+  font-size: var(--t-small);
+}
+
+.dk-legend--row .dk-legend-item,
+.dk-legend--row .dk-legend-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+/* ---------- a column with figures ----------------------------------------- */
+
+.dk-legend--column {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--x10);
+  row-gap: var(--x10);
+  font-size: var(--t-body);
+  line-height: var(--lh-tight);
+}
+
+.dk-legend--column .dk-legend-item,
+.dk-legend--column .dk-legend-link {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.dk-legend--column .dk-legend-mark:not([data-mark="line"], [data-mark="dash"]) {
+  width: var(--legend-dot);
+  height: var(--legend-dot);
+}
+
+.dk-legend-share,
+.dk-legend-value {
+  color: var(--ink);
+  text-align: right;
+}
+
+.dk-legend-value {
+  min-width: var(--x16);
+  color: var(--ink-2);
+}
+
+.dk-legend-link:hover .dk-legend-label {
+  color: var(--ink);
+}

@@ -1,0 +1,23 @@
+/*
+ * The columns of a ComboChart. The line over them is a time chart's line and
+ * is styled there. Measured on the boards' Search Console overview: columns
+ * about two thirds of their slot, bright at the top and sinking into the
+ * panel at the foot.
+ */
+.dk-combo-bar {
+  position: absolute;
+  bottom: 0;
+  min-height: var(--x1);
+  border-radius: var(--x2) var(--x2) 0 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--c) var(--chart-bar-top), var(--chart-ground)), color-mix(in srgb, var(--c) var(--chart-bar-low), var(--chart-ground)));
+  pointer-events: none;
+}
+
+/* Still being counted. */
+.dk-combo-bar[data-provisional] {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--c) var(--chart-bar-low), var(--chart-ground)) 0 var(--x3),
+    color-mix(in srgb, var(--c) var(--chart-soft-top), var(--chart-ground)) var(--x3) var(--x6)
+  );
+}

@@ -1,0 +1,115 @@
+/*
+ * A donut. Measured on the boards' Traffic sources: 136px across, the ring
+ * about two fifths of the radius, the figure in the middle bold with a small
+ * grey word under it.
+ */
+.dk-donut {
+  position: relative;
+  flex: none;
+  width: var(--donut);
+  aspect-ratio: 1;
+}
+
+.dk-donut--small {
+  width: var(--donut-sm);
+}
+
+.dk-donut-svg {
+  width: 100%;
+  height: 100%;
+}
+
+.dk-donut-track,
+.dk-donut-slice {
+  fill: none;
+}
+
+.dk-donut-track {
+  stroke: var(--track);
+}
+
+.dk-donut-slice {
+  stroke: var(--c);
+  transition: opacity var(--fast) var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-donut-slice {
+    transition: none;
+  }
+}
+
+/* The pointer on one slice sets the others back. */
+.dk-donut:has(.dk-donut-slice:hover) .dk-donut-slice:not(:hover) {
+  opacity: var(--chart-dim);
+}
+
+.dk-donut-middle {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.dk-donut-whole,
+.dk-donut-part {
+  grid-area: 1 / 1;
+  display: grid;
+  justify-items: center;
+  gap: var(--x4);
+  max-width: var(--donut-middle);
+  text-align: center;
+}
+
+.dk-donut-figure {
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-tight);
+  line-height: 1;
+}
+
+.dk-donut--small .dk-donut-figure {
+  font-size: var(--t-title);
+}
+
+.dk-donut-caption {
+  color: var(--ink-3);
+  font-family: var(--font);
+  font-size: var(--t-label);
+  line-height: var(--lh-tight);
+}
+
+.dk-donut-caption[data-toned] {
+  color: var(--c);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+/* While the pointer is on a slice, the middle is that slice: its value and
+   its name. One rule per slice, for as many as a donut can sensibly hold. */
+.dk-donut-part {
+  display: none;
+}
+
+.dk-donut-part .dk-donut-figure {
+  font-size: var(--t-title);
+}
+
+.dk-donut:has(.dk-donut-slice:hover) .dk-donut-whole {
+  visibility: hidden;
+}
+
+.dk-donut:has(.dk-donut-slice[data-i="0"]:hover) .dk-donut-part[data-i="0"],
+.dk-donut:has(.dk-donut-slice[data-i="1"]:hover) .dk-donut-part[data-i="1"],
+.dk-donut:has(.dk-donut-slice[data-i="2"]:hover) .dk-donut-part[data-i="2"],
+.dk-donut:has(.dk-donut-slice[data-i="3"]:hover) .dk-donut-part[data-i="3"],
+.dk-donut:has(.dk-donut-slice[data-i="4"]:hover) .dk-donut-part[data-i="4"],
+.dk-donut:has(.dk-donut-slice[data-i="5"]:hover) .dk-donut-part[data-i="5"],
+.dk-donut:has(.dk-donut-slice[data-i="6"]:hover) .dk-donut-part[data-i="6"],
+.dk-donut:has(.dk-donut-slice[data-i="7"]:hover) .dk-donut-part[data-i="7"] {
+  display: grid;
+}

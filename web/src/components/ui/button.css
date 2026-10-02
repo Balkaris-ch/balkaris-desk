@@ -1,0 +1,120 @@
+.dk-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x6);
+  height: var(--ctl);
+  padding: 0 var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  transition:
+    background-color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-btn:hover {
+  background: var(--card-3);
+  border-color: var(--pop-edge);
+}
+
+.dk-btn:disabled,
+.dk-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.dk-btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* sizes */
+.dk-btn--sm {
+  height: var(--ctl-sm);
+  padding: 0 var(--x12);
+  border-radius: var(--r-ctl);
+  font-size: var(--t-small);
+}
+
+.dk-btn--xs {
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border-radius: var(--r-chip);
+  font-size: var(--t-small);
+}
+
+.dk-btn--block {
+  display: flex;
+  width: 100%;
+}
+
+.dk-btn--icon {
+  width: var(--ctl);
+  padding: 0;
+}
+
+.dk-btn--icon.dk-btn--sm {
+  width: var(--ctl-sm);
+}
+
+.dk-btn--icon.dk-btn--xs {
+  width: var(--ctl-xs);
+}
+
+/* looks */
+.dk-btn--primary {
+  background: var(--green-2);
+  border-color: var(--green-2);
+  color: var(--ink-on-green);
+  font-weight: var(--w-semi);
+}
+
+.dk-btn--primary:hover {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.dk-btn--good {
+  background: var(--green-3);
+  border-color: var(--green-4);
+  color: var(--green);
+}
+
+.dk-btn--good:hover {
+  background: var(--green-4);
+  border-color: var(--green-2);
+}
+
+.dk-btn--danger {
+  background: var(--red-ground);
+  border-color: var(--red-edge);
+  color: var(--red);
+}
+
+.dk-btn--danger:hover {
+  background: var(--red-edge);
+  border-color: var(--red);
+}
+
+.dk-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--ink-2);
+}
+
+.dk-btn--ghost:hover {
+  background: var(--card-3);
+  border-color: transparent;
+  color: var(--ink);
+}

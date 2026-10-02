@@ -1,0 +1,327 @@
+/*
+ * The desk's materials. Measured from the boards in design/boards (1672×941).
+ *
+ * Every colour, radius and size a component uses is one of these. A component
+ * that needs a value that is not here adds it here, with a name that says what
+ * it is for, rather than writing a number in its own stylesheet.
+ *
+ * Type: the website's own system. Geist for everything read, Figtree for small
+ * labels, Geist Mono for machine text. The variables are set by next/font in
+ * the root layout.
+ */
+:root {
+  color-scheme: dark;
+
+  /* ground */
+  --bg: #060909;            /* the page */
+  --bg-side: #080a0b;       /* sidebar and top bar */
+  --card: #0b0d0f;          /* a panel */
+  --card-2: #0f1214;        /* a field, a raised row, a tab strip */
+  --card-3: #151a1c;        /* hover, a pressed tab */
+  --line: #16191b;          /* a panel's edge */
+  --line-2: #1f2427;        /* a field's edge, a divider that must be seen */
+  --track: #212528;         /* the empty part of a bar */
+
+  /* ink */
+  --ink: #f2f4f3;           /* figures, headings */
+  --ink-2: #c5cbc8;         /* body */
+  --ink-3: #8b9390;         /* labels, secondary */
+  --ink-4: #5d6562;         /* axis, placeholder */
+
+  /* the one accent, and what it is mixed into */
+  --green: #2fd15f;         /* a rising figure, a live dot, a line on a chart */
+  --green-2: #17b34a;       /* a primary button */
+  --green-3: #0b2417;       /* the active sidebar row, a green chip's ground */
+  --green-4: #123d26;       /* the active row's edge, a green chip's edge */
+  --green-glow: rgba(47, 209, 95, 0.16);
+
+  /* the other tones a figure can take */
+  --red: #f0524f;
+  --red-ground: #2a1113;
+  --red-edge: #5a2427;
+  --amber: #f5b53d;
+  --amber-ground: #2a2010;
+  --amber-edge: #5a4418;
+  --blue: #3b8ef0;
+  --blue-ground: #0f1d33;
+  --blue-edge: #1d3a66;
+  --violet: #a86ef5;
+  --violet-ground: #1f1433;
+  --violet-edge: #3d2866;
+  --pink: #f05fc0;
+  --sand: #d9c58f;
+  --grey: #8a93a0;
+
+  /* chart series, in the order a legend lists them */
+  --s1: var(--green);
+  --s2: var(--blue);
+  --s3: var(--sand);
+  --s4: #f29a4a;
+  --s5: var(--pink);
+  --s6: var(--grey);
+
+  /* shape */
+  --r-card: 10px;
+  --r-field: 8px;
+  --r-chip: 6px;
+  --r-pill: 999px;
+
+  /* measure */
+  --side: 228px;            /* sidebar width */
+  --top: 62px;              /* top bar height */
+  --gap: 14px;              /* between panels */
+  --pad: 18px;              /* inside a panel */
+  --page-x: 30px;           /* the page's side gutter */
+
+  /* type scale (px at the boards' size) */
+  --t-display: 34px;        /* "Good morning, Fini." */
+  --t-figure: 28px;         /* a tile's number */
+  --t-figure-2: 22px;       /* a chart's headline number */
+  --t-title: 15px;          /* a panel's title */
+  --t-body: 13px;
+  --t-small: 12px;
+  --t-label: 11px;          /* uppercase table heads, eyebrows */
+
+  --font: var(--font-wd), "Helvetica Neue", Arial, sans-serif;
+  --font-label: var(--font-wd-label), "Helvetica Neue", Arial, sans-serif;
+  --font-mono: var(--font-wd-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+/*
+ * Added for the frame and the primitives (components/shell, components/ui).
+ * Measured on the same boards. Additive: nothing above is changed.
+ */
+:root {
+  /* steps of space. The name is the size, so a stylesheet reads as measured. */
+  --x1: 1px;
+  --x2: 2px;
+  --x3: 3px;
+  --x4: 4px;
+  --x6: 6px;
+  --x8: 8px;
+  --x10: 10px;
+  --x12: 12px;
+  --x14: 14px;
+  --x16: 16px;
+  --x20: 20px;
+  --x24: 24px;
+  --x32: 32px;
+  --x40: 40px;
+  --x56: 56px;
+
+  /* the frame */
+  --side-x: 30px;           /* a sidebar row's inset from the screen's edge */
+  --side-x-right: 11px;     /* and from the sidebar's own right edge */
+  --row: 36px;              /* a sidebar row */
+  --row-step: 42px;         /* from one row's top to the next */
+  --row-gap: calc(var(--row-step) - var(--row));
+  --search-w: 408px;        /* the top bar's search field */
+  --head-inset: 12px;       /* a page's heading sits this far inside the panels' edge */
+  --head-top: 22px;         /* from the top bar to the eyebrow */
+  --page-max: 1980px;       /* past this the page stops growing and is centred */
+  --drawer: 276px;          /* the sidebar when it slides over a phone */
+
+  /* controls */
+  --ctl: 36px;              /* a field, a primary button */
+  --ctl-sm: 30px;           /* "View all", a select in a panel's head */
+  --ctl-xs: 26px;           /* a button inside a table row */
+  --r-row: 8px;             /* a sidebar row, a list row */
+  --r-ctl: 7px;             /* a button */
+  --r-tile-icon: 9px;
+
+  /* type that the first scale did not name */
+  --t-sub: 14px;            /* a page's subtitle */
+  --t-nav: 13.5px;          /* a sidebar row */
+  --t-brand: 18px;          /* the wordmark */
+  --t-delta: 15px;          /* the change under a tile's figure */
+  --t-tiny: 10px;           /* a count chip, a keyboard chip */
+  --w-regular: 400;
+  --w-medium: 500;
+  --w-semi: 600;
+  --w-bold: 700;
+  --track-label: 0.06em;    /* uppercase labels are opened up a little */
+  --track-tight: -0.02em;   /* large figures and headings are closed up */
+  --lh-tight: 1.15;
+  --lh-body: 1.45;
+
+  /* icons */
+  --icon: 18px;
+  --icon-sm: 14px;
+  --icon-lg: 20px;
+
+  /* ink on a filled green button */
+  --ink-on-green: #f6fff8;
+
+  /* what floats: menus, the palette, a dialog, a tooltip */
+  --pop: #0d1012;
+  --pop-edge: #252b2e;
+  --shadow-pop: 0 18px 48px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --scrim: rgba(3, 5, 5, 0.66);
+  --focus: rgba(47, 209, 95, 0.55);
+  --select: rgba(47, 209, 95, 0.28);
+  --hover: rgba(255, 255, 255, 0.035);   /* laid over a row under the pointer */
+  --shine: rgba(255, 255, 255, 0.05);    /* the lit edge of a skeleton's sweep */
+
+  /* the active sidebar row is lit from the left, as on the boards */
+  --row-on: linear-gradient(90deg, #0f3320 0%, var(--green-3) 100%);
+  --tab-on: linear-gradient(180deg, #12492a 0%, #0c3320 100%);
+
+  /* order of what overlaps */
+  --z-top: 20;
+  --z-side: 30;
+  --z-scrim: 29;
+  --z-pop: 60;
+  --z-tip: 80;
+
+  --fast: 120ms;
+  --slow: 240ms;
+
+  /* sizes of the primitives */
+  --tile-h: 103px;          /* a tile on the boards, without its source line */
+  --table-row: 34px;        /* a dense table row */
+  --table-row-roomy: 46px;  /* a row with a picture or two lines */
+  --timeline-time: 60px;    /* room for "Yesterday" in the time column */
+  --action-min: 220px;      /* the least a quick-action row may be in two columns */
+  --absent-min: 132px;      /* the least an absent or empty panel takes */
+  --avatar-sm: 22px;
+  --avatar-md: 30px;
+  --t-micro: 9px;           /* a small avatar's initials, the bell's count */
+  --thumb-sm-w: 48px;       /* a picture in a table row */
+  --thumb-sm-h: 32px;
+  --thumb-md-w: 56px;       /* in a list */
+  --thumb-md-h: 40px;
+  --thumb-lg-w: 88px;       /* in a card */
+  --thumb-lg-h: 60px;
+
+  /* widths of what floats */
+  --tip-w: 320px;           /* a tooltip */
+  --pop-w: 340px;           /* a top-bar panel */
+  --menu-w: 228px;          /* the person's menu */
+  --palette-w: 620px;       /* the command palette */
+  --palette-h: 520px;
+  --dialog-sm: 420px;       /* a confirmation */
+  --dialog-md: 560px;       /* a form */
+  --gate-w: 520px;          /* the calm full-page states */
+
+  /* the sidebar on a window too short for the boards' 42 step (shell.css) */
+  --row-step-least: 30px;   /* the closest its rows may come; shorter still, the sidebar scrolls */
+  --row-gap-least: 2px;     /* the gap kept between rows while they close up */
+  --side-rest: 240px;       /* its height that is not rows: wordmark 62, the list's padding 27, the foot 149, 2 spare */
+
+  /* tracking the first scale did not name */
+  --track-brand: 0.01em;    /* the wordmark */
+  --track-chip: 0.02em;     /* initials, the range switch */
+  --track-title: -0.005em;  /* a panel's title */
+
+  /* line heights the first scale did not name */
+  --lh-display: 1.18;       /* a page's title */
+  --lh-figure: 1.2;         /* a tile's figure */
+  --lh-snug: 1.35;          /* a short second line under a name */
+
+  /* how long a line of each kind may run */
+  --measure-sub: 78ch;      /* a page's subtitle */
+  --measure-note: 56ch;     /* an absent reading's sentences in a panel */
+  --measure-empty: 46ch;    /* an empty panel's sentence */
+  --measure-status: 32ch;   /* the top bar's status line */
+  --measure-name: 16ch;     /* the person's name in the top bar */
+}
+
+/*
+ * Added for the charts (components/charts). Measured on the boards' Website
+ * traffic, Ranking trend, tile sparks, donuts and Core Web Vitals rows.
+ * Additive: nothing above is changed.
+ */
+:root {
+  /* a chart's lines */
+  --chart-axis: #2c3234;        /* the baseline and the y axis */
+  --chart-grid: #181c1e;        /* the dashed lines behind a chart */
+  --chart-rule: #4a5154;        /* the rule under the pointer */
+  --chart-prev: #6f7774;        /* the previous period's dashed line */
+  --chart-line: 2px;            /* a panel chart's series line, and the ring of its dots */
+  --chart-spark-line: 1.5px;    /* a tile's sparkline */
+  --chart-dot: 7px;             /* a point on a line, ring included */
+  --chart-dim: 0.35;            /* what is not under the pointer, set back */
+  --chart-lift: 14%;            /* how much light is mixed into a line and its dots' rings */
+  --chart-tick: 3px;            /* the stub under the baseline at a labelled day */
+  --chart-icon-stroke: 1.5;     /* a chart's small line icons (the funnel's and the calendar's arrows), in their 12-unit box */
+  --chart-halo: 30%;            /* the ring round the point under the pointer, of its colour */
+  --chart-provisional-line: 0.7; /* a stretch still being counted: its line, against a settled one */
+  --chart-provisional-dot: 0.8; /* and its dots */
+
+  /* how much of a series' colour is in its area: at the plot's top, at its foot */
+  --chart-fill-top: 70%;
+  --chart-fill-low: 3%;
+  --chart-soft-top: 16%;        /* a line chart's wash, and a provisional day */
+  --chart-band: 7%;             /* a stretch of days marked behind a chart (Experiments' before and after windows) */
+  --chart-bar-top: 92%;         /* a column: at its top, at its foot */
+  --chart-bar-low: 38%;
+
+  /* a chart's sizes */
+  --chart-h: 116px;             /* a panel chart's plot */
+  --chart-h-min: 72px;          /* the least a plot that fills its parent may be */
+  --chart-tip-min: 132px;       /* a tooltip */
+  --chart-tip-max: 220px;
+
+  /* sparks */
+  --spark-w: 96px;              /* beside a tile's figure */
+  --spark-h: 40px;
+  --spark-row-w: 64px;          /* in a table row */
+  --spark-row-h: 20px;
+  --spark-fill-top: 34%;        /* the area under a spark, at the line */
+  --spark-bar-old: 26;          /* how much colour the oldest bar keeps, in percent */
+
+  /* bars, rings, donuts */
+  --bar: 6px;                   /* a progress bar's thickness */
+  --barlist-row: 28px;          /* from one row of a bar list to the next */
+  --barlist-bar: 108px;         /* a bar at the end of its row */
+  --meter-mark: 7px;            /* how far a threshold mark stands past the track */
+  --meter-poor-ink: 70%;        /* how red the poor threshold's figure is, in the quiet ink */
+  --donut: 136px;
+  --donut-sm: 104px;
+  --donut-middle: 58%;          /* how wide the words in a donut's middle may run, of the donut */
+  --ring-row: 30px;             /* the SEO score in a table row */
+  --ring-panel: 112px;          /* Route health */
+  --legend-dot: 9px;            /* beside a donut */
+
+  /* the funnel */
+  --funnel-col: 84px;           /* the room a column has */
+  --funnel-bar: 70px;           /* the column */
+  --funnel-gap: 34px;           /* between two steps, where the rate is printed */
+  --t-figure-3: 18px;           /* a funnel step's figure */
+  --funnel-head: 5px;           /* the arrowhead at the foot of a step's stem */
+  --funnel-stem-ink: 55%;       /* the stem and its arrowhead, of the series colour */
+  --funnel-band: 82%;           /* the lit band across a column's top, of the series colour */
+  --funnel-body-top: 55%;       /* the column under the band, and at its foot */
+  --funnel-body-low: 10%;
+  --funnel-edge: 85%;           /* the hairline along a column's top */
+  --funnel-row-low: 45%;        /* a narrow screen's bar, at its start */
+  --funnel-rate-top: 62%;       /* how far down the step the rate stands, in the gap */
+
+  /* the calendar */
+  --cal-row: 34px;
+  --cal-dot: 5px;
+
+  /* the map */
+  --map-land: #424d4b;          /* a dot of land with no visitors (at the board's size the dots blend into its grey land) */
+  --map-dot: 0.84;              /* a dot's width, in cells */
+  --map-lit-low: 45;            /* how green the least of the lit countries is, in percent */
+  --map-glow: 9cqw;             /* the largest glow, against the map's width: a lit point, as on the board, not a blot */
+  --map-glow-min: 0.35;         /* the least lit country's glow, of the largest */
+  --map-glow-core: 85%;         /* a glow's centre, of the green */
+  --map-glow-edge: 38%;         /* where a glow has faded to its halo, of its radius */
+}
+
+/*
+ * Added for the Leads screen (components/leads). Additive: nothing above is changed.
+ */
+:root {
+  --leads-sheet: 580px;         /* one enquiry, open over the right of the screen */
+  --leads-dt: 112px;            /* the label column of its facts */
+  --leads-cell: 180px;          /* the most a name, company or page cell of the list may take */
+  --leads-cell-wide: 220px;     /* and "Asked for" */
+  --leads-cell-name: 190px;     /* a name with its Returning tag */
+  --leads-cell-narrow: 120px;   /* "Asked for" and the page, when the list is too narrow for all its columns */
+  --leads-cell-call: 110px;     /* who holds a call, under its time */
+}

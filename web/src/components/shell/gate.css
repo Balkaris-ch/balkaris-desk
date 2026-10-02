@@ -1,0 +1,98 @@
+/* The calm screen: a server that is down, an account that is off, an address that leads nowhere. */
+.dk-gate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x24);
+  padding: var(--x32) var(--x16);
+}
+
+.dk-gate--page {
+  min-height: 100dvh;
+}
+
+.dk-gate--panel {
+  min-height: min(60dvh, var(--gate-w));
+}
+
+.dk-gate-brand {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x10);
+}
+
+/* The wordmark's own classes are the sidebar's; this page has no sidebar to bring them. */
+.dk-gate-brand .dk-brand-name {
+  color: var(--ink);
+  font-size: var(--t-brand);
+  font-weight: var(--w-bold);
+  letter-spacing: var(--track-brand);
+}
+
+.dk-gate-brand .dk-brand-slash {
+  color: var(--ink-4);
+  font-size: var(--t-title);
+}
+
+.dk-gate-brand .dk-brand-desk {
+  color: var(--ink-2);
+  font-size: var(--t-title);
+}
+
+.dk-gate-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x8);
+  width: 100%;
+  max-width: var(--gate-w);
+  padding: var(--x24);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-gate-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x40);
+  height: var(--x40);
+  margin-bottom: var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-tile-icon);
+  background: var(--card-2);
+  color: var(--ink-2);
+}
+
+.dk-gate-title {
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-gate-text {
+  color: var(--ink-2);
+  font-size: var(--t-sub);
+  line-height: var(--lh-body);
+}
+
+.dk-gate-detail {
+  width: 100%;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  margin-top: var(--x12);
+}

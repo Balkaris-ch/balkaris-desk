@@ -1,0 +1,47 @@
+.dk-grid {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.dk-grid-row {
+  display: grid;
+  gap: var(--gap);
+  grid-template-columns: var(--dk-cols);
+  align-items: stretch;
+}
+
+.dk-grid-row > * {
+  min-width: 0;
+}
+
+@container (max-width: 1120px) {
+  .dk-grid-row {
+    grid-template-columns: var(--dk-mid);
+  }
+
+  /* No hole: in two columns, a panel left alone on the last row takes all of it. */
+  .dk-grid-row[data-pair] > :last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@container (max-width: 700px) {
+  .dk-grid-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-grid-row[data-pair] > :last-child:nth-child(odd) {
+    grid-column: auto;
+  }
+}
+
+.dk-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-stack > * {
+  flex: 1 1 auto;
+}

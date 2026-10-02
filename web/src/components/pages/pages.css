@@ -1,0 +1,962 @@
+/* The Pages screen and one page's detail. Every value is a token; every class
+   is dk-pages-…, so nothing here can style another screen. */
+
+/* ---------- the strip over the table: tabs, search, filters ---------- */
+.dk-pages-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-pages-bar .dk-tabs {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.dk-pages-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  margin-left: auto;
+  min-width: 0;
+}
+
+.dk-pages-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: calc(var(--x56) * 4.75);
+  min-width: 0;
+}
+
+.dk-pages-search .dk-icon {
+  position: absolute;
+  left: var(--x12);
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.dk-pages-search .dk-input {
+  height: var(--ctl);
+  min-height: var(--ctl);
+  padding-left: var(--x40);
+  background: var(--card);
+  border-color: var(--line);
+}
+
+.dk-pages-search .dk-input::placeholder {
+  color: var(--ink-3);
+}
+
+.dk-pages-filter {
+  position: relative;
+  flex: none;
+}
+
+.dk-pages-filter > .dk-btn {
+  background: var(--card);
+  border-color: var(--line);
+}
+
+.dk-pages-filter-n {
+  margin-left: var(--x2);
+  color: var(--green);
+}
+
+.dk-pages-filter-panel {
+  position: absolute;
+  top: calc(100% + var(--x8));
+  right: 0;
+  z-index: var(--z-pop);
+  display: grid;
+  gap: var(--x12);
+  width: var(--pop-w);
+  max-width: calc(100vw - var(--x32));
+  padding: var(--x14);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-card);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+}
+
+.dk-pages-filter-panel .dk-field-label {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-filter-panel .dk-select {
+  width: 100%;
+}
+
+.dk-pages-filter-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding-top: var(--x4);
+}
+
+/* ---------- the table ---------- */
+
+/* The panel is the container the columns give way to (below), so they answer
+   to the room the table has, beside the sidebar or not, not to the window. */
+.dk-pages-table {
+  container: dk-pages-table / inline-size;
+}
+
+.dk-pages-table .dk-card-body {
+  padding: 0;
+}
+
+/* Where the table is wider than its panel (a tablet, a phone) and scrolls
+   sideways, a soft edge on the side that has more says so. The two "local"
+   layers travel with the table and cover each edge at its own end. */
+.dk-pages-table .dk-table-wrap {
+  background:
+    linear-gradient(to right, var(--card), var(--card), transparent) left center / var(--x40) 100% no-repeat local,
+    linear-gradient(to left, var(--card), var(--card), transparent) right center / var(--x40) 100% no-repeat local,
+    linear-gradient(to right, var(--line-2), transparent) left center / var(--x14) 100% no-repeat scroll,
+    linear-gradient(to left, var(--line-2), transparent) right center / var(--x14) 100% no-repeat scroll;
+}
+
+.dk-pages-table table {
+  table-layout: auto;
+}
+
+.dk-pages-table thead th {
+  height: calc(var(--x40) + var(--x6));
+  line-height: var(--lh-snug);
+}
+
+/* The board's faint rules between the columns. */
+.dk-pages-table th + th,
+.dk-pages-table td + td {
+  border-left: var(--x1) solid var(--line);
+}
+
+.dk-pages-table .dk-table-pick + th,
+.dk-pages-table .dk-table-pick + td {
+  border-left: 0;
+}
+
+.dk-pages-table tbody td {
+  height: calc(var(--x40) + var(--x2));
+}
+
+.dk-pages-head-sub {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+}
+
+.dk-pages-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  text-align: left;
+}
+
+.dk-pages-head .dk-table-sort {
+  text-align: left;
+}
+
+/* The page cell: the row's link (picture, name, section) and, while the
+   Route column is folded in, the route laid over the section's line. */
+.dk-pages-pagecell {
+  position: relative;
+  display: inline-flex;
+  max-width: 100%;
+  vertical-align: middle;
+}
+
+.dk-pages-page {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x14);
+  min-width: 0;
+  max-width: clamp(calc(var(--x56) * 4.6), 15vw, calc(var(--x56) * 6.5));
+}
+
+.dk-pages-name-path {
+  display: none;
+}
+
+.dk-pages-folded {
+  display: none;
+}
+
+.dk-pages-page .dk-thumb--sm {
+  width: calc(var(--thumb-sm-w) + var(--x6));
+  height: calc(var(--thumb-sm-h) + var(--x2));
+  border-radius: var(--x3);
+}
+
+.dk-pages-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: var(--lh-snug);
+}
+
+.dk-pages-name b {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-pages-name span {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-pages-table .dk-table-linked:hover .dk-pages-name b {
+  color: var(--green);
+}
+
+.dk-pages-route {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  max-width: calc(var(--x56) * 3);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-pages-route span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-pages-route a {
+  flex: none;
+  display: inline-flex;
+  color: var(--ink-3);
+  border-radius: var(--x4);
+}
+
+.dk-pages-route a:hover {
+  color: var(--green);
+}
+
+.dk-pages-figure {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-body);
+}
+
+.dk-pages-figure > b {
+  font-weight: var(--w-regular);
+}
+
+.dk-pages-rate {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-two {
+  display: flex;
+  flex-direction: column;
+  line-height: var(--lh-snug);
+}
+
+.dk-pages-two > :first-child {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-pages-two > :last-child:not(:first-child) {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-table .dk-dot-label {
+  font-size: var(--t-body);
+}
+
+/* Under the table, one low row: how many are showing, the stamps, show more. */
+.dk-pages-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x2) var(--x16);
+  min-height: var(--ctl-sm);
+  padding: var(--x2) var(--pad);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-showing {
+  color: var(--ink-2);
+}
+
+.dk-pages-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x14);
+}
+
+.dk-pages-more {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+}
+
+.dk-pages-none {
+  display: grid;
+  justify-items: center;
+  gap: var(--x10);
+  padding: var(--x24) var(--pad);
+  color: var(--ink-3);
+  text-align: center;
+}
+
+.dk-pages-selected {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+/* ---------- the row menu ---------- */
+.dk-pages-menu-button.dk-btn {
+  width: var(--ctl-xs);
+  height: var(--ctl-xs);
+  border-color: var(--line-2);
+}
+
+.dk-pages-menu {
+  position: fixed;
+  z-index: var(--z-pop);
+  display: grid;
+  width: calc(var(--menu-w) - var(--x20));
+  padding: var(--x6);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-card);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+}
+
+.dk-pages-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  width: 100%;
+  min-height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  text-align: left;
+}
+
+.dk-pages-menu-item:hover,
+.dk-pages-menu-item:focus-visible {
+  outline: none;
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-pages-menu-item .dk-icon {
+  color: var(--ink-3);
+}
+
+/* ---------- the bottom row ---------- */
+.dk-pages-health {
+  display: flex;
+  align-items: center;
+  gap: var(--x20);
+  min-width: 0;
+}
+
+.dk-pages-health .dk-donut {
+  flex: none;
+}
+
+/* The legend and, under it, where the counts come from. */
+.dk-pages-health-side {
+  display: grid;
+  gap: var(--x10);
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-pages-list {
+  display: grid;
+}
+
+/* The board's rows: 23px from one to the next. */
+.dk-pages-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x20) + var(--x3));
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-pages-list li > span:nth-child(2) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-pages-list li > b {
+  color: var(--ink);
+  font-weight: var(--w-regular);
+}
+
+/* A small dot in the row's tone, in the middle of a 14px slot so the labels line up with Complete's icon. */
+.dk-pages-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x14);
+  height: var(--x14);
+}
+
+.dk-pages-mark::before {
+  content: "";
+  width: var(--x10);
+  height: var(--x10);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+}
+
+/* Nothing to report: a quiet grey dot, not the loudest mark in the panel. */
+.dk-pages-mark--none::before {
+  background: var(--ink-4);
+}
+
+.dk-pages-mark--ok {
+  color: var(--green);
+}
+
+.dk-pages-mark--ok::before {
+  content: none;
+}
+
+.dk-pages-stamp-line {
+  margin-top: var(--x8);
+}
+
+/* Recent page activity: the board's tight two-line rows on a rail. */
+.dk-pages-feed {
+  position: relative;
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-pages-feed::before {
+  content: "";
+  position: absolute;
+  left: calc(var(--x4) - var(--x1) / 2);
+  top: var(--x10);
+  bottom: var(--x14);
+  width: var(--x1);
+  background: var(--line-2);
+}
+
+.dk-pages-feed-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--x8) calc(var(--x56) + var(--x2)) var(--x14) minmax(0, 1fr);
+  align-items: start;
+  column-gap: var(--x10);
+  margin: 0 calc(var(--x6) * -1);
+  padding: var(--x1) var(--x6);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+}
+
+a.dk-pages-feed-row:hover {
+  background: var(--hover);
+}
+
+a.dk-pages-feed-row:hover .dk-pages-feed-text {
+  color: var(--green);
+}
+
+.dk-pages-feed-node {
+  width: var(--x8);
+  height: var(--x8);
+  margin-top: var(--x4);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+  box-shadow: 0 0 0 var(--x3) var(--card);
+}
+
+.dk-pages-feed-time {
+  padding-top: var(--x1);
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-pages-feed-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x14);
+  height: var(--x14);
+  margin-top: var(--x1);
+  border-radius: var(--r-pill);
+  background: var(--tone);
+  color: var(--card);
+}
+
+.dk-pages-feed-dot.dk-tone-quiet {
+  background: var(--ink-4);
+}
+
+.dk-pages-feed-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-pages-feed-text {
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-pages-feed-by {
+  color: var(--ink-3);
+}
+
+.dk-pages-said {
+  margin-top: var(--x10);
+  padding: var(--x8) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-pages-said--bad {
+  border-color: var(--red-edge);
+  background: var(--red-ground);
+}
+
+.dk-pages-ribbon {
+  padding: var(--x10) var(--x14);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-card);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-pages-ribbon b {
+  color: var(--amber);
+}
+
+/* ---------- one page ---------- */
+.dk-pages-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+}
+
+.dk-pages-crumb a:hover {
+  color: var(--green);
+}
+
+.dk-pages-sub {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+}
+
+.dk-pages-sub a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.dk-pages-sub a:hover {
+  color: var(--green);
+}
+
+.dk-pages-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+}
+
+.dk-pages-facts {
+  display: grid;
+  grid-template-columns: minmax(calc(var(--x56) * 1.9), max-content) minmax(0, 1fr);
+  gap: var(--x10) var(--x16);
+  margin: 0;
+  font-size: var(--t-body);
+}
+
+.dk-pages-facts dt {
+  color: var(--ink-3);
+}
+
+.dk-pages-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.dk-pages-facts dd small {
+  display: block;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-len {
+  display: grid;
+  gap: var(--x4);
+  margin-top: var(--x6);
+  max-width: calc(var(--x56) * 5);
+}
+
+.dk-pages-len span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-share {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--x10);
+}
+
+.dk-pages-share img {
+  display: block;
+  width: 100%;
+  max-width: calc(var(--x56) * 7);
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-pages-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-pages-rows > li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  min-width: 0;
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+  font-size: var(--t-body);
+  color: var(--ink-2);
+}
+
+.dk-pages-rows > li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.dk-pages-rows .dk-pages-grow {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dk-pages-rows .dk-pages-grow > small {
+  display: block;
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-rows .dk-pages-end {
+  flex: none;
+  color: var(--ink);
+  text-align: right;
+}
+
+.dk-pages-rows a:hover {
+  color: var(--green);
+}
+
+.dk-pages-scroll {
+  max-height: calc(var(--x56) * 6.5);
+  overflow-y: auto;
+}
+
+.dk-pages-score {
+  display: flex;
+  align-items: center;
+  gap: var(--x20);
+}
+
+.dk-pages-score .dk-ring {
+  flex: none;
+}
+
+.dk-pages-score > .dk-pages-rows,
+.dk-pages-score > p {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-pages-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x10) var(--x32);
+  margin-bottom: var(--x14);
+}
+
+.dk-pages-figures > div {
+  display: grid;
+  gap: var(--x2);
+}
+
+.dk-pages-figures span {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-pages-figures b {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  letter-spacing: var(--track-tight);
+}
+
+.dk-pages-speed {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x16);
+}
+
+.dk-pages-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+.dk-pages-alt-absent {
+  color: var(--red);
+}
+
+/* The one step that would connect a missing source, under its reason. */
+.dk-pages-rows .dk-pages-grow > small.dk-pages-step {
+  color: var(--ink-2);
+}
+
+/* A second list in the same panel, ruled off from the first. */
+.dk-pages-rows--after {
+  margin-top: var(--x8);
+  padding-top: var(--x8);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-pages-chips {
+  flex: none;
+  display: inline-flex;
+  gap: var(--x4);
+}
+
+.dk-pages-stack {
+  display: grid;
+  gap: var(--x14);
+}
+
+/* ---------- the table in less room ----------
+   All eleven columns need about 1380px. Under that the Route column folds
+   into the page cell: the address takes the section's line under the name,
+   with its live-page link. Under about 1190px the status keeps its dot (the
+   word stays for screen readers and in the tooltip), the type chips and the
+   cells' padding get smaller and the heads wrap onto two lines. That fits a
+   1280 screen. Narrower still (a tablet, a phone) the table scrolls inside
+   its panel. */
+@container dk-pages-table (max-width: 1380px) {
+  .dk-pages-table .dk-pages-col-route {
+    display: none;
+  }
+
+  .dk-pages-page {
+    max-width: calc(var(--x56) * 4.5);
+  }
+
+  .dk-pages-name-section {
+    display: none;
+  }
+
+  /* Keeps the name block as wide as the route laid over it, its link included. */
+  .dk-pages-name .dk-pages-name-path {
+    display: block;
+    visibility: hidden;
+    padding-right: var(--x20);
+  }
+
+  .dk-pages-folded {
+    position: absolute;
+    left: calc(var(--thumb-sm-w) + var(--x6) + var(--x14));
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--x6);
+    min-width: 0;
+    color: var(--ink-3);
+    font-size: var(--t-small);
+    line-height: var(--lh-snug);
+    /* The address is part of the row's link to the page's detail; only its icon is a link of its own. */
+    pointer-events: none;
+  }
+
+  .dk-pages-folded > span {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dk-pages-folded > a {
+    flex: none;
+    display: inline-flex;
+    color: var(--ink-3);
+    border-radius: var(--x4);
+    pointer-events: auto;
+  }
+
+  .dk-pages-folded > a:hover {
+    color: var(--green);
+  }
+}
+
+@container dk-pages-table (max-width: 1190px) {
+  .dk-pages-table th,
+  .dk-pages-table td {
+    padding: 0 var(--x8);
+  }
+
+  .dk-pages-table th:first-child,
+  .dk-pages-table td:first-child {
+    padding-left: var(--x14);
+  }
+
+  .dk-pages-table th:last-child,
+  .dk-pages-table td:last-child {
+    padding-right: var(--x14);
+  }
+
+  .dk-pages-page {
+    gap: var(--x10);
+    max-width: calc(var(--x56) * 3.75);
+  }
+
+  .dk-pages-folded {
+    left: calc(var(--thumb-sm-w) + var(--x6) + var(--x10));
+  }
+
+  /* The heads wrap: "Internal / links", "Last / updated". */
+  .dk-pages-table thead .dk-table-sort > span {
+    white-space: normal;
+  }
+
+  .dk-pages-table .dk-pages-head-sub {
+    white-space: nowrap;
+  }
+
+  /* Status: the dot alone; its word stays for screen readers. */
+  .dk-pages-table .dk-dot-label {
+    position: absolute;
+    width: var(--x1);
+    height: var(--x1);
+    margin: calc(var(--x1) * -1);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .dk-pages-table .dk-chip {
+    height: var(--x20);
+    padding: 0 var(--x6);
+    font-size: var(--t-label);
+  }
+
+  .dk-pages-figure {
+    gap: var(--x6);
+  }
+}
+
+/* ---------- narrower screens ---------- */
+@media (max-width: 1360px) {
+  .dk-pages-bar {
+    flex-wrap: wrap;
+  }
+
+  .dk-pages-bar .dk-tabs {
+    flex-basis: 100%;
+  }
+
+  .dk-pages-tools {
+    flex: 1;
+    margin-left: 0;
+  }
+
+  .dk-pages-search {
+    flex: 1;
+    width: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .dk-pages-health {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .dk-pages-health .dk-donut {
+    align-self: center;
+  }
+
+  .dk-pages-facts {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x2) 0;
+  }
+
+  .dk-pages-facts dd {
+    margin-bottom: var(--x8);
+  }
+
+  .dk-pages-speed {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

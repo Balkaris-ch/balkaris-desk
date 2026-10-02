@@ -1,0 +1,918 @@
+/*
+ * The Leads screen. Drawn as another board of the Conversions set: the same
+ * tiles, the row of four panels under them, and the list beside a narrow
+ * panel at the foot. Every value is a token (styles/tokens.css).
+ */
+
+.dk-leads {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+  min-width: 0;
+}
+
+.dk-leads-quiet {
+  color: var(--ink-3);
+}
+
+.dk-leads-fine {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-pad {
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-leads-ref {
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  letter-spacing: 0;
+}
+
+.dk-leads-cut {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-leads-pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the specimen ribbon ---------- */
+.dk-leads-ribbon {
+  display: flex;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x10) var(--pad);
+  border: var(--x1) dashed var(--violet-edge);
+  border-radius: var(--r-card);
+  background: var(--violet-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-ribbon .dk-badge {
+  flex: none;
+}
+
+.dk-leads-ribbon code {
+  font-family: var(--font-mono);
+  color: var(--ink);
+}
+
+/* ---------- the connect panel ---------- */
+.dk-leads-connect {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: var(--x32);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-connect-head {
+  margin-bottom: var(--x8);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-leads-connect-what ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-left: var(--x16);
+  list-style: disc;
+}
+
+.dk-leads-connect-what li::marker {
+  color: var(--ink-4);
+}
+
+.dk-leads-connect-note {
+  margin-top: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-connect-step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-leads-connect-step .dk-leads-connect-head {
+  margin-bottom: 0;
+}
+
+.dk-leads-connect-step .dk-leads-connect-note {
+  margin-top: 0;
+}
+
+@container (max-width: 860px) {
+  .dk-leads-connect {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x20);
+  }
+}
+
+/* The command and its Copy button. */
+.dk-leads-copy {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-leads-copy-line {
+  flex: 1;
+  min-width: 0;
+  padding: var(--x10) var(--x12);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  /* The whole command stays in sight: it wraps rather than hiding its end. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.dk-leads-copy-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  padding: 0 var(--x14);
+  border-left: var(--x1) solid var(--line-2);
+  border-radius: 0 var(--r-field) var(--r-field) 0;
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-leads-copy-btn:hover {
+  background: var(--card-3);
+}
+
+.dk-leads-copy-btn:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: calc(var(--x2) * -1);
+}
+
+/* The card that holds the connect panel answers to its own width. */
+.dk-card:has(.dk-leads-connect) {
+  container-type: inline-size;
+}
+
+/* ---------- the day chart ---------- */
+.dk-leads-chart {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  height: 100%;
+}
+
+/* The plot takes the height its row gives it, never less than a panel chart's. */
+.dk-leads-plot {
+  flex: 1;
+  min-height: calc(var(--chart-h) + var(--x24));
+}
+
+/* A day's columns stand on its point: enquiries, and inside it the booked calls. */
+/* At a year a day's slot is under two pixels: the day keeps a visible
+   column, and its booked call a line down the middle of it. */
+.dk-leads-bar {
+  min-width: var(--x3);
+  transform: translateX(-50%);
+}
+
+.dk-leads-bar--in {
+  min-width: var(--x1);
+}
+
+/* ---------- the list ---------- */
+.dk-leads-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-leads-search {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  flex: 1 1 var(--search-w);
+  max-width: var(--search-w);
+  min-width: 0;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-leads-search:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-leads-search--busy {
+  opacity: 0.8;
+}
+
+.dk-leads-search--wait {
+  display: block;
+}
+
+.dk-leads-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-leads-search input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-leads-search input::-webkit-search-cancel-button {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.dk-leads-filters-count {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  margin-left: auto;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-leads-filters-count .dk-num {
+  color: var(--ink-2);
+}
+
+.dk-leads-clear {
+  margin-left: var(--x6);
+  color: var(--green);
+  font-weight: var(--w-medium);
+}
+
+.dk-leads-clear:hover {
+  text-decoration: underline;
+}
+
+.dk-leads-name {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  max-width: 100%;
+}
+
+.dk-leads-tag {
+  flex: none;
+}
+
+/*
+ * The list answers to its own width. Wide: all seven columns. Narrower: the
+ * Company column folds under the name and the long cells give way first. On
+ * a phone each enquiry stacks into a small block. The columns are found by
+ * their place, in ListBody's order: 1 Name, 2 Company, 3 Asked for, 4 Page,
+ * 5 Stage, 6 Call, 7 Received (with the reference under it).
+ */
+.dk-leads-list {
+  container: dk-leads-list / inline-size;
+}
+
+/* A cell's text stops at the column, not at the window. */
+.dk-leads-list .dk-table td > .dk-leads-cut,
+.dk-leads-list .dk-table td .dk-leads-page {
+  max-width: var(--leads-cell);
+}
+
+.dk-leads-list .dk-table td .dk-leads-who {
+  max-width: var(--leads-cell-name);
+}
+
+.dk-leads-list .dk-table td .dk-leads-who .dk-leads-cut {
+  max-width: 100%;
+}
+
+.dk-leads-list .dk-table td .dk-leads-what {
+  max-width: var(--leads-cell-wide);
+}
+
+.dk-leads-list .dk-table td .dk-leads-call .dk-leads-cut {
+  max-width: var(--leads-cell-call);
+}
+
+/* The company under the name: only when its own column is folded away. */
+.dk-leads-fold,
+.dk-leads-sub--fold {
+  display: none;
+}
+
+.dk-leads-when {
+  align-items: flex-end;
+}
+
+.dk-leads-refsub {
+  color: var(--ink-3);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  letter-spacing: 0;
+}
+
+/* A wide screen (Fini's 2000): the long cells take more of the room. With
+   every cell at these caps the seven columns take about 1540px. */
+@container dk-leads-list (min-width: 1600px) {
+  .dk-leads-list .dk-table td .dk-leads-who {
+    max-width: calc(var(--leads-cell-name) + var(--x40));
+  }
+
+  .dk-leads-list .dk-table td > .dk-leads-cut,
+  .dk-leads-list .dk-table td .dk-leads-page {
+    max-width: calc(var(--leads-cell) + var(--x56));
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-what {
+    max-width: calc(var(--leads-cell-wide) + var(--x56) + var(--x24));
+  }
+}
+
+@container dk-leads-list (max-width: 1300px) {
+  .dk-leads-list .dk-table :is(th, td):nth-child(2) {
+    display: none;
+  }
+
+  .dk-leads-fold {
+    display: inline;
+  }
+
+  .dk-leads-sub--fold {
+    display: block;
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-what,
+  .dk-leads-list .dk-table td .dk-leads-page {
+    max-width: var(--leads-cell-narrow);
+  }
+}
+
+/* One enquiry, one block: name and age, what they asked for, stage and call.
+   Below this the six columns no longer fit (with every cell at its cap they
+   take about 950px), so a 1280 screen with a scrollbar keeps the table. */
+@container dk-leads-list (max-width: 959px) {
+  .dk-leads-list .dk-table,
+  .dk-leads-list .dk-table tbody {
+    display: block;
+  }
+
+  .dk-leads-list .dk-table thead {
+    display: none;
+  }
+
+  /* Three tracks: the stage chip's, the room between, the age's. The name
+     spans the first two and the call the last two, so neither a long call
+     nor a long stage can squeeze the name. */
+  .dk-leads-list .dk-table tbody tr {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name name received"
+      "asked asked asked"
+      "stage call call";
+    align-items: center;
+    gap: var(--x8) var(--x12);
+    padding: var(--x12) var(--pad);
+  }
+
+  .dk-leads-list .dk-table tbody td {
+    height: auto;
+    padding: 0;
+  }
+
+  .dk-leads-list .dk-table tbody tr.dk-table-none {
+    display: block;
+    padding: 0;
+  }
+
+  .dk-leads-list .dk-table tbody tr.dk-table-none td {
+    display: block;
+    padding: var(--x20) var(--pad);
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(1) {
+    grid-area: name;
+    min-width: 0;
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(2),
+  .dk-leads-list .dk-table tbody td:nth-child(4) {
+    display: none;
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(3) {
+    grid-area: asked;
+    min-width: 0;
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(5) {
+    grid-area: stage;
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(6) {
+    grid-area: call;
+    min-width: 0;
+    overflow: hidden;
+    text-align: right;
+  }
+
+  .dk-leads-list .dk-table tbody td:nth-child(7) {
+    grid-area: received;
+    align-self: start;
+  }
+
+  /* The block has the width the columns lacked. */
+  .dk-leads-list .dk-table td .dk-leads-who,
+  .dk-leads-list .dk-table td .dk-leads-what {
+    max-width: 100%;
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-two {
+    gap: var(--x4);
+  }
+
+  /* The asked-for line and the call each on one line. */
+  .dk-leads-list .dk-table td:nth-child(3) .dk-leads-two {
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--x8);
+  }
+
+  /* The services give way first; the intent keeps its few words unless the
+     line has no room even for them. */
+  .dk-leads-list .dk-table td:nth-child(3) .dk-leads-sub {
+    flex: 0 10 auto;
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-call {
+    flex-direction: row;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: var(--x6);
+    min-width: 0;
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-call time {
+    flex: none;
+  }
+
+  .dk-leads-list .dk-table td .dk-leads-call .dk-leads-cut {
+    flex: 0 1 auto;
+  }
+}
+
+.dk-leads-asked {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A cell of two lines: the fact, and a quieter line under it. */
+.dk-leads-two {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  line-height: var(--lh-tight);
+}
+
+.dk-leads-sub {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* The narrow panels: the list, then where it came from at the foot. */
+.dk-leads-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  height: 100%;
+}
+
+.dk-leads-groups-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x4) var(--x12);
+  margin-top: auto;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-leads-page {
+  display: block;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-leads-page:hover {
+  color: var(--green);
+  text-decoration: underline;
+}
+
+.dk-leads-call {
+  white-space: nowrap;
+}
+
+.dk-leads-call--off time {
+  color: var(--ink-3);
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-4);
+}
+
+.dk-leads-capnote {
+  padding: var(--x10) var(--pad) var(--x12);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+/* ---------- the facts, quietly, under the list ---------- */
+.dk-leads-about {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: var(--x8) var(--x24);
+  padding: var(--x14) var(--pad) var(--x16);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-about-head {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+}
+
+.dk-leads-about-head .dk-icon {
+  color: var(--ink-4);
+}
+
+.dk-leads-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--leads-cell-wide) + var(--x56))), 1fr));
+  gap: var(--x6) var(--x24);
+}
+
+@media (max-width: 760px) {
+  .dk-leads-about {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- one enquiry, over the right of the screen ---------- */
+.dk-leads-sheet-wrap {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-pop);
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dk-leads-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--scrim);
+  cursor: default;
+}
+
+.dk-leads-sheet {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: min(var(--leads-sheet), 100vw);
+  height: 100dvh;
+  overflow-y: auto;
+  border-left: var(--x1) solid var(--pop-edge);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+  scrollbar-width: thin;
+  outline: none;
+}
+
+.dk-leads-sheet-x {
+  position: absolute;
+  top: var(--x14);
+  right: var(--x14);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-leads-sheet-x:hover {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-leads-sheet-body {
+  display: flex;
+  flex-direction: column;
+  padding: var(--x24) var(--x24) var(--x40);
+}
+
+.dk-leads-sheet-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-right: var(--x40);
+  padding-bottom: var(--x20);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-leads-sheet-title {
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-tight);
+  letter-spacing: var(--track-tight);
+  overflow-wrap: anywhere;
+}
+
+.dk-leads-sheet-sub {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-leads-sheet-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-top: var(--x4);
+}
+
+.dk-leads-sheet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x12);
+  margin-top: var(--x6);
+}
+
+.dk-leads-sheet-engine {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--green);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-leads-sheet-engine:hover {
+  text-decoration: underline;
+}
+
+.dk-leads-sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x16) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-leads-sec:last-child {
+  border-bottom: 0;
+}
+
+.dk-leads-sec-title {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-leads-message {
+  color: var(--ink);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dk-leads-line {
+  color: var(--ink-2);
+  font-size: var(--t-body);
+}
+
+.dk-leads-dl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-dl-row {
+  display: grid;
+  grid-template-columns: var(--leads-dt) minmax(0, 1fr);
+  gap: var(--x12);
+}
+
+.dk-leads-dl dt {
+  color: var(--ink-3);
+}
+
+.dk-leads-dl dd {
+  min-width: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.dk-leads-dl dd a,
+.dk-leads-sheet-body .dk-leads-dl a {
+  color: var(--green);
+}
+
+.dk-leads-dl dd a:hover {
+  text-decoration: underline;
+}
+
+.dk-leads-goals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding-left: var(--x16);
+  list-style: disc;
+}
+
+.dk-leads-struck {
+  color: var(--ink-3);
+  text-decoration: line-through;
+}
+
+.dk-leads-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  font-size: var(--t-body);
+}
+
+.dk-leads-steps li {
+  display: grid;
+  grid-template-columns: var(--x10) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-leads-steps-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+}
+
+.dk-leads-steps-dot[data-tone="good"] {
+  background: var(--green);
+}
+
+.dk-leads-steps-dot[data-tone="warn"] {
+  background: var(--amber);
+}
+
+.dk-leads-steps-dot[data-tone="info"] {
+  background: var(--blue);
+}
+
+.dk-leads-steps-dot[data-tone="violet"] {
+  background: var(--violet);
+}
+
+.dk-leads-steps-text {
+  color: var(--ink);
+}
+
+.dk-leads-steps-time {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-leads-updates {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  color: var(--ink);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+}
+
+.dk-leads-others {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-leads-other {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x4) var(--x12);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-row);
+  background: var(--card-2);
+  font-size: var(--t-small);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-leads-other:hover {
+  background: var(--card-3);
+}
+
+.dk-leads-other-top {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-leads-other-what {
+  grid-column: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-leads-other .dk-chip {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+@media (max-width: 560px) {
+  .dk-leads-sheet-body {
+    padding: var(--x20) var(--x16) var(--x32);
+  }
+
+  .dk-leads-dl-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x2);
+  }
+
+  .dk-leads-ribbon {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dk-leads-filters-count {
+    margin-left: 0;
+  }
+}

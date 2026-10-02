@@ -1,0 +1,130 @@
+.dk-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-card);
+  background: var(--card);
+}
+
+.dk-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--x12);
+  min-height: calc(var(--ctl-sm) + var(--x14) + var(--x12));
+  padding: var(--x14) var(--pad) var(--x12);
+}
+
+.dk-card-head--divided {
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-card-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x12);
+  min-width: 0;
+  /* The title is centred on a head-height control beside it. */
+  padding-top: calc((var(--ctl-sm) - var(--x20)) / 2);
+}
+
+.dk-card-icon {
+  flex: none;
+  display: inline-flex;
+  color: var(--tone);
+}
+
+.dk-card-icon.dk-tone-quiet {
+  color: var(--ink-3);
+}
+
+.dk-card-titles {
+  min-width: 0;
+}
+
+.dk-card-title {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--x20);
+  font-size: var(--t-title);
+  font-weight: var(--w-medium);
+  line-height: var(--x20);
+  letter-spacing: var(--track-title);
+}
+
+.dk-card-title-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-card-count {
+  color: var(--ink-3);
+  font-weight: var(--w-regular);
+}
+
+.dk-card-sub {
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-card-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--ctl-sm);
+}
+
+.dk-card-body {
+  flex: 1;
+  min-width: 0;
+  padding: var(--x4) var(--pad) var(--pad);
+}
+
+/* With no head, the body carries the top padding itself. */
+.dk-card > .dk-card-body:first-child {
+  padding-top: var(--pad);
+}
+
+.dk-card--flush > .dk-card-body,
+.dk-card--flush > .dk-card-body:first-child {
+  padding: 0;
+}
+
+.dk-card-foot {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-card-footlink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding: var(--x10) var(--pad);
+  border-radius: 0 0 var(--r-card) var(--r-card);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-card-footlink:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-card-footlink .dk-icon {
+  color: var(--ink-3);
+}
+
+@media (max-width: 520px) {
+  .dk-card-head {
+    flex-wrap: wrap;
+  }
+}
