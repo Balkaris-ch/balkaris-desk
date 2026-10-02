@@ -12,8 +12,9 @@ import type { ApiError } from "../../web/src/contract/common.ts";
  *   const { mountCommandCenter } = await import("./cc/index.ts");
  *   await mountCommandCenter(app);    once, in src/server.ts, before it listens
  *
- * It loads the collectors and registers their jobs, loads the fourteen screen
- * routers and mounts the API at /api/v1, then starts the scheduler.
+ * It loads the collectors and registers their jobs, loads the fifteen screen
+ * routers and mounts the API at /api/v1, mounts the Vercel drain's door at
+ * /drain (public, proven by its signature), then starts the scheduler.
  *
  * WHY THE COLLECTORS AND SCREENS ARE LOADED WITH `import()` AND NOT `import`.
  * The desk publishes articles, and that must survive anything that goes wrong
@@ -66,6 +67,7 @@ const collectors: [string, () => Promise<{ jobs: Job[] }>][] = [
   ["The GA4 collector", () => import("./ga4.ts")],
   ["The website collector", () => import("./site/index.ts")],
   ["The search collector", () => import("./search/index.ts")],
+  ["The Vercel collector", () => import("./vercel/index.ts")],
 ];
 
 /* Written out one by one, not built from a name, so the typechecker follows
@@ -81,6 +83,7 @@ const screens: Record<string, () => Promise<{ routes: Hono<Vars> }>> = {
   leads: () => import("./routes/leads.ts"),
   experiments: () => import("./routes/experiments.ts"),
   health: () => import("./routes/health.ts"),
+  hosting: () => import("./routes/hosting.ts"),
   automations: () => import("./routes/automations.ts"),
   assets: () => import("./routes/assets.ts"),
   operator: () => import("./routes/operator.ts"),
@@ -158,5 +161,16 @@ export async function mountCommandCenter(app: Hono<Vars>): Promise<void> {
   }
 
   app.route("/api/v1", buildApi(routers));
+
+  /* Vercel's log drain delivers here. Outside /api: it is a machine door,
+     let past sign-in by src/server.ts and proven by its signature alone. A
+     door whose code did not load answers 503, which Vercel reports as an
+     errored drain, rather than 404. */
+  const door = await loadPart("The Vercel drain's door", () => import("./vercel/drain.ts"), (mod) => {
+    if (!(mod.door instanceof Hono)) throw new Error("it does not export `door` as a Hono router");
+    return mod.door;
+  });
+  app.route("/drain", door ?? unavailable("The Vercel drain's door"));
+
   start();
 }

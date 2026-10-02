@@ -1,0 +1,666 @@
+/*
+ * Hosting. In the language of the Site Health board (design/boards/site-health.png):
+ * a row of six tiles, then rows of panels 12 apart vertically and 10 across,
+ * heads tight, tables about 22px a row. Each panel carries its stamp.
+ *
+ * Every value is a token; every class begins dk-hosting-. The shared
+ * primitives are tightened only under this screen's own classes.
+ */
+
+/* ---- the screen ---- */
+.dk-hosting {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-hosting .dk-grid-row,
+.dk-hosting .dk-tiles-grid {
+  gap: var(--x12) var(--x10);
+}
+
+.dk-hosting-domain {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-hosting-specimen {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x10);
+  padding: var(--x10) var(--x16);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-card);
+  background: var(--amber-ground);
+  color: var(--amber);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-hosting-specimen .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+.dk-hosting-specimen b {
+  font-weight: var(--w-semi);
+}
+
+/* ---- panels: heads and bodies as Site Health draws them ---- */
+.dk-hosting-card > .dk-card-head {
+  min-height: 0;
+  padding: var(--x8) var(--pad) var(--x4);
+}
+
+.dk-hosting-card > .dk-card-head .dk-card-heading {
+  padding-top: calc((var(--ctl-xs) - var(--x20)) / 2);
+}
+
+.dk-hosting-card > .dk-card-head .dk-card-right {
+  min-height: var(--ctl-xs);
+  align-items: center;
+  gap: var(--x10);
+}
+
+.dk-hosting-card:not(.dk-card--flush) > .dk-card-body {
+  padding: var(--x4) var(--pad) var(--x10);
+}
+
+/* A panel with nothing to show keeps every part of its absent state, the mark beside the head. */
+.dk-hosting-card .dk-absent--panel {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  min-height: 0;
+  padding: var(--x4) 0;
+}
+
+.dk-hosting-card .dk-absent--panel .dk-absent-mark {
+  margin-bottom: 0;
+}
+
+.dk-hosting-card .dk-absent--panel .dk-absent-why,
+.dk-hosting-card .dk-absent--panel .dk-absent-step {
+  grid-column: 1 / -1;
+}
+
+/* The counting panel's absent state in two short lines: its neighbour holds the full one. */
+.dk-hosting-absent-short {
+  margin-top: var(--x4);
+}
+
+.dk-hosting-card.dk-card--flush .dk-absent--panel {
+  padding: var(--x4) var(--pad) var(--x12);
+}
+
+/* ---- shared bits ---- */
+.dk-hosting-mono {
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+
+.dk-hosting-quiet {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-hosting-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hosting-line {
+  margin: var(--x2) 0 0;
+  font-size: var(--t-small);
+}
+
+/* A second thing after a state in a row (the deployment's address): it gives way, the state does not. */
+.dk-hosting-after {
+  min-width: 0;
+  margin-left: var(--x8);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-hosting-kv dd > .dk-dot {
+  flex: none;
+}
+
+.dk-hosting-note {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x6);
+  margin-top: var(--x8);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-hosting-note b {
+  color: var(--ink-3);
+  font-weight: var(--w-medium);
+}
+
+.dk-hosting-note .dk-icon {
+  flex: none;
+  transform: translateY(var(--x1));
+}
+
+.dk-hosting-subhead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x8);
+  margin: 0 0 var(--x4);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dk-hosting-subhead--gap {
+  margin-top: var(--x12);
+}
+
+.dk-hosting-subhead-n {
+  color: var(--ink);
+  font-family: var(--font);
+  font-size: var(--t-small);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dk-hosting-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--x12);
+  row-gap: var(--x2);
+  min-width: 0;
+  margin: 0;
+}
+
+.dk-hosting-foot--list {
+  margin-top: var(--x8);
+}
+
+.dk-hosting-since {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-4);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hosting-since::before {
+  content: "·";
+  margin-right: var(--x8);
+}
+
+.dk-hosting-iconlink {
+  display: inline-flex;
+  color: var(--ink-3);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-hosting-iconlink:hover,
+.dk-hosting-iconlink:focus-visible {
+  color: var(--ink);
+}
+
+/* ---- tiles ---- */
+.dk-hosting-tiles .dk-tile {
+  min-height: 0;
+  padding: var(--x10) var(--pad) var(--x8);
+}
+
+.dk-hosting-tiles .dk-tile-figure {
+  margin-top: 0;
+}
+
+.dk-hosting-tiles .dk-tile-under {
+  min-height: 0;
+  margin-top: 0;
+  line-height: var(--lh-tight);
+}
+
+.dk-hosting-tiles .dk-tile .dk-stamp {
+  margin-top: var(--x2);
+}
+
+.dk-hosting-tiles .dk-tile-badge .dk-badge {
+  gap: var(--x4);
+  height: var(--x20);
+  padding: 0 var(--x6);
+  font-size: var(--t-label);
+}
+
+/* A state for a figure: set a size down from a number, its line kept a number's height so the six tiles' lines meet. */
+.dk-hosting-statevalue {
+  font-size: var(--t-figure-2);
+}
+
+.dk-hosting-statetile .dk-tile-figure {
+  min-height: calc(var(--t-figure) * var(--lh-figure));
+  align-items: flex-end;
+}
+
+.dk-hosting-under {
+  overflow: hidden;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hosting-tilesub {
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hosting-tilesub .dk-hosting-mono {
+  font-size: var(--t-label);
+  color: var(--ink-3);
+}
+
+/* ---- page views per day ---- */
+.dk-hosting-chartbox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-hosting-chartbox > .dk-frame {
+  margin-top: var(--x6);
+}
+
+.dk-hosting-figs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6) var(--x24);
+  min-width: 0;
+}
+
+.dk-hosting-fig-value {
+  color: var(--ink);
+  font-size: var(--t-figure-2);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+  letter-spacing: var(--track-tight);
+  white-space: nowrap;
+}
+
+.dk-hosting-fig-name {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  margin-top: var(--x2);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-tight);
+  white-space: nowrap;
+}
+
+.dk-hosting-key {
+  display: inline-block;
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--c);
+}
+
+/* ---- how page views are counted ---- */
+.dk-hosting-kinds {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The kinds in two columns, in the rules' order, row by row. One column on a phone. */
+.dk-hosting-kinds--grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--x24);
+}
+
+.dk-hosting-kind {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x16) + var(--x2));
+  font-size: var(--t-small);
+}
+
+.dk-hosting-kind-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-decoration: underline dotted var(--line-2);
+  text-underline-offset: var(--x3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.dk-hosting-kind-n {
+  color: var(--ink-2);
+}
+
+.dk-hosting-kind--view .dk-hosting-kind-name,
+.dk-hosting-kind--view .dk-hosting-kind-n {
+  color: var(--ink);
+}
+
+.dk-hosting-kind--view .dk-hosting-kind-n {
+  font-weight: var(--w-semi);
+}
+
+.dk-hosting-tip-why {
+  display: block;
+  margin-top: var(--x6);
+  color: var(--ink-3);
+}
+
+.dk-hosting-deliv {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--x24);
+  margin-top: var(--x4);
+}
+
+.dk-hosting-deliv > div {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--x56) + var(--x20))) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x16) + var(--x2));
+  font-size: var(--t-label);
+}
+
+.dk-hosting-deliv dt {
+  color: var(--ink-3);
+}
+
+/* The router's markers missing on some day: one line under the deliveries. */
+.dk-hosting-markers {
+  margin-top: var(--x8);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* A sentence, not a chip: it wraps on a narrow screen instead of being cut. */
+.dk-hosting-markers .dk-dot {
+  align-items: baseline;
+  white-space: normal;
+}
+
+.dk-hosting-markers .dk-dot-mark {
+  transform: translateY(calc(var(--x1) * -1));
+}
+
+.dk-hosting-deliv dd {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- the lists ---- */
+.dk-hosting-bars .dk-barlist-row {
+  min-height: calc(var(--x20) + var(--x2));
+}
+
+/* ---- production builds ---- */
+.dk-hosting-table .dk-table {
+  table-layout: fixed;
+}
+
+.dk-hosting-table td,
+.dk-hosting-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dk-hosting-table th:not(:first-child),
+.dk-hosting-table td:not(:first-child) {
+  padding-left: var(--x8);
+}
+
+.dk-hosting-table th:not(:last-child),
+.dk-hosting-table td:not(:last-child) {
+  padding-right: var(--x8);
+}
+
+.dk-hosting-table .dk-table thead th {
+  height: calc(var(--x20) + var(--x2));
+}
+
+.dk-hosting-table .dk-table--dense tbody td {
+  height: calc(var(--x24) + var(--x2));
+}
+
+.dk-hosting-live {
+  color: var(--green);
+}
+
+.dk-hosting-loglink {
+  color: var(--blue);
+  font-size: var(--t-small);
+}
+
+.dk-hosting-loglink:hover,
+.dk-hosting-loglink:focus-visible {
+  text-decoration: underline;
+}
+
+/* ---- key and value rows: domain and firewall, the engine ---- */
+.dk-hosting-kvs {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-hosting-kv {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--x56) + var(--x40))) minmax(0, 1fr);
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x16) + var(--x4));
+  font-size: var(--t-small);
+}
+
+.dk-hosting-kv dt {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-3);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hosting-kv dd {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+.dk-hosting-domains,
+.dk-hosting-parts,
+.dk-hosting-incidents {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-hosting-domains li {
+  display: grid;
+  grid-template-columns: var(--x10) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x16) + var(--x4));
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+
+/* ---- Vercel's status ---- */
+.dk-hosting-parts li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--x20) + var(--x2));
+  border-bottom: var(--x1) solid var(--line);
+  font-size: var(--t-small);
+  color: var(--ink-2);
+}
+
+.dk-hosting-parts li:last-child {
+  border-bottom: 0;
+}
+
+.dk-hosting-incidents li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: calc(var(--x20) + var(--x2));
+  font-size: var(--t-small);
+}
+
+.dk-hosting-incident {
+  color: var(--ink-2);
+}
+
+.dk-hosting-incident:hover,
+.dk-hosting-incident:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+}
+
+/* ---- the engine ---- */
+.dk-hosting-engine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x16);
+}
+
+.dk-hosting-engine-col {
+  min-width: 0;
+}
+
+.dk-hosting-engine-col .dk-spark--row {
+  width: 100%;
+  max-width: none;
+  margin-top: var(--x6);
+}
+
+.dk-hosting-engine-col--pub {
+  padding-left: var(--x16);
+  border-left: var(--x1) solid var(--line);
+}
+
+.dk-hosting-engine-col--pub .dk-hosting-kv {
+  grid-template-columns: minmax(0, calc(var(--x56) + var(--x24))) minmax(0, 1fr);
+}
+
+/* ---- only in Vercel's dashboard ---- */
+.dk-hosting-dash {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+}
+
+.dk-hosting-dash-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-hosting-dash-link .dk-icon {
+  color: var(--ink-3);
+}
+
+.dk-hosting-dash-link:hover,
+.dk-hosting-dash-link:focus-visible {
+  text-decoration: underline;
+}
+
+.dk-hosting-dash-why {
+  margin-top: var(--x2);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---- the build log ---- */
+.dk-hosting-log {
+  display: flex;
+  flex-direction: column;
+  margin-top: var(--x8);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-hosting-log-line {
+  display: grid;
+  grid-template-columns: calc(var(--x40) + var(--x4)) minmax(0, 1fr);
+  gap: var(--x12);
+  padding: var(--x1) var(--x6);
+  border-radius: var(--r-chip);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-hosting-log-line--error {
+  background: var(--red-ground);
+  color: var(--red);
+}
+
+.dk-hosting-log-time {
+  color: var(--ink-4);
+}
+
+.dk-hosting-log-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  color: inherit;
+}
+
+.dk-hosting-log-line:not(.dk-hosting-log-line--error) .dk-hosting-log-text {
+  color: var(--ink-2);
+}
+
+/* ---- narrower screens (a media query cannot read a custom property: the width is written here only) ---- */
+@media (max-width: 560px) {
+  .dk-hosting-engine,
+  .dk-hosting-deliv,
+  .dk-hosting-kinds--grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-hosting-engine-col--pub {
+    padding: var(--x12) 0 0;
+    border-top: var(--x1) solid var(--line);
+    border-left: 0;
+  }
+}

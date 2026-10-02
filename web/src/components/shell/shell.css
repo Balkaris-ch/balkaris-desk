@@ -55,20 +55,20 @@
   scrollbar-width: thin;
   /*
    * The rows' step for this window. The boards' 42 while the foot (Balkaris
-   * AI and the two live-site buttons) fits under the fourteen rows; on a
+   * AI and the two live-site buttons) fits under the fifteen rows; on a
    * shorter window the rows close up, a pixel at a time, just enough to keep
    * it in sight, down to --row-step-least. Declared here, not on :root,
    * because 100dvh and the gap derived from it must be worked out where they
    * are used.
    */
-  --side-step: clamp(var(--row-step-least), calc((100dvh - var(--side-rest)) / 14), var(--row-step));
+  --side-step: clamp(var(--row-step-least), calc((100dvh - var(--side-rest)) / 15), var(--row-step));
   --side-row: min(var(--row), calc(var(--side-step) - var(--row-gap-least)));
 }
 
 /* Whole pixels where the browser can round, so a row's edge stays crisp. */
 @supports (width: round(down, 1.5px, 1px)) {
   .dk-side {
-    --side-step: clamp(var(--row-step-least), round(down, (100dvh - var(--side-rest)) / 14, var(--x1)), var(--row-step));
+    --side-step: clamp(var(--row-step-least), round(down, (100dvh - var(--side-rest)) / 15, var(--x1)), var(--row-step));
   }
 }
 

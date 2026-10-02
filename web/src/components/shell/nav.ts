@@ -11,7 +11,7 @@ export interface Section {
   hint: string;
 }
 
-/** The fourteen sections, in the order the sidebar lists them. */
+/** The fifteen sections, in the order the sidebar lists them. */
 export const SECTIONS: readonly Section[] = [
   { key: "", label: "Command Center", href: "/", icon: "home", hint: "The website today" },
   { key: "insights", label: "Insights", href: "/insights", icon: "article", hint: "Articles: plan, write, publish" },
@@ -23,6 +23,7 @@ export const SECTIONS: readonly Section[] = [
   { key: "leads", label: "Leads", href: "/leads", icon: "inbox", hint: "Enquiries and booked calls" },
   { key: "experiments", label: "Experiments", href: "/experiments", icon: "flask", hint: "Tests on the site" },
   { key: "site-health", label: "Site Health", href: "/site-health", icon: "shield-check", hint: "Uptime, speed, errors" },
+  { key: "hosting", label: "Hosting", href: "/hosting", icon: "cloud", hint: "True page views, Vercel builds, the engine" },
   { key: "automations", label: "Automations", href: "/automations", icon: "bolt", hint: "Scheduled jobs" },
   { key: "assets", label: "Assets", href: "/assets", icon: "image", hint: "Pictures, covers, films" },
   { key: "operator", label: "AI Operator", href: "/operator", icon: "sparkles", hint: "Ask about the website" },

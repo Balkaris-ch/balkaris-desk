@@ -29,7 +29,7 @@ export interface Section {
 }
 
 /**
- * The fourteen, in the sidebar's order.
+ * The fifteen, in the sidebar's order.
  *
  * Site Health is NOT at /health: that address is the desk server's own
  * "are you up" answer, which Caddy and the uptime check ask, and it has to
@@ -46,6 +46,7 @@ export const SECTIONS: Section[] = [
   { name: "leads", title: "Leads", href: "/leads" },
   { name: "experiments", title: "Experiments", href: "/experiments" },
   { name: "health", title: "Site Health", href: "/site-health" },
+  { name: "hosting", title: "Hosting", href: "/hosting" },
   { name: "automations", title: "Automations", href: "/automations" },
   { name: "assets", title: "Assets", href: "/assets" },
   { name: "operator", title: "AI Operator", href: "/operator" },

@@ -161,6 +161,8 @@ const STEP_TITLE: Partial<Record<SourceId, { title: string; rank: number }>> = {
   engine: { title: "Give the desk a key to the engine's enquiries", rank: 4 },
   clarity: { title: "Connect Microsoft Clarity", rank: 5 },
   bing: { title: "Connect Bing Webmaster Tools", rank: 6 },
+  "vercel-drain": { title: "Count true page views: connect Vercel's log drain", rank: 7 },
+  "vercel-api": { title: "Give the desk a Vercel token for the website's project", rank: 7.5 },
 };
 
 /** Two sources that want the same credential are one step (CrUX and PageSpeed share the Google API key). */
@@ -170,6 +172,8 @@ const CREDENTIAL = /\b(GOOGLE_API_KEY|BING_API_KEY|CLARITY_TOKEN|ENGINE_READ_KEY
 function commandsIn(step: string): string[] {
   const found = [
     ...(step.match(/bash deploy\/env-put\.sh --(?:ask|mint) [A-Z][A-Z0-9_]*/g) ?? []),
+    /* The Hosting screen's connector: one line that sets up the drain and places its secret. */
+    ...(step.match(/bash deploy\/vercel-connect\.sh/g) ?? []),
     ...(step.match(/ssh -i \S+ \S+@\S+ "[^"]+"/g) ?? []),
   ];
   return [...new Set(found)];

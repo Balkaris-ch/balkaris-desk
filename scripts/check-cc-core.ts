@@ -24,7 +24,9 @@
  *       reports all of it; a failed job turns the light red by name; a key in
  *       what it threw is blanked before a browser sees it; a job the owner
  *       switched off cannot be run by a refresh, a run cannot be asked for
- *       again straight away, and a ready() that throws is "not ready";
+ *       again straight away, and a ready() that throws is "not ready"; the
+ *       inbox's "why" is the line of an error that says why (not a harmless
+ *       first line), with the whole text kept and both scrubbed;
  *    8. the activity feed and the search box answer, and an enquiry is never
  *       sent to somebody who may not read enquiries;
  *    9. every error under /api is `{ error }`: never a page, never a stack;
@@ -554,6 +556,23 @@ check(
 );
 scheduler.setEnabled("check-leaky", false);
 
+/* The inbox's "why": the line that says why, not the first one. Specimen texts in the shapes the local model and the runner produce. */
+const { whyLine } = await import("../src/cc/system.ts");
+const loadWarning = "specimen-server stopped: exit status 1: specimen_init: failed to set up: SpecimenModel requires ctx_other to be set (this warning is normal during memory fitting)";
+let why = whyLine(`Specimen 500: ${JSON.stringify({ error: `${loadWarning}\nspecimen cause: the model file is missing` })}`);
+check("why: the last line of a source's JSON body, labelled with the source, not its harmless first line", why.line === "Specimen 500: specimen cause: the model file is missing", why.line);
+check("why: the whole text is kept beside it", why.full.includes("ctx_other") && why.full.includes("the model file is missing"));
+why = whyLine(`Specimen 500: {"error":"${loadWarning}\\nspecimen cause: cut short here`);
+check("why: a body cut short is still opened on its escaped line breaks", why.line === "Specimen 500: specimen cause: cut short here", why.line);
+why = whyLine("Error: specimen write failed\n    at write (file:///specimen/run.js:10:5)\n    at async main (file:///specimen/run.js:40:3)\n(Use `node --trace-warnings ...` to show where the warning was created)");
+check("why: stack frames and Node's hint are noise; the message is the line", why.line === "Error: specimen write failed", why.line);
+why = whyLine("ERROR: [Specimen] abc123: this specimen content is not available");
+check("why: a one-line error stays as it is", why.line === "ERROR: [Specimen] abc123: this specimen content is not available" && why.full === why.line, why.line);
+why = whyLine(`${loadWarning}\n`);
+check("why: all noise still says something (the last line), never an empty cell", why.line === loadWarning, why.line);
+why = whyLine("specimen fetch failed\nGET https://api.example.test/v1?key=specimen-key-value answered 403");
+check("why: the line and the whole text both go through scrub", why.line.includes("key=[hidden]") && why.full.includes("key=[hidden]") && !why.full.includes("specimen-key-value"), why.line);
+
 console.log("\n8. activity and search");
 store.note("check-kind", "A specimen thing happened", { actor: "check" });
 store.note("other-kind", "Another specimen thing happened");
@@ -583,7 +602,7 @@ registerSearch(
 const search = async (q: string, who: Person) => ((await ask(`/api/v1/search?q=${encodeURIComponent(q)}`, { who })).json ?? []) as any[];
 let hits = await search("site health", member);
 check("a section is found by its name", hits[0]?.kind === "section" && hits[0].title === "Site Health" && typeof hits[0].href === "string", JSON.stringify(hits[0] ?? null));
-check("all fourteen sections can be found", (await Promise.all(SECTIONS.map(async (s) => (await search(s.title, member)).some((h) => h.kind === "section" && h.href === s.href)))).every(Boolean) && SECTIONS.length === 14);
+check("all fifteen sections can be found", (await Promise.all(SECTIONS.map(async (s) => (await search(s.title, member)).some((h) => h.kind === "section" && h.href === s.href)))).every(Boolean) && SECTIONS.length === 15);
 hits = await search("specimen", member);
 check("an article is found by its title, and leads to the article", hits.some((h) => h.kind === "insight" && h.title === "Specimen article of the check" && h.href === "/insights/1"));
 check("a link with no article yet is found too, and leads to the link", hits.some((h) => h.kind === "insight" && h.title === "Specimen link still waiting" && h.href === "/insights/link/2"));
@@ -604,7 +623,7 @@ a = await ask("/api", { who: member });
 check("and at /api itself", isError(a, 404), show(a));
 const mounted = await Promise.all(SECTIONS.map(async (s) => ({ name: s.name, a: await ask(`/api/v1/${s.name}/check-no-such-path`, { who: owner }) })));
 const notJson = mounted.filter((m) => !isJson(m.a) || m.a.type.startsWith("text/html"));
-check("each of the fourteen screens answers under its name, in JSON", notJson.length === 0, notJson.length ? notJson.map((m) => `${m.name}: ${show(m.a)}`).join("; ") : mounted.map((m) => m.a.status).join(" "));
+check("each of the fifteen screens answers under its name, in JSON", notJson.length === 0, notJson.length ? notJson.map((m) => `${m.name}: ${show(m.a)}`).join("; ") : mounted.map((m) => m.a.status).join(" "));
 if (!planted) check("the test routes could be planted on a screen's router", false, said.find((s) => s.startsWith("could not plant")) ?? "");
 else {
   a = await ask("/api/v1/experiments/check-throws", { who: member });

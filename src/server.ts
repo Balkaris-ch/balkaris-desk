@@ -32,6 +32,9 @@ import type { Vars } from "./cc/access.ts";
  *                  header Telegram also sends. Nothing else is accepted.
  *   /runner/*      the workstation. Bearer DESK_RUNNER_SECRET, compared in
  *                  constant time.
+ *   /drain/vercel  Vercel's log drain, that one address. An HMAC-SHA1 of the
+ *                  body with VERCEL_DRAIN_SECRET, compared in constant time
+ *                  (src/cc/vercel/drain.ts, mounted by src/cc/index.ts).
  *   /api/*         the interface (web/, the Next.js app that draws the
  *                  command center) asking for JSON. A signed-in person who is
  *                  not revoked; and for anything that changes something, a
@@ -247,7 +250,9 @@ function fromOurPages(c: { req: { header: (name: string) => string | undefined }
  */
 app.use("*", async (c, next) => {
   const p = c.req.path;
-  if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p.startsWith("/auth/")) return next();
+  /* /drain/vercel: Vercel's log drain (src/cc/vercel/drain.ts), proven by its signature like /tg/ by its secret.
+     Exactly that address: anything mounted under /drain later is behind sign-in until it is named here. */
+  if (p === "/health" || p.startsWith("/runner/") || p.startsWith("/tg/") || p === "/drain/vercel" || p.startsWith("/auth/")) return next();
 
   const api = isApi(p);
 

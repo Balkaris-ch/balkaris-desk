@@ -256,7 +256,8 @@ export interface Certificate {
   problem: string | null;
 }
 
-function certificateOf(host: string): Promise<Certificate> {
+/** Exported for the engine's hourly check (src/cc/vercel/engine.ts), which reads operation.balkaris.ch's the same way. */
+export function certificateOf(host: string): Promise<Certificate> {
   return new Promise((resolve) => {
     const blank: Certificate = { host, subject: null, issuer: null, validFrom: null, validTo: null, daysLeft: null, trusted: false, problem: null };
     /* rejectUnauthorized is off ON PURPOSE: an expired certificate is exactly

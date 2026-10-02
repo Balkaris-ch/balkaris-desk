@@ -23,7 +23,8 @@ desk.balkaris.ch {
 		-Server
 	}
 
-	@server path /api/* /auth/* /logout /tg/* /runner/* /health /cover/* /console /console/* /draft/* /link/* /people /people/* /match
+	# /drain/vercel is Vercel's log drain: exactly that address, the only public one under /drain.
+	@server path /api/* /auth/* /logout /tg/* /runner/* /drain/vercel /health /cover/* /console /console/* /draft/* /link/* /people /people/* /match
 	handle @server {
 		# The old console has no inline scripts, so 'self' is real there.
 		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; frame-ancestors 'none'; base-uri 'self'"
