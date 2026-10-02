@@ -292,6 +292,9 @@ const SOURCES: Record<SourceId, string> = {
   engine: "Engine",
   desk: "Desk",
   runner: "Workstation",
+  "vercel-drain": "Vercel request records",
+  "vercel-api": "Vercel API",
+  "vercel-status": "Vercel status page",
   none: "No source",
 };
 
