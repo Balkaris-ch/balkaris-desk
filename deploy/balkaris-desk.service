@@ -26,7 +26,9 @@ Environment=DESK_DB=/opt/balkaris-desk/desk.db
 # The box has 3.7 GB and the engine is the tenant that matters. A jsdom parse
 # of a heavy page is the one thing here that eats memory, so this is set above
 # what the queue and the HTML need and well below what the engine leaves.
-MemoryMax=768M
+# 768M until 2 October 2026: the first crawl on the box (103 pages) peaked at
+# 707 MB, too close to it; the box had 2.1 GB available that day.
+MemoryMax=1G
 # V8 sizes its heap from the machine's memory, not from MemoryMax, so without
 # this a long crawl lets the heap grow until systemd kills the whole desk
 # (Telegram, the runner door, publishing) instead of V8 collecting sooner.
