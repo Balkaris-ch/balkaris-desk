@@ -547,7 +547,7 @@
 .dk-insights-why {
   display: -webkit-box;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
   min-width: calc(var(--x56) * 4);
   overflow: hidden;
   overflow-wrap: anywhere;

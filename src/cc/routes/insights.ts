@@ -13,6 +13,7 @@ import { gsc } from "../search/index.ts";
 import { crawledAt, inventory, LIMITS, type PageRow } from "../site/index.ts";
 import { specimenAllowed } from "../specimen.ts";
 import { whyLine } from "../system.ts";
+import { explain } from "../../why.ts";
 import { ok, off, reading, waiting } from "../store.ts";
 import type { DayPoint, EarlySignals, Range, Reading, Stat } from "../../../web/src/contract/common.ts";
 import type {
@@ -325,7 +326,12 @@ function buildRows(desk: Desk, crawl: Crawl | null): InsightRow[] {
     const when = status === "published" ? desk.firstListed.get(l.id) : status === "review" ? desk.firstLive.get(l.id) : undefined;
     /* Why it is stuck or unread: the line that says so (not the first, which for the local model is a harmless load warning), and the whole text beside it. */
     const raw = status === "stuck" ? (job?.error ?? "The workstation gave it up after three attempts.") : l.draft_id === null && l.state === "failed" ? (l.error ?? "It could not be read.") : null;
-    const why = raw === null ? null : whyLine(raw);
+    /* The row says it the way Telegram does (src/why.ts): why, and what to do. The raw error stays in problemFull for the hover. */
+    const why = raw === null ? null : (() => { const w = explain(raw); return { line: `${w.reason} ${w.next}`, full: `${w.reason}
+
+What to do: ${w.next}
+
+What the workstation said: ${whyLine(raw).full}` }; })();
     rows.push({
       key: `l${l.id}`,
       href: l.draft_id !== null ? `/insights/${l.draft_id}` : `/insights/link/${l.id}`,

@@ -15,6 +15,7 @@ import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
 import { coverPath, saveClip, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, devUser, issue, whoIs } from "./session.ts";
+import { explainForChat } from "./why.ts";
 import type { Vars } from "./cc/access.ts";
 
 /**
@@ -868,9 +869,9 @@ runner.post("/result/:id", async (c) => {
        message that will not send costs it nothing. */
     if (done && (kind.kind === "write" || kind.kind === "ingest")) {
       const l = db.prepare("SELECT from_chat FROM links WHERE id = ?").get(job.link_id) as { from_chat: number | null } | undefined;
-      const why = (body.error ?? "").split(/\r?\n/)[0].slice(0, 300);
+      /* Why in plain words and what to do (src/why.ts), the same text the Insights row shows. */
       if (l?.from_chat) {
-        void send(l.from_chat, `That link did not become an article${why ? `: ${esc(why)}` : "."}\n\nIt is on the desk, where it can be tried again.`).catch(() => {});
+        void send(l.from_chat, `${esc(explainForChat(body.error))}\n\nIt is on the desk under Insights, where it can be tried again.`).catch(() => {});
       }
     }
     return c.json({ ok: true });
