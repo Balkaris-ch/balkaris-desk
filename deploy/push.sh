@@ -81,7 +81,27 @@ tar -xzf /tmp/desk.tar.gz -C "$DIR"
 rm -f /tmp/desk.tar.gz
 
 cd "$DIR"
-npm ci --omit=dev --silent
+# `npm ci` empties node_modules before it installs, and ffmpeg-static fetches
+# its binary from GitHub while it does. On 3 October 2026 GitHub answered 503,
+# twice: the install died without a word (--silent) and left the box with no
+# modules under a server that was still running the old code, one restart away
+# from being down. So: install only when the lock file changed, try three
+# times, and say why it failed.
+LOCK=$(sha256sum package-lock.json | cut -d' ' -f1)
+if [ "$(cat .lock-installed 2>/dev/null)" != "$LOCK" ] || [ ! -d node_modules/hono ]; then
+  installed=0
+  for try in 1 2 3; do
+    if npm ci --omit=dev --silent 2>/tmp/desk-npm.err; then installed=1; break; fi
+    echo "  npm ci failed (try $try): $(grep -m1 -E 'npm error (Error|code)' /tmp/desk-npm.err || tail -n 1 /tmp/desk-npm.err)"
+    sleep 10
+  done
+  if [ "$installed" != 1 ]; then
+    echo "✗ npm ci failed three times. node_modules is incomplete: the server still running is the OLD one and will not start again until 'npm ci --omit=dev' passes in $DIR"
+    exit 1
+  fi
+  echo "$LOCK" > .lock-installed
+fi
+rm -f /tmp/desk-npm.err
 
 # The interface: each release in its own folder, the live one a symlink, so
 # the swap is one rename and the previous build is still there to go back to.
