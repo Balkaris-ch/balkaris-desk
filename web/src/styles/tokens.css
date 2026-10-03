@@ -164,9 +164,10 @@
   --hover: rgba(255, 255, 255, 0.035);   /* laid over a row under the pointer */
   --shine: rgba(255, 255, 255, 0.05);    /* the lit edge of a skeleton's sweep */
 
-  /* the active sidebar row is lit from the left, as on the boards */
-  --row-on: linear-gradient(90deg, #0f3320 0%, var(--green-3) 100%);
-  --tab-on: linear-gradient(180deg, #12492a 0%, #0c3320 100%);
+  /* the active sidebar row and the active tab: one flat accent, no gradient
+     (Fini, 3 October 2026: "make them flat, like accent color and that's it") */
+  --row-on: var(--green-3);
+  --tab-on: #0f3a23;
 
   /* order of what overlaps */
   --z-top: 20;
