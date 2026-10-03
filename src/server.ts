@@ -859,6 +859,20 @@ runner.post("/result/:id", async (c) => {
       const draft = (JSON.parse(kind.payload) as { draft?: number }).draft;
       if (draft) void autoPublish(draft, job.link_id);
     }
+
+    /* A link that will not become an article by itself: say so in the chat it
+       came from. The other kinds are extras somebody asked for on the desk,
+       where the failure is in front of them; this one was sent from Telegram
+       and nobody is looking (link 23, 3 October 2026: three tries, stuck, and
+       not a word to the person who sent it). Never the runner's problem: a
+       message that will not send costs it nothing. */
+    if (done && (kind.kind === "write" || kind.kind === "ingest")) {
+      const l = db.prepare("SELECT from_chat FROM links WHERE id = ?").get(job.link_id) as { from_chat: number | null } | undefined;
+      const why = (body.error ?? "").split(/\r?\n/)[0].slice(0, 300);
+      if (l?.from_chat) {
+        void send(l.from_chat, `That link did not become an article${why ? `: ${esc(why)}` : "."}\n\nIt is on the desk, where it can be tried again.`).catch(() => {});
+      }
+    }
     return c.json({ ok: true });
   }
 
