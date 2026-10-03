@@ -829,7 +829,8 @@ a.dk-team-sha:hover {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .dk-team-sub {
+  /* Not the checkbox row: its box stays beside its label (the enquiry right under Leads). */
+  .dk-team-sub:not(.dk-team-sub--check) {
     grid-template-columns: minmax(0, 1fr);
   }
 

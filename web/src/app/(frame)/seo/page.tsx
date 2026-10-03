@@ -5,6 +5,7 @@ import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { Grid } from "@/components/ui/Grid";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { AiSearch } from "@/components/seo/overview/AiSearch";
 import { Automations } from "@/components/seo/overview/Automations";
 import { Backlinks } from "@/components/seo/overview/Backlinks";
@@ -58,6 +59,8 @@ export default async function SeoOverviewPage({ searchParams }: { searchParams: 
 
   if (!answer.ok) {
     if (answer.kind === "signed-out") redirect("/auth/google");
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (answer.kind === "forbidden") return <SeoRefused message={answer.message} />;
     return (
       <Card title="Overview" icon="grid">
         <Empty icon="alert" title="The Overview could not be read">

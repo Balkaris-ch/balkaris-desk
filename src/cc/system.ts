@@ -1,4 +1,5 @@
 import { lastBeat } from "../db.ts";
+import { noticeFor, readsFeed, seesJob, type Holder } from "../grants.ts";
 import { status as jobStatus } from "./scheduler.ts";
 import { checks as registeredChecks, sources, type Check } from "./sources.ts";
 import { activity } from "./store.ts";
@@ -146,24 +147,56 @@ function runner(): Check {
     : { name: "Workstation", ok: true, detail: `Asleep: it last asked for work ${ago(at)}. Shared links wait in the queue until it wakes.` };
 }
 
-/** One check per scheduled job that has something to say: see the note above for which do not. */
-function jobs(): Check[] {
+/**
+ * One check per scheduled job that has something to say: see the note above
+ * for which do not. The check and whether it holds are everybody's, since the
+ * light is; what the run said is given only to somebody who sees an area the
+ * job feeds (src/grants.ts `seesJob`), and anybody else reads that it
+ * finished or failed, and when.
+ */
+function jobs(who?: Holder): Check[] {
   const out: Check[] = [];
   for (const j of jobStatus()) {
     if (!j.ready || !j.enabled || j.lastOk === null) continue;
     const when = j.lastEnd ? ` (${ago(Date.parse(j.lastEnd))})` : "";
+    const told = !who || seesJob(who, j.name);
     out.push(
       j.lastOk
-        ? { name: j.title, ok: true, detail: `${j.lastNote ?? "The last run finished"}${when}` }
-        : { name: j.title, ok: false, detail: `The last run failed${when}: ${j.lastNote ?? "no reason was given"}` },
+        ? { name: j.title, ok: true, detail: `${told ? (j.lastNote ?? "The last run finished") : "The last run finished"}${when}` }
+        : { name: j.title, ok: false, detail: told ? `The last run failed${when}: ${j.lastNote ?? "no reason was given"}` : `The last run failed${when}` },
     );
   }
   return out;
 }
 
-/** What `GET /api/v1/system` answers. Cheap: it reads the database and asks nothing outside. */
-export function systemStatus(): SystemStatus {
-  const vouched = [...registeredChecks(), ...jobs()].map((c) => ({ ...c, detail: scrub(c.detail) }));
+/** How far back the bell looks for rows a person may be shown, when they may not read the whole feed. */
+const BELL_LOOKS_BACK = 100;
+const BELL_SHOWS = 10;
+
+/**
+ * The bell's rows for one person. Somebody who reads the feed (the Command
+ * Center's, src/grants.ts) gets its newest ten, as everybody did. Anybody
+ * else gets only the rows that lead to a page they may open, picked from the
+ * newest hundred BEFORE cutting to ten, so their bell is not emptied by ten
+ * newer rows about parts of the desk they were not given. Always a list,
+ * possibly empty: the frame throws the whole status away without one.
+ */
+function notices(who?: Holder): ActivityItem[] {
+  if (!who || readsFeed(who)) return activity(BELL_SHOWS);
+  return activity(BELL_LOOKS_BACK)
+    .filter((a) => noticeFor(who, a.href))
+    .slice(0, BELL_SHOWS);
+}
+
+/**
+ * What `GET /api/v1/system` answers. Cheap: it reads the database and asks
+ * nothing outside. `who` is the person asking, for the two parts that depend
+ * on them (the bell, and what each job's last run said); without one
+ * (Settings, which is given whole) nothing is left out. The light, its line
+ * and the sources are the same for everybody.
+ */
+export function systemStatus(who?: Holder): SystemStatus {
+  const vouched = [...registeredChecks(), ...jobs(who)].map((c) => ({ ...c, detail: scrub(c.detail) }));
   const listed = sources().map((s) => (s.error ? { ...s, error: scrub(s.error) } : s));
 
   const failing = [
@@ -188,6 +221,6 @@ export function systemStatus(): SystemStatus {
     line,
     checks: [...vouched, runner()],
     sources: listed,
-    notices: activity(10).map(scrubItem),
+    notices: notices(who).map(scrubItem),
   };
 }

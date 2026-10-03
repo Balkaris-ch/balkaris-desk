@@ -7,9 +7,10 @@ import type { AuditRun } from "@/contract/seo/common";
 import { RANGES, rangeLabel } from "@/lib/format";
 import { Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/Select";
+import { mayOpen, type PageAccess } from "@/components/shell/nav";
 import { AuditButton, type RunningStep } from "./AuditButton";
 import { SeoTabs } from "./SeoTabs";
-import { seoPlace } from "./pages";
+import { SEO_PAGES, seoPlace } from "./pages";
 import "@/components/shell/page-head.css";
 import "./seo-nav.css";
 
@@ -22,6 +23,8 @@ export interface SeoFrameProps {
   audit: AuditRun | null;
   /** On a desk with no record of the audit: the audit's jobs already running when the page was drawn. */
   running: RunningStep[];
+  /** What the person may open, page by page (`Me.access.pages`); absent means everything. */
+  pages?: PageAccess;
   children: ReactNode;
 }
 
@@ -38,10 +41,14 @@ export interface SeoFrameProps {
  * The earlier SEO screen's addresses (/seo/legacy, /seo/report, /seo/list/…)
  * are none of the eleven pages: they keep their own heads and get nothing
  * from here.
+ *
+ * Neither does somebody the owner gave no SEO page at all: the page's own
+ * refusal is then all there is to draw, with no head, period or audit button
+ * over it. With some of the pages, the head stays and the strip lists those.
  */
-export function SeoFrame({ opportunities, audit, running, children }: SeoFrameProps) {
+export function SeoFrame({ opportunities, audit, running, pages, children }: SeoFrameProps) {
   const place = seoPlace(usePathname());
-  if (!place) return <>{children}</>;
+  if (!place || !SEO_PAGES.some((p) => mayOpen(pages, p.href))) return <>{children}</>;
   const { head } = place;
 
   return (
@@ -72,7 +79,7 @@ export function SeoFrame({ opportunities, audit, running, children }: SeoFramePr
         </div>
       </header>
       <Suspense fallback={<div className="dk-seo-nav-tabs-space" />}>
-        <SeoTabs opportunities={opportunities} />
+        <SeoTabs opportunities={opportunities} pages={pages} />
       </Suspense>
       {children}
     </>

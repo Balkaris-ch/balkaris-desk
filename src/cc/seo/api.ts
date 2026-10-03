@@ -10,7 +10,7 @@ import type { NewAiCheck } from "../../../web/src/contract/seo/ai-search.ts";
 import type { AuditAnswer, AuditRun, ImportAnswer, OpportunityAnswer, OwnerTaskAnswer, SeoNav } from "../../../web/src/contract/seo/common.ts";
 import { addCheck, checkRefusal, IMPORT_KINDS, importManual, type ImportKind } from "./aisearch.ts";
 import { auditRun, startAudit } from "./audit.ts";
-import { markSubmitted } from "./engine.ts";
+import { markSubmitted, opportunityDb } from "./engine.ts";
 import { importAll } from "./import.ts";
 import { clusters, setClusterPage } from "./keywords.ts";
 import { markOwnerTask, ownerTask } from "./owner.ts";
@@ -84,7 +84,11 @@ engineApi.post("/indexing/requested", async (c) => {
   const b = await body(c);
   if (typeof b.path !== "string" || !b.path.startsWith("/") || b.path.length > 300) bad("path must be one of the site's addresses, starting with /.");
   if (typeof b.submitted !== "boolean") bad("submitted must be true or false.");
+  /* The mark as it stood, read before the change: taking back a mark that was never set changes nothing,
+     and taking one back is not "sent to Google" (the owner's record of the team, src/presence.ts). */
+  const marked = opportunityDb(`not-indexed:${b.path}`)?.state === "in-progress";
   const opportunity = markSubmitted(b.path as string, b.submitted as boolean, me(c));
+  if (!b.submitted) c.set("did", marked ? { text: `Took back the Request-indexing mark: ${b.path}`, href: "/seo/technical#indexing" } : null);
   return c.json<OpportunityAnswer>({ ok: true, opportunity });
 });
 

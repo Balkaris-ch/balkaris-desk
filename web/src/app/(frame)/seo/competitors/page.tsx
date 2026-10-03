@@ -3,6 +3,7 @@ import { api, ask } from "@/lib/api";
 import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { CompDetail } from "@/components/seo/competitors/CompDetail";
 import { CompList } from "@/components/seo/competitors/CompList";
 import { CompTiles } from "@/components/seo/competitors/CompTiles";
@@ -45,6 +46,8 @@ export default async function SeoCompetitorsPage({ searchParams }: { searchParam
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoCompetitorsPayload>("/api/v1/seo/competitors", params);
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Competitors" icon="users">
         <Empty icon="alert" title="The desk did not answer for this page">

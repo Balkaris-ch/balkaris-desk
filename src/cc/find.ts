@@ -1,5 +1,5 @@
 import { db } from "../db.ts";
-import { pageLevel, pageOfHref } from "../grants.ts";
+import { earlierSeo, pageLevel, pageOfHref } from "../grants.ts";
 import type { Person } from "../people.ts";
 import type { SearchHit } from "../../web/src/contract/common.ts";
 
@@ -14,7 +14,9 @@ import type { SearchHit } from "../../web/src/contract/common.ts";
  *
  * ACCESS. A hit that leads into a part of the desk the owner did not give
  * this person (src/grants.ts) is never sent: sections, articles and every
- * registered searcher's hits alike, by the address each one leads to.
+ * registered searcher's hits alike, by the address each one leads to. A
+ * keyword hit leads to the earlier SEO screen, which is several SEO pages in
+ * one, so it is sent only to somebody with no SEO page switched off.
  *
  * ENQUIRIES. A hit of kind "lead" carries somebody's name. Whatever a
  * registered searcher returns, a person who may not read enquiries
@@ -230,8 +232,13 @@ export async function find(query: string, who: Person, limit = 20): Promise<Sear
     const page = pageOfHref(h.href);
     return !page || pageLevel(who, page.key) !== "none";
   };
+  /* A keyword leads to /seo?open=, which is the earlier SEO screen: one answer with several SEO pages'
+     figures, open only to somebody with no SEO page switched off (src/grants.ts `earlierSeo`). The
+     hit is one of Google's queries with its figures, so it follows the same rule as the screen. */
+  const keywords = earlierSeo(who) !== "none";
   return hits
     .filter((h) => h.kind !== "lead" || who.seesLeads)
+    .filter((h) => h.kind !== "keyword" || keywords)
     .filter(mayOpen)
     .filter((h) => !seen.has(`${h.kind} ${h.href}`) && !!seen.add(`${h.kind} ${h.href}`))
     .slice(0, limit);

@@ -841,6 +841,8 @@ routes.post("/act", async (c) => {
       results.push({ id, ok: false, line: said(err) });
     }
   }
+  /* Every row refused: the answer is still a list of why, and nothing was done to record (src/presence.ts). */
+  if (!done.length) c.set("did", null);
   return c.json<OpportunitiesActed>({ ok: true, results, opportunities: done });
 });
 
@@ -885,6 +887,7 @@ routes.post("/state", async (c) => {
       results.push({ id, ok: false, line: said(err) });
     }
   }
+  if (!done.length) c.set("did", null);
   return c.json<OpportunitiesActed>({ ok: true, results, opportunities: done });
 });
 

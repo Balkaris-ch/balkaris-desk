@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { JobListed } from "@/contract/common";
 import type { AuditRun, SeoNav } from "@/contract/seo/common";
-import { ask, type Answer } from "@/lib/api";
+import { ask, askMe, type Answer } from "@/lib/api";
 import { isAuditJob } from "@/components/seo/nav/pages";
 import { SeoFrame } from "@/components/seo/nav/SeoFrame";
 import type { RunningStep } from "@/components/seo/nav/AuditButton";
@@ -19,12 +19,16 @@ import type { RunningStep } from "@/components/seo/nav/AuditButton";
  * the middle of one follows it. Only a desk without that record is asked
  * which of the audit's jobs are running instead (GET /api/v1/jobs). Each page
  * asks for its own data itself, in parallel with this.
+ *
+ * The frame is also told which pages the person may open, so the tab strip
+ * lists only those, and somebody with no SEO page at all gets no SEO head.
  */
 export default async function SeoLayout({ children }: { children: ReactNode }) {
-  const [nav, audit] = await Promise.all([ask<SeoNav>("/api/v1/seo/nav"), ask<{ audit: AuditRun | null }>("/api/v1/seo/audit")]);
+  /* Who is looking is the frame's own question, answered once per request (lib/api.ts `askMe`): asking here costs nothing more. */
+  const [nav, audit, who] = await Promise.all([ask<SeoNav>("/api/v1/seo/nav"), ask<{ audit: AuditRun | null }>("/api/v1/seo/audit"), askMe()]);
   const running = !audit.ok && audit.kind === "missing" ? runningAudit(await ask<JobListed[]>("/api/v1/jobs")) : [];
   return (
-    <SeoFrame opportunities={openCount(nav)} audit={auditRunning(audit)} running={running}>
+    <SeoFrame opportunities={openCount(nav)} audit={auditRunning(audit)} running={running} pages={who.ok ? who.value.access?.pages : undefined}>
       {children}
     </SeoFrame>
   );

@@ -5,9 +5,9 @@ import { promisify } from "node:util";
 import { Hono, type Context } from "hono";
 import { db, queueState } from "../../db.ts";
 import { client as googleClient, DOMAIN } from "../../google.ts";
-import { byEmail, everyone, getPerson, link, OWNER_EMAIL, setAuthor, setEmail, setRevoked, setSeesLeads, type Person } from "../../people.ts";
+import { addressHeld, byEmail, everyone, getPerson, link, OWNER_EMAIL, setAuthor, setEmail, setRevoked, setSeesLeads, type Person } from "../../people.ts";
 import { SESSION_DAYS, SESSION_HANDOVER_DAYS } from "../../session.ts";
-import { me, requireOwner, toMe, type Vars } from "../access.ts";
+import { me, noteLeads, requireOwner, toMe, type Vars } from "../access.ts";
 import { cached, kept, note, off, ok, reading, waiting } from "../store.ts";
 import { scrub, systemStatus } from "../system.ts";
 import type { ApiError, Reading, SourceId, SourceStatus, Tone } from "../../../web/src/contract/common.ts";
@@ -130,6 +130,7 @@ function view(p: Person, looking: Person, seen = signIns()): SettingsPerson {
     seesLeads: p.seesLeads,
     leadsGranted: granted(p.telegram),
     revoked: p.revoked,
+    restricted: !!p.grants,
     knownBy: google && telegram ? "both" : telegram ? "telegram" : "google",
     /* When somebody last came in is the owner's to know, not the team's. */
     lastSignIn: looking.owner ? (last ?? null) : null,
@@ -738,18 +739,28 @@ routes.post("/people/:id", requireOwner, async (c) => {
     }
     /*
      * Google sign-in finds a person by address and nothing else (src/people.ts
-     * rememberGoogle): an address nobody carries any more makes a NEW row,
-     * switched on, with the studio byline and no enquiry right. So for a
-     * switched-off person, changing or removing the address would let them
-     * back in, and it is refused outright; adding one where there was none
-     * only closes a door. For somebody who signs in with Google it splits
-     * them in two, which is done only when the owner says they know.
+     * rememberGoogle): an address nobody carries any more makes a NEW person,
+     * switched on, with what a newcomer gets, the studio byline and no enquiry
+     * right. So for a switched-off person, and for one whose access the owner
+     * limited, changing or removing the address would be a way round that, and
+     * it is refused outright (`addressHeld`, the rule the old console's form
+     * asks too); adding one where there was none only closes a door. For
+     * somebody who signs in with Google it splits them in two, which is done
+     * only when the owner says they know.
      */
-    if (!same && p.revoked && p.email) {
+    const held = same ? null : addressHeld(p);
+    if (held === "off") {
       return refuse(
         c,
         409,
         "They are switched off, and Google sign-in finds a person by this address. Changing or removing it would let them back in as a new person the next time they sign in with it, so it stays as it is while they are switched off.",
+      );
+    }
+    if (held === "restricted") {
+      return refuse(
+        c,
+        409,
+        "Their access is limited, and Google sign-in finds a person by this address. Changing or removing it would let them in as a new person, with what a newcomer gets, the next time they sign in with it. Lift the restriction first (Team › Access & Roles), or leave the address as it is.",
       );
     }
     if (!same && p.email && findsByGoogle(p)) {
@@ -757,7 +768,7 @@ routes.post("/people/:id", requireOwner, async (c) => {
         return refuse(
           c,
           409,
-          `They sign in with Google as ${p.email}, and that address is how the desk finds them. Changing or removing it makes their next sign-in a new person, with the studio byline and no enquiry right. Tick "Detach their Google sign-in" to do it anyway.`,
+          `They sign in with Google as ${p.email}, and that address is how the desk finds them. Changing or removing it makes their next sign-in a new person, with what a newcomer gets (Team › Access & Roles), the studio byline and no enquiry right. Tick "Detach their Google sign-in" to do it anyway.`,
         );
       }
       detached = true;
@@ -785,7 +796,9 @@ routes.post("/people/:id", requireOwner, async (c) => {
   if (email !== undefined) {
     setEmail(p.telegram, email);
     said.push(email ? "The address for publishing was saved." : "The address was removed: they cannot publish until one is added.");
-    if (detached) said.push("Their Google sign-in is detached: the next time they sign in with the old address, they arrive as a new person.");
+    if (detached) {
+      said.push("Their Google sign-in is detached: the next time they sign in with the old address, they arrive as a new person, with what a newcomer gets (Team › Access & Roles), the studio byline and no enquiry right.");
+    }
     note("people", `${p.name}'s address for publishing was ${email ? (p.email ? "changed" : "added") : "removed"}${detached ? ", detaching their Google sign-in" : ""}`, {
       actor: who.name,
       href: "/settings",
@@ -797,14 +810,33 @@ routes.post("/people/:id", requireOwner, async (c) => {
     said.push(`The byline is now "${byline}".`);
     note("people", `${p.name}'s byline is now "${byline}"`, { actor: who.name, href: "/settings" });
   }
+  const now = () => getPerson(p.telegram) ?? p;
   if (sees !== undefined) {
     setSeesLeads(p.telegram, sees);
-    said.push(sees ? (p.revoked ? "May see enquiries, once they are switched on again." : "They may now see enquiries.") : "They no longer see enquiries.");
-    note("people", sees ? `${p.name} may now see enquiries` : `${p.name} no longer sees enquiries`, { actor: who.name, href: "/settings", tone: sees ? "warn" : "info" });
+    /* The right is stored here; whether it APPLIES also takes Leads (src/grants.ts) and being switched on.
+       The sentence says which, and the desk's feed is told only when it starts or stops applying. */
+    const applies = now().seesLeads;
+    said.push(
+      !sees
+        ? "They no longer see enquiries."
+        : p.revoked
+          ? "May see enquiries, once they are switched on again."
+          : applies
+            ? "They may now see enquiries."
+            : "The enquiry right is given. It takes effect once they also have Leads (Team › Access & Roles).",
+    );
+    noteLeads(p, p.seesLeads, applies, who, "/settings");
+    /* Given or taken without yet applying: no line in the feed, so the owner's record of the team says it here. */
+    if (applies === p.seesLeads) {
+      const also = email !== undefined || byline !== undefined ? `Changed ${p.name}'s details, and ` : "";
+      const what = sees ? `${also ? "gave them" : `Gave ${p.name}`} the enquiry right${p.revoked ? ", for when they are let in again" : ": it waits for Leads"}` : `${also ? "took the enquiry right away" : `Took the enquiry right from ${p.name}`}`;
+      c.set("did", { text: `${also}${what}`, href: "/settings" });
+    }
   }
 
-  const now = getPerson(p.telegram) ?? p;
-  return c.json<PersonAnswer>(answer(now, who, said.join(" ") || "Nothing had changed."));
+  /* The form sends every field with each Save: one that changed none of them is not a change to record (src/presence.ts). */
+  if (!said.length) c.set("did", null);
+  return c.json<PersonAnswer>(answer(now(), who, said.join(" ") || "Nothing had changed."));
 });
 
 /* Switched off: they can still sign in, and the gate answers 403 to everything else. */
@@ -816,10 +848,16 @@ routes.post("/people/:id/access", requireOwner, async (c) => {
   if (typeof body?.on !== "boolean") return refuse(c, 400, 'Send { "on": true } or { "on": false }.');
   if (p.owner || p.telegram === who.telegram) return refuse(c, 409, "The owner cannot be switched off.");
 
-  if (p.revoked === !body.on) return c.json<PersonAnswer>(answer(p, who, body.on ? "They were already let in." : "They were already switched off."));
+  if (p.revoked === !body.on) {
+    c.set("did", null);
+    return c.json<PersonAnswer>(answer(p, who, body.on ? "They were already let in." : "They were already switched off."));
+  }
   setRevoked(p.telegram, !body.on);
   note("people", body.on ? `${p.name} was let in again` : `${p.name} was switched off`, { actor: who.name, href: "/settings", tone: body.on ? "info" : "warn" });
-  return c.json<PersonAnswer>(answer(getPerson(p.telegram) ?? p, who, body.on ? "They are let in again." : "They are switched off: every page and the API now refuse them."));
+  const now = getPerson(p.telegram) ?? p;
+  /* An enquiry right they hold stops applying with the switch, and starts again with it: said when it does. */
+  noteLeads(p, p.seesLeads, now.seesLeads, who, "/settings");
+  return c.json<PersonAnswer>(answer(now, who, body.on ? "They are let in again." : "They are switched off: every page and the API now refuse them."));
 });
 
 /**

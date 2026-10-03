@@ -125,11 +125,14 @@ export function SitePanel({ p, back }: { p: ArticlePayload; back: (done: string)
       ) : null}
 
       <div className="dk-article-acts">
-        {!p.offers.canPublish ? (
+        {/* The true reason (`offers.why`): an email would not help somebody whose Insights is read-only, and the people page refuses them. */}
+        {p.offers.canPublish ? null : p.offers.why === "access" ? (
+          <p className="dk-article-flag">Insights is read-only for your account, so you cannot publish or change this article. The owner changes that under Team › Access &amp; Roles.</p>
+        ) : (
           <p className="dk-article-flag">
             Add your Vercel email on the <Go href="/people">people page</Go> before you can publish. The commit goes out under your name, and Vercel refuses it otherwise.
           </p>
-        ) : null}
+        )}
         {p.offers.site.map((a) => {
           const x = siteAction(a, s.state, s.url);
           return <ActionForm key={a} post={`/draft/${p.draftId}/${a}`} back={back(a)} label={x.label} variant={x.variant} explain={x.explain} confirm={x.confirm} />;
@@ -429,42 +432,45 @@ export function VideoPanel({ p, back }: { p: ArticlePayload; back: (done: string
           ["Clip job", v.clipJob ? <JobState key="cj" job={v.clipJob} /> : null],
         ]}
       />
-      <div className="dk-article-acts">
-        <ActionForm
-          post={`/draft/${p.draftId}/attach`}
-          back={back("attach")}
-          label={v.attached ? "Just the text, no video" : "Attach the video"}
-          explain={`${v.attached ? "The article reads as prose; the video is credited but not shown." : "A silent excerpt of the video plays in the article."}${later}`}
-          confirm={
-            live
-              ? {
-                  title: v.attached ? "Take the video out of the live article?" : "Put the video in the live article?",
-                  body: p.offers.canPublish ? (
-                    <p>The desk changes the setting and republishes the article under your name, so the live page changes once the site has rebuilt, in about two minutes.</p>
-                  ) : (
-                    <p>The setting changes on the desk. Your account has no email, so the article is not republished: the live page keeps the old setting until somebody who can publish pushes it.</p>
-                  ),
-                  yes: v.attached ? "Just the text" : "Attach the video",
-                }
-              : null
-          }
-        />
-        <ActionForm
-          post={`/draft/${p.draftId}/clip`}
-          back={back("clip")}
-          label="Cut the silent clip again"
-          explain={`The workstation cuts the excerpt from the video again. It never touches the words.${later}`}
-          confirm={
-            live
-              ? {
-                  title: "Cut the silent clip again?",
-                  body: <p>The workstation cuts a new excerpt. Because the article is published, the desk pushes the new clip to the site by itself as soon as it is cut.</p>,
-                  yes: "Cut it again",
-                }
-              : null
-          }
-        />
-      </div>
+      {/* Both forms change the article, which the gate takes only from somebody with edit on Insights: anybody else reads the facts above and is offered nothing it would refuse. */}
+      {p.offers.edit ? (
+        <div className="dk-article-acts">
+          <ActionForm
+            post={`/draft/${p.draftId}/attach`}
+            back={back("attach")}
+            label={v.attached ? "Just the text, no video" : "Attach the video"}
+            explain={`${v.attached ? "The article reads as prose; the video is credited but not shown." : "A silent excerpt of the video plays in the article."}${later}`}
+            confirm={
+              live
+                ? {
+                    title: v.attached ? "Take the video out of the live article?" : "Put the video in the live article?",
+                    body: p.offers.canPublish ? (
+                      <p>The desk changes the setting and republishes the article under your name, so the live page changes once the site has rebuilt, in about two minutes.</p>
+                    ) : (
+                      <p>The setting changes on the desk. Your account has no email, so the article is not republished: the live page keeps the old setting until somebody who can publish pushes it.</p>
+                    ),
+                    yes: v.attached ? "Just the text" : "Attach the video",
+                  }
+                : null
+            }
+          />
+          <ActionForm
+            post={`/draft/${p.draftId}/clip`}
+            back={back("clip")}
+            label="Cut the silent clip again"
+            explain={`The workstation cuts the excerpt from the video again. It never touches the words.${later}`}
+            confirm={
+              live
+                ? {
+                    title: "Cut the silent clip again?",
+                    body: <p>The workstation cuts a new excerpt. Because the article is published, the desk pushes the new clip to the site by itself as soon as it is cut.</p>,
+                    yes: "Cut it again",
+                  }
+                : null
+            }
+          />
+        </div>
+      ) : null}
     </Card>
   );
 }

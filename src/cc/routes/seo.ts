@@ -895,6 +895,13 @@ const firstLine = (e: unknown): string => (e instanceof Error ? e.message : Stri
 const carried = new WeakMap<Request, Person>();
 
 /**
+ * And the other way: what a page's route said it did (`did`, src/cc/access.ts). The page's router runs
+ * in a context of its own, so the gate, which writes the owner's record of the team from the original
+ * request's, would never see it. Kept by the handed-on request, and put on the original once it answered.
+ */
+const reported = new WeakMap<Request, { text: string; href?: string } | null>();
+
+/**
  * Load a page's router once. Null while its file does not exist (asked again
  * next time). Exported so the check script can prove a broken page is survived.
  */
@@ -912,6 +919,8 @@ export function loadPage(name: string, file: string = pageFile(name)): Promise<P
         const who = carried.get(c.req.raw);
         if (who) c.set("who", who);
         await next();
+        const did = c.get("did");
+        if (did !== undefined) reported.set(c.req.raw, did);
       });
       app.route("/", mod.routes as Hono<Vars>);
       app.onError(apiError);
@@ -951,7 +960,9 @@ async function toPage(name: string, c: Context<Vars>): Promise<Response> {
   });
   const who = c.get("who");
   if (who) carried.set(req, who);
-  return got.app.fetch(req, c.env);
+  const res = await got.app.fetch(req, c.env);
+  if (reported.has(req)) c.set("did", reported.get(req));
+  return res;
 }
 
 for (const name of SEO_PAGES) {

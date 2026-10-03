@@ -4,7 +4,8 @@ import { me, type Vars } from "../access.ts";
 import { db, lastBeat } from "../../db.ts";
 import { serviceName, TOPICS } from "../../catalogue.ts";
 import { CLOSING_JOBS, FORMATS, isFormat, template, type ClosingJob, type TemplateId } from "../../templates.ts";
-import { getPerson } from "../../people.ts";
+import { areaLevel } from "../../grants.ts";
+import { getPerson, publishBlock } from "../../people.ts";
 import { clipFacts, clipPath, hasClip, hasCover } from "../../covers.ts";
 import { watchFrom } from "../../watch.ts";
 import { shownTitle } from "../operator/packs.ts";
@@ -358,6 +359,12 @@ function said(e: EventRow): Omit<ActivityItem, "id" | "at" | "kind"> {
       return { tone: "good", text: "Published by itself, as soon as the cover was drawn", detail: sha ? `commit ${sha}` : undefined, actor: by };
     case "auto.nobody":
       return { tone: "warn", text: "Written, with nobody to publish it as: no one has an email on the desk" };
+    case "auto.held":
+      return {
+        tone: "warn",
+        text: "Written, and not published by itself: it waits for somebody who may publish",
+        detail: d?.sharer ? `${str(d.sharer)}, who shared it, does not have edit on Insights` : undefined,
+      };
     case "auto.failed":
       return { tone: "bad", text: "Written, and the automatic publish did not go out", detail: why || undefined };
     case "publish.pushed": {
@@ -627,12 +634,17 @@ routes.get("/:id", async (c) => {
   /* The old page's own conditions (src/console.ts draftPage). `onSite` is
      its three states: a taken-down article is a draft again there. */
   const onSite = stateOf(d.state);
+  /* Every action here is a change in Insights, which the gate takes only from somebody with edit
+     there: nothing is offered that it would refuse, and `why` is the true reason they cannot publish. */
+  const edit = areaLevel(who, "insights") === "edit";
   const offers: ArticleOffers = {
+    edit,
     canPublish: who.canPublish,
+    why: publishBlock(who),
     site: !who.canPublish ? [] : onSite === "draft" ? ["publish"] : onSite === "unlisted" ? ["list", "takedown"] : ["unlist", "takedown"],
-    redraw: Boolean(d.cover_alt),
+    redraw: edit && Boolean(d.cover_alt),
     video: l.kind === "video",
-    remove: onSite === "draft",
+    remove: edit && onSite === "draft",
   };
 
   const [repo, traffic, meta] = await Promise.all([repoOf(d.slug), trafficOf(d.slug, where, range), metaOf(d, post, where.state)]);
@@ -719,8 +731,9 @@ routes.get("/link/:id", (c) => {
     history: historyOf(l.id),
     /* The old link page always offers it, and the old list only ever leads
        there for a link with no draft. Offered here on that same condition:
-       on a link that has an article, "try again" would write a second one. */
-    offers: { retry: !newest },
+       on a link that has an article, "try again" would write a second one.
+       And only to somebody with edit on Insights, from whom the gate takes it. */
+    offers: { retry: !newest && areaLevel(me(c), "insights") === "edit" },
   };
   return c.json(payload);
 });

@@ -14,16 +14,17 @@ import {
   pageLevel,
   pageOfHref,
   roleOf,
+  sameGrants,
   seesAnything,
   setNewcomers,
   type Grants,
   type Level,
 } from "../../grants.ts";
-import { byEmail, everyone, getPerson, invite, OWNER_EMAIL, setGrants, setSeesLeads, withdraw, type Person } from "../../people.ts";
-import { beat, flushAll, now as presenceOf, zurichDay } from "../../presence.ts";
-import { me, requireOwner, type Vars } from "../access.ts";
+import { byEmail, everyone, getPerson, inPlaceOf, invite, OWNER_EMAIL, setGrants, setSeesLeads, withdraw, type Person } from "../../people.ts";
+import { beat, flushAll, now as presenceOf, pagesOf, zurichDays } from "../../presence.ts";
+import { me, noteLeads, requireOwner, type Vars } from "../access.ts";
 import { status } from "../scheduler.ts";
-import { note, ok, reading, waiting } from "../store.ts";
+import { ok, reading, waiting } from "../store.ts";
 import type { ApiError, DayPoint, Reading, Stat } from "../../../web/src/contract/common.ts";
 import type {
   AccessGrantAnswer,
@@ -60,9 +61,11 @@ import type {
  *
  * Every change is checked before anything is written and written through
  * src/people.ts. It is said in the owner's record of the team (Activity), not
- * in the desk's feed, which everybody reads: who may see what is the owner's
- * business. The one exception is the enquiry right, announced in the feed
- * exactly as Settings › People announces it.
+ * in the desk's feed, which everybody with the Command Center reads: who may
+ * see what is the owner's business. The one exception is the enquiry right,
+ * announced in the feed when it starts or stops applying to somebody
+ * (src/cc/access.ts `noteLeads`), exactly as Settings › People announces it.
+ * A save that changes nothing says so and is not recorded at all.
  */
 
 export const routes = new Hono<Vars>();
@@ -116,6 +119,16 @@ const known = (): Known => {
 /** Has this person ever been on the desk: a Google sign-in, or a request written down. */
 const everIn = (p: Person, k: Known): boolean => (!!p.email && k.signIn.has(p.email.toLowerCase())) || k.days.has(p.telegram);
 
+/**
+ * Known only from writing to the Telegram bot: the bot's row, with no
+ * address, never seen on the desk. Without an address nobody can sign in as
+ * them. A bot row the owner gave an address is NOT this: it can sign in with
+ * Google at once, with whatever its access is, so it is a member like any
+ * other who has not come in yet (and Access & Roles lists it, by the same
+ * test on the address).
+ */
+const botOnly = (p: Person, k: Known): boolean => p.telegram > 0 && !p.email && !everIn(p, k);
+
 function lastActive(p: Person, k: Known): string | null {
   const live = presenceOf(p.telegram);
   return (
@@ -131,9 +144,8 @@ function statusOf(p: Person, k: Known): MemberStatus {
   if (p.revoked) return "off";
   if (!p.owner && p.grants && !seesAnything(p)) return "waiting";
   if (presenceOf(p.telegram).online) return "online";
-  const been = everIn(p, k);
-  if (!been && p.invitedAt) return "invited";
-  if (!been && p.telegram > 0) return "bot";
+  if (!everIn(p, k) && p.invitedAt) return "invited";
+  if (botOnly(p, k)) return "bot";
   return "away";
 }
 
@@ -149,7 +161,7 @@ function member(p: Person, looking: Person, k: Known): TeamMember {
     you: p.telegram === looking.telegram,
     role: roleOf(p),
     /* Whether somebody is online, and when they were last here, is the owner's to know, not the team's. */
-    status: owner ? statusOf(p, k) : p.revoked ? "off" : !everIn(p, k) && p.invitedAt ? "invited" : !everIn(p, k) && p.telegram > 0 ? "bot" : "away",
+    status: owner ? statusOf(p, k) : p.revoked ? "off" : !everIn(p, k) && p.invitedAt ? "invited" : botOnly(p, k) ? "bot" : "away",
     lastActive: owner ? lastActive(p, k) : null,
     place: owner ? placeOf(live.page ?? k.days.get(p.telegram)?.page ?? null) : null,
     pages: { open: SHARED_PAGES.filter((k) => a.pages[k] !== "none").length, of: SHARED_PAGES.length },
@@ -191,7 +203,10 @@ routes.get("/members", (c) => {
 /* ---------- access ---------------------------------------------------------------- */
 
 function accessPerson(p: Person, k: Known): AccessPerson {
-  const a = accessOf(p);
+  /* The editor is filled from what is STORED, switched off or not: for a switched-off person the levels
+     that hold today are all "none", and a form drawn from those would save "nothing" over the access
+     they are to come back to. What holds today is said beside it: `revoked`, `seesLeads`, `canPublish`. */
+  const a = accessOf({ owner: false, revoked: false, grants: p.grants });
   const stored = db.prepare("SELECT sees_leads FROM people WHERE telegram = ?").get(p.telegram) as { sees_leads: number } | undefined;
   return {
     id: p.telegram,
@@ -303,34 +318,45 @@ routes.post("/access/:id", requireOwner, async (c) => {
   }
 
   /* ---- then write ---- */
-  const said: string[] = [];
-  if (next !== undefined) {
-    setGrants(p.telegram, next);
-    const now = getPerson(p.telegram) ?? p;
-    const role = roleOf(now);
-    said.push(label ? `${p.name} now has the ${label} template: ${inWords(next)}.` : `${p.name} now has ${inWords(next)}.`);
-    /* For the owner's record only: who may see what is not news for the whole desk's feed. */
-    c.set("did", {
-      text: label ? `Gave ${p.name} the ${label} template: ${inWords(next)}` : `Changed ${p.name}'s access (${role.label}): ${inWords(next)}`,
-      href: `/team/access?person=${p.telegram}`,
-    });
-  }
-  if (body.seesLeads !== undefined) {
-    const stored = db.prepare("SELECT sees_leads FROM people WHERE telegram = ?").get(p.telegram) as { sees_leads: number } | undefined;
-    if (!!stored?.sees_leads !== body.seesLeads) {
-      setSeesLeads(p.telegram, body.seesLeads);
-      said.push(body.seesLeads ? "They may see enquiries' names, contact details and messages." : "They no longer see enquiries' contents.");
-      note("people", body.seesLeads ? `${p.name} may now see enquiries` : `${p.name} no longer sees enquiries`, {
-        actor: who.name,
-        href: "/team/access",
-        tone: body.seesLeads ? "warn" : "info",
-      });
-    }
+  /* The editor always sends its whole form, so what was SENT says nothing: only what differs from what
+     is stored is a change, is written, and is recorded. Compared as grants, not as text: the same row
+     reached through a template and through the form lists its areas in another order. */
+  const held = !!(db.prepare("SELECT sees_leads FROM people WHERE telegram = ?").get(p.telegram) as { sees_leads: number } | undefined)?.sees_leads;
+  const grantsChanged = next !== undefined && !sameGrants(next, p.grants);
+  const rightChanged = body.seesLeads !== undefined && body.seesLeads !== held;
+  if (!grantsChanged && !rightChanged) {
+    c.set("did", null);
+    return c.json<AccessGrantAnswer>({ ok: true, person: accessPerson(p, known()), said: "Nothing had changed." });
   }
 
+  const said: string[] = [];
+  /* For the owner's record only: who may see what is not news for the whole desk's feed. */
+  const did: string[] = [];
+  if (grantsChanged) {
+    setGrants(p.telegram, next!);
+    const role = roleOf(getPerson(p.telegram) ?? p);
+    said.push(label ? `${p.name} now has the ${label} template: ${inWords(next!)}.` : `${p.name} now has ${inWords(next!)}.`);
+    did.push(label ? `Gave ${p.name} the ${label} template: ${inWords(next!)}` : `Changed ${p.name}'s access (${role.label}): ${inWords(next!)}`);
+  }
+  if (rightChanged) {
+    setSeesLeads(p.telegram, body.seesLeads!);
+    said.push(body.seesLeads ? "They may see enquiries' names, contact details and messages." : "They no longer see enquiries' contents.");
+  }
+
+  /* The enquiry right is the most sensitive thing given here, so the record names it whenever it moved:
+     given or taken away, and whether it applies yet. The desk's feed is told when it starts or stops
+     applying (`noteLeads`), which is also the moment Leads is given to somebody who already held it. */
   const now = getPerson(p.telegram) ?? p;
-  if (body.seesLeads && !now.seesLeads && !now.revoked) said.push("It takes effect once they also have Leads.");
-  return c.json<AccessGrantAnswer>({ ok: true, person: accessPerson(now, known()), said: said.join(" ") || "Nothing had changed." });
+  const waits = (rightChanged ? body.seesLeads! : held) && !now.seesLeads && !now.revoked;
+  if (rightChanged) {
+    did.push(body.seesLeads ? `${grantsChanged ? "gave them" : `Gave ${p.name}`} the enquiry right${now.seesLeads ? "" : now.revoked ? ", for when they are let in again" : ": it waits for Leads"}` : `${grantsChanged ? "took the enquiry right away" : `Took the enquiry right from ${p.name}`}`);
+  } else if (now.seesLeads !== p.seesLeads) {
+    did.push(now.seesLeads ? "the enquiry right they hold now applies" : "the enquiry right they hold no longer applies");
+  }
+  if (body.seesLeads && waits) said.push("It takes effect once they also have Leads.");
+  noteLeads(p, p.seesLeads, now.seesLeads, who, "/team/access");
+  c.set("did", { text: did.join("; "), href: `/team/access?person=${p.telegram}` });
+  return c.json<AccessGrantAnswer>({ ok: true, person: accessPerson(now, known()), said: said.join(" ") });
 });
 
 routes.post("/settings", requireOwner, async (c) => {
@@ -338,7 +364,10 @@ routes.post("/settings", requireOwner, async (c) => {
   const body = (await c.req.json().catch(() => null)) as TeamSettingsChange | null;
   const v = String(body?.newcomers ?? "");
   if (v !== "full" && v !== "nothing" && !PRESETS.some((p) => p.key === v)) return refuse(c, 400, 'Choose "full", "nothing" or a template.');
-  if (v === newcomers()) return c.json<TeamSettingsAnswer>({ ok: true, newcomers: v, said: "Nothing had changed." });
+  if (v === newcomers()) {
+    c.set("did", null);
+    return c.json<TeamSettingsAnswer>({ ok: true, newcomers: v, said: "Nothing had changed." });
+  }
   setNewcomers(v);
   const words = v === "full" ? "every area, as before" : v === "nothing" ? "nothing until you give them access" : `the ${PRESETS.find((p) => p.key === v)!.label} template`;
   c.set("did", { text: `Set what a newcomer starts with: ${words}`, href: "/team/access" });
@@ -362,6 +391,8 @@ function invitation(p: Person, k: Known): Invitation {
     invitedBy: by,
     /* A sign-in before the invitation was somebody else's row under the same address: not this invitation used. */
     joinedAt: firstIn && firstIn >= at ? firstIn : (k.days.has(p.telegram) ? k.days.get(p.telegram)!.last : null),
+    linked: p.telegram > 0,
+    revoked: p.revoked,
   };
 }
 
@@ -396,6 +427,31 @@ routes.post("/invitations", requireOwner, async (c) => {
   if (holder) {
     return refuse(c, 409, `${holder.name} is already on the team as ${email}. Change their access under Access & Roles instead.`);
   }
+  /* An invitation is the row sign-in would make for the address, and somebody whose address was changed or
+     removed since still sits in its place. The refusal says what a sign-in with the address does then, read
+     from the walk the sign-in itself takes (src/people.ts `inPlaceOf`): a row with no address takes it back;
+     a row with another one is left alone, and the arriving address becomes a new person. */
+  const way = inPlaceOf(email);
+  if (way?.arrives === "back") {
+    return refuse(
+      c,
+      409,
+      `${way.person.name} already holds the row ${email} signs in to: it was their address until it was removed. Change their access under Access & Roles, or give them the address back in Settings › People.`,
+    );
+  }
+  if (way) {
+    const how =
+      way.arrives === "off"
+        ? "switched off and with nothing, because a row that had this address is switched off"
+        : way.arrives === "nothing"
+          ? "with nothing, because a row that had this address is restricted"
+          : "with what a newcomer gets";
+    return refuse(
+      c,
+      409,
+      `${email} was ${way.person.name}'s address until it was changed, and their row still keeps its place, so no invitation can be made for it. Whoever signs in with it arrives as a new person, ${how}. Give them their access once they have (Access & Roles), or give ${way.person.name} the address back in Settings › People.`,
+    );
+  }
   const preset = PRESETS.find((p) => p.key === body?.preset);
   if (!preset) return refuse(c, 400, "Choose what they get: one of the templates.");
 
@@ -417,10 +473,20 @@ routes.post("/invitations/:id/withdraw", requireOwner, (c) => {
   const who = me(c);
   const p = target(c.req.param("id"));
   if (!p || !p.invitedAt) return refuse(c, 404, "There is no such invitation.");
+  /* Linking copies the invitation onto the person's Telegram row (src/people.ts `link`): that row is a
+     person, with a Telegram identity and a byline, and is never deleted from here. */
+  if (p.telegram > 0) {
+    return refuse(c, 409, `${p.name}'s invitation was linked to their Telegram account, so this is a person now, not an invitation. Change their access under Access & Roles, or switch them off in Settings › People.`);
+  }
+  /* The row IS the switch-off. Without it the address would sign in as a newcomer. */
+  if (p.revoked) {
+    return refuse(c, 409, `${p.name} is switched off, and removing the invitation would remove the switch-off with it: they could then sign in as a newcomer. Let them in first if the invitation should really go.`);
+  }
   if (everIn(p, known())) {
     return refuse(c, 409, `${p.name} has already signed in, so this is a person now, not an invitation. Switch them off in Settings › People instead.`);
   }
-  withdraw(p.telegram);
+  /* Said, and recorded, only once the row has really gone. */
+  if (!withdraw(p.telegram)) return refuse(c, 409, `The invitation for ${p.name} could not be withdrawn: its row is still there, and nothing was changed.`);
   c.set("did", { text: `Withdrew the invitation for ${p.name}${p.email ? ` (${p.email})` : ""}`, href: "/team/invitations" });
   return c.json<InviteAnswer>({ ok: true, said: `The invitation for ${p.name} is withdrawn: if they sign in now, they arrive as a newcomer.`, invitation: null });
 });
@@ -497,8 +563,10 @@ function eventsIn(w: Window, people: Person[]): TeamEvent[] {
     /* no log, no sign-ins */
   }
 
+  /* Shared with the bot: links that came through a chat. One made on the desk (Insights › New) carries the
+     person too and no chat; it is already an action of its own, and would be counted twice here. */
   const links = db
-    .prepare("SELECT id, url, title, site, platform, from_user, created_at FROM links WHERE from_user IS NOT NULL AND created_at >= ? AND created_at < ?")
+    .prepare("SELECT id, url, title, site, platform, from_user, created_at FROM links WHERE from_user IS NOT NULL AND from_chat IS NOT NULL AND created_at >= ? AND created_at < ?")
     .all(fromSql, toSql) as { id: number; url: string; title: string | null; site: string | null; platform: string | null; from_user: number; created_at: string }[];
   for (const l of links) {
     const p = byId.get(l.from_user);
@@ -538,8 +606,14 @@ function eventsIn(w: Window, people: Person[]): TeamEvent[] {
   return out;
 }
 
-/** Counted as an action: everything but a sign-in, which is arriving, not doing. */
-const isAction = (e: TeamEvent): boolean => e.kind !== "signin";
+/**
+ * Counted as an action: what a person did on the desk or through the bot. Not
+ * a sign-in, which is arriving; and not a deployment, which is the website's
+ * history and has a tile of its own (a publish from the desk is already the
+ * action that made the commit, and would be counted twice). Both stay in the
+ * timeline.
+ */
+const isAction = (e: TeamEvent): boolean => e.kind !== "signin" && e.kind !== "deploy";
 
 /** Buckets for a tile's bars: hours for a day, days otherwise. */
 function buckets(w: Window, range: TeamRange): number[] {
@@ -548,11 +622,16 @@ function buckets(w: Window, range: TeamRange): number[] {
   return Array.from({ length: n }, (_, i) => w.from + i * step);
 }
 
-function statOf(now: TeamEvent[], before: TeamEvent[], w: Window, range: TeamRange, sub: string): Stat {
+/**
+ * `before` is null when the desk was not yet recording through the whole period before: a count of what
+ * it happened to write down then is not a figure to compare with. A period it did record keeps its
+ * count, a true zero included.
+ */
+function statOf(now: TeamEvent[], before: TeamEvent[] | null, w: Window, range: TeamRange, sub: string): Stat {
   const starts = buckets(w, range);
   const step = range === "24h" ? 3_600_000 : 86_400_000;
   const series = starts.map((s) => now.filter((e) => Date.parse(e.at) >= s && Date.parse(e.at) < s + step).length);
-  return { value: now.length, previous: before.length, unit: "count", series, sub };
+  return { value: now.length, previous: before ? before.length : null, unit: "count", series, sub };
 }
 
 /** Since when the desk has kept activity: the first day row or action. */
@@ -563,9 +642,25 @@ function keptSince(): string | null {
   return list[0] ?? null;
 }
 
-function personActivity(p: Person, w: Window, range: TeamRange, events: TeamEvent[], k: Known): TeamPersonActivity {
-  const fromDay = zurichDay(w.from);
-  const rows = db.prepare("SELECT day, minutes, pages, last FROM team_days WHERE person = ? AND day >= ? ORDER BY day").all(p.telegram, fromDay) as {
+/**
+ * The first moment the desk wrote anything down, to the millisecond: the first request of the first day
+ * row, or the first action. `keptSince` is the day for showing; stamped as midnight it would say the
+ * desk recorded up to a day before it did, and a tile would compare with a period it only half holds.
+ */
+function firstKept(): number | null {
+  const d = (db.prepare("SELECT MIN(first) AS d FROM team_days").get() as { d: string | null }).d;
+  const a = (db.prepare("SELECT MIN(at) AS a FROM team_actions").get() as { a: string | null }).a;
+  const list = [d, a].map((x) => (x ? Date.parse(x) : NaN)).filter((x) => Number.isFinite(x));
+  return list.length ? Math.min(...list) : null;
+}
+
+/**
+ * One person's days. `days` are the Zurich dates the chart draws, oldest first: the totals beside it
+ * (minutes, opens, days active, pages) are read from exactly those days, so the figure above the bars
+ * is the sum of the bars. The actions are counted from the events, in the exact window.
+ */
+function personActivity(p: Person, days: string[], events: TeamEvent[], k: Known): TeamPersonActivity {
+  const rows = db.prepare("SELECT day, minutes, pages, last FROM team_days WHERE person = ? AND day >= ? ORDER BY day").all(p.telegram, days[0]!) as {
     day: string;
     minutes: number;
     pages: string;
@@ -574,13 +669,7 @@ function personActivity(p: Person, w: Window, range: TeamRange, events: TeamEven
   const pages = new Map<string, { opens: number; minutes: number }>();
   let opens = 0;
   for (const r of rows) {
-    let per: Record<string, { opens?: number; minutes?: number }> = {};
-    try {
-      per = JSON.parse(r.pages);
-    } catch {
-      per = {};
-    }
-    for (const [key, v] of Object.entries(per)) {
+    for (const [key, v] of Object.entries(pagesOf(r.pages))) {
       const had = pages.get(key) ?? { opens: 0, minutes: 0 };
       had.opens += Number(v.opens) || 0;
       had.minutes += Number(v.minutes) || 0;
@@ -588,12 +677,7 @@ function personActivity(p: Person, w: Window, range: TeamRange, events: TeamEven
       pages.set(key, had);
     }
   }
-  const days: DayPoint[] = [];
-  const n = range === "24h" ? 1 : Math.round((w.to - w.from) / 86_400_000);
-  for (let i = n - 1; i >= 0; i--) {
-    const day = zurichDay(w.to - i * 86_400_000);
-    days.push({ date: day, value: rows.find((r) => r.day === day)?.minutes ?? 0 });
-  }
+  const bars: DayPoint[] = days.map((day) => ({ date: day, value: rows.find((r) => r.day === day)?.minutes ?? 0 }));
   const live = presenceOf(p.telegram);
   return {
     id: p.telegram,
@@ -602,7 +686,7 @@ function personActivity(p: Person, w: Window, range: TeamRange, events: TeamEven
     online: live.online,
     lastActive: lastActive(p, k),
     place: placeOf(live.page ?? k.days.get(p.telegram)?.page ?? null),
-    minutes: days,
+    minutes: bars,
     totalMinutes: rows.reduce((s, r) => s + r.minutes, 0),
     opens,
     daysActive: rows.filter((r) => r.minutes > 0 || r.pages !== "{}").length,
@@ -616,11 +700,14 @@ function personActivity(p: Person, w: Window, range: TeamRange, events: TeamEven
 
 routes.get("/activity", requireOwner, async (c) => {
   const q = c.req.query("range") as TeamRange | undefined;
-  const range: TeamRange = q && q in RANGES ? q : "7d";
+  /* Its own keys only: "constructor" is in every object, and is no range. */
+  const range: TeamRange = q && Object.hasOwn(RANGES, q) ? q : "7d";
   const len = RANGES[range];
   const at = Date.now();
   const w: Window = { from: at - len, to: at };
   const before: Window = { from: at - 2 * len, to: at - len };
+  /* The Zurich days the minutes are read from and drawn for: today alone for 24 hours, else one per day of the range. */
+  const days = zurichDays(at, range === "24h" ? 1 : Math.round(len / 86_400_000));
   const k = known();
   const people = everyone();
   const team = people.filter((p) => !p.revoked && (everIn(p, k) || p.invitedAt));
@@ -639,9 +726,9 @@ routes.get("/activity", requireOwner, async (c) => {
   const actsBefore = prev.filter((e) => isAction(e) && mine(e));
   const content = (e: TeamEvent) => e.kind === "shared" || (e.kind === "action" && CONTENT.has(e.type));
 
-  /* Minutes per person in the window, from the day rows. */
+  /* Minutes per person, from the same days a person's chart draws. */
   const minutes = new Map<number, number>();
-  for (const r of db.prepare("SELECT person, SUM(minutes) AS m FROM team_days WHERE day >= ? GROUP BY person").all(zurichDay(w.from)) as { person: number; m: number }[]) {
+  for (const r of db.prepare("SELECT person, SUM(minutes) AS m FROM team_days WHERE day >= ? GROUP BY person").all(days[0]!) as { person: number; m: number }[]) {
     minutes.set(r.person, r.m);
   }
 
@@ -693,11 +780,15 @@ routes.get("/activity", requireOwner, async (c) => {
     );
   });
 
+  /* Compared only with a period the desk recorded from its first moment to its last. */
+  const first = firstKept();
+  const compared = first !== null && first <= before.from;
+  const keptNote = since && !compared ? `Kept since ${since.slice(0, 10)}: ${first !== null && first > w.from ? "this period shows less than happened, and " : ""}the period before is not compared.` : undefined;
   const kept: Reading<Stat> = since
-    ? ok(statOf(acts, actsBefore, w, range, sub), "desk", at, Date.parse(since) > w.from ? `Kept since ${since.slice(0, 10)}: the period before it shows less than happened.` : undefined)
+    ? ok(statOf(acts, compared ? actsBefore : null, w, range, sub), "desk", at, keptNote)
     : waiting("desk", "Nothing has been recorded yet. Every change the desk accepts from a person is kept from now on.");
   const contentStat: Reading<Stat> = since
-    ? ok(statOf(acts.filter(content), actsBefore.filter(content), w, range, "insights, content and shared links"), "desk", at)
+    ? ok(statOf(acts.filter(content), compared ? actsBefore.filter(content) : null, w, range, "insights, content and shared links"), "desk", at, keptNote)
     : waiting("desk", "Nothing has been recorded yet.");
 
   return c.json<TeamActivity>({
@@ -722,6 +813,6 @@ routes.get("/activity", requireOwner, async (c) => {
     deployments,
     members: team.map((p) => ({ id: p.telegram, name: p.name })).sort((a, b) => a.name.localeCompare(b.name)),
     types,
-    person: member ? personActivity(member, w, range, all, k) : null,
+    person: member ? personActivity(member, days, all, k) : null,
   });
 });

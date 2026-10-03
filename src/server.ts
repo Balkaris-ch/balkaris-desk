@@ -10,7 +10,7 @@ import { FORMATS, isFormat } from "./templates.ts";
 import { closingEcho, echoWords } from "./echo.ts";
 import { draftPage, linkPage, listPage, page, peoplePage } from "./console.ts";
 import { publish, type PublishAction } from "./publish.ts";
-import { everyone, getPerson, link, remember, rememberGoogle, setAuthor, setEmail, setRevoked, type Person } from "./people.ts";
+import { addressHeld, everyone, getPerson, link, publisherFor, remember, rememberGoogle, setAuthor, setEmail, setRevoked, type Person } from "./people.ts";
 import { configured as ga4On, pages as ga4Pages } from "./ga4.ts";
 import { coverPath, saveClip, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
@@ -332,8 +332,23 @@ app.post("/people/:telegram", async (c) => {
   if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
   const id = Number(c.req.param("telegram"));
   const form = await c.req.parseBody();
-  if (!getPerson(id)) return c.notFound();
-  setEmail(id, String(form.email ?? "").trim() || null);
+  const had = getPerson(id);
+  if (!had) return c.notFound();
+  /* The form posts the address with every Save, so only a different one is a
+     change. A switched-off or restricted person keeps the address they have,
+     for the reason Settings › People gives (src/people.ts `addressHeld`):
+     checked before anything is written, the byline included. */
+  const email = String(form.email ?? "").trim() || null;
+  const same = (email ?? "").toLowerCase() === (had.email ?? "").toLowerCase();
+  const held = same ? null : addressHeld(had);
+  if (held) {
+    return c.text(
+      `${held === "off" ? "They are switched off" : "Their access is limited"}, and Google sign-in finds a person by this address. ` +
+        "Changing or removing it would let them in as a new person the next time they sign in with it, so it stays as it is. Nothing was changed.",
+      409,
+    );
+  }
+  if (!same) setEmail(id, email);
   setAuthor(id, String(form.author ?? "balkaris").trim() || "balkaris");
   return c.redirect("/people", 303);
 });
@@ -344,8 +359,8 @@ app.post("/people/:telegram/link", async (c) => {
   const acct = getPerson(Number(c.req.param("telegram")));
   const form = await c.req.parseBody();
   const tg = Number(String(form.telegram ?? "").trim());
-  if (!acct?.email || !tg) return c.redirect("/people", 303);
-  link(tg, acct.email);
+  /* Nothing to link, or the two rows would not join: the form lands where it did, and nothing is written down as a change (src/presence.ts). */
+  if (!acct?.email || !tg || !link(tg, acct.email)) c.set("did", null);
   return c.redirect("/people", 303);
 });
 
@@ -354,7 +369,10 @@ app.post("/people/:telegram/revoke", (c) => {
   if (!ownerOnly(c)) return c.text("Only the owner changes people.", 403);
   const id = Number(c.req.param("telegram"));
   const p = getPerson(id);
-  if (!p || p.owner) return c.redirect("/people", 303);
+  if (!p || p.owner) {
+    c.set("did", null);
+    return c.redirect("/people", 303);
+  }
   setRevoked(id, !p.revoked);
   return c.redirect("/people", 303);
 });
@@ -391,7 +409,7 @@ app.get("/cover/:slug", (c) => {
 });
 
 app.get("/link/:id", (c) => {
-  const html = linkPage(Number(c.req.param("id")));
+  const html = linkPage(Number(c.req.param("id")), me(c));
   return html ? c.html(html) : c.notFound();
 });
 
@@ -476,10 +494,15 @@ app.post("/draft/:id/reclose", async (c) => {
  * and the person who shared the link gets the live URL in the chat. Nobody
  * opens the console unless they want to.
  *
- * WHO IT PUBLISHES AS. The commit is authored by whoever SHARED the link if
- * the desk knows their address, and by the owner otherwise. It has to be a
- * real person either way: Vercel refuses a commit from somebody who is not on
- * the team, which is the whole reason the desk has no identity of its own.
+ * WHO IT PUBLISHES AS (src/people.ts `publisherFor`). The commit is authored
+ * by whoever SHARED the link if they can publish, and by the owner for
+ * somebody the desk does not know or a teammate with no address yet. It has
+ * to be a real person either way: Vercel refuses a commit from somebody who
+ * is not on the team, which is the whole reason the desk has no identity of
+ * its own. And it is HELD for a sharer the owner did not give edit on
+ * Insights (read-only, not at all, or switched off): the piece is written
+ * and stays a draft on the desk until somebody who may publish puts it out.
+ * The bot's door never passes the gate, so this is where their access counts.
  *
  * WHAT STILL STOPS IT. Everything that stopped it before. guard() in draft.ts
  * throws away a draft that leans on its source, never names it, or came out
@@ -497,15 +520,28 @@ async function autoPublish(draftId: number, linkId: number): Promise<void> {
     | undefined;
   if (!d || d.state !== "draft") return;
 
-  /* The sharer publishes it if we know their address; the owner otherwise. */
+  /* The sharer publishes it if they can; the owner for somebody without an address; nobody for a sharer the owner holds back. */
   const l = db.prepare("SELECT from_user, from_chat FROM links WHERE id = ?").get(linkId) as {
     from_user: number | null;
     from_chat: number | null;
   };
-  const sharer = l.from_user ? getPerson(l.from_user) : null;
-  const by = sharer?.canPublish ? sharer : everyone().find((p) => p.owner && p.canPublish);
+  const pub = publisherFor(l.from_user ? getPerson(l.from_user) : null, everyone());
 
-  if (!by) {
+  if ("held" in pub) {
+    /* This runs again on every cover result while the draft is still a draft (a redraw, a cover that
+       gave up): it is written down, and the chat told, once per link. */
+    if (db.prepare("SELECT 1 FROM events WHERE link_id = ? AND what = 'auto.held' LIMIT 1").get(linkId)) return;
+    log("auto.held", { draft: draftId, sharer: pub.held.name }, linkId);
+    if (l.from_chat) {
+      await send(
+        l.from_chat,
+        "It is written, and it waits on the desk as a draft: your access there does not include publishing, so somebody who may publish puts it out.",
+      );
+    }
+    return;
+  }
+
+  if ("nobody" in pub) {
     log("auto.nobody", { draft: draftId }, linkId);
     if (l.from_chat) {
       await send(
@@ -515,6 +551,7 @@ async function autoPublish(draftId: number, linkId: number): Promise<void> {
     }
     return;
   }
+  const by = pub.by;
 
   try {
     await publish(draftId, "publish", by);
@@ -714,34 +751,38 @@ async function act(
   }
 }
 
+/**
+ * What a site action answers: the page that says why it failed; 404 when there is no such draft, as every
+ * other form of a draft answers; else back to where the form was. Only that last one is a change, and
+ * only a redirect is written down as one (src/presence.ts).
+ */
+const landed = (c: Context<Vars>, r: Awaited<ReturnType<typeof act>>, back: string): Response | Promise<Response> =>
+  r.html ? c.html(r.html) : r.ok ? c.redirect(back || `/draft/${r.id}`, 303) : c.notFound();
+
 const escHtml = (s: string) => s.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!);
 
 /* Live at its own url, in none of the menus. */
 app.post("/draft/:id/publish", async (c) => {
   const back = await backTo(c, "");
-  const r = await act(c, "publish", "unlisted", back || null);
-  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
+  return landed(c, await act(c, "publish", "unlisted", back || null), back);
 });
 
 /* Into the menus, the shelves, the sitemap and search. */
 app.post("/draft/:id/list", async (c) => {
   const back = await backTo(c, "");
-  const r = await act(c, "list", "listed", back || null);
-  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
+  return landed(c, await act(c, "list", "listed", back || null), back);
 });
 
 /* Out of them again. The url keeps working; noindex comes back. */
 app.post("/draft/:id/unlist", async (c) => {
   const back = await backTo(c, "");
-  const r = await act(c, "unlist", "unlisted", back || null);
-  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
+  return landed(c, await act(c, "unlist", "unlisted", back || null), back);
 });
 
 /* Off the site entirely. The url 404s afterwards. */
 app.post("/draft/:id/takedown", async (c) => {
   const back = await backTo(c, "");
-  const r = await act(c, "remove", "draft", back || null);
-  return r.html ? c.html(r.html) : c.redirect(back || `/draft/${r.id}`, 303);
+  return landed(c, await act(c, "remove", "draft", back || null), back);
 });
 
 app.post("/draft/:id/remove", async (c) => {

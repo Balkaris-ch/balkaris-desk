@@ -52,6 +52,13 @@ export interface SettingsPerson {
   leadsGranted: boolean;
   /** Switched off: they can sign in, and every page and API answer refuses them. */
   revoked: boolean;
+  /**
+   * The owner limited what they may open (Team › Access & Roles). While that
+   * holds, or while they are switched off, an address they have cannot be
+   * changed or removed: sign-in finds them by it, and a changed one would let
+   * them in as a new person. The server refuses it with 409 and says why.
+   */
+  restricted: boolean;
   /** How the desk knows them: signing in with Google, the Telegram bot, or both. */
   knownBy: "google" | "telegram" | "both";
   /**
@@ -78,8 +85,9 @@ export interface SettingsPeople {
  *
  * Google sign-in finds a person by their address (src/people.ts
  * rememberGoogle), so the address is also their identity. The server refuses
- * to change or remove the address of a switched-off person (their next
- * sign-in would arrive as a new, active person), and changes the address of
+ * to change or remove the address of a switched-off person or of one whose
+ * access is limited (`revoked`, `restricted`: their next sign-in would arrive
+ * as a new person, with what a newcomer gets), and changes the address of
  * somebody who signs in with Google only when `detach` says the owner knows
  * that their next sign-in makes a new person.
  */
@@ -232,9 +240,13 @@ export interface SettingsAccess {
 export interface SettingsWriting {
   /** DESK_AUTOPUBLISH is not "0": a written article is published and listed by the desk itself. */
   autopublish: boolean;
-  /** Who publishes when the person who shared the link has no address: the owner, if they can publish. */
+  /**
+   * Who publishes when the person who shared the link has no address: the
+   * owner, if they can publish. Not for a sharer the owner did not give edit
+   * on Insights: their piece is written and waits on the desk as a draft.
+   */
   fallback: string | null;
-  /** People who can publish (have an address and are not switched off). */
+  /** People who can publish: an address, edit on Insights, and not switched off. */
   publishers: number;
 }
 

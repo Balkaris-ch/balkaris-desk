@@ -35,8 +35,23 @@ import { db } from "./db.ts";
  * can undo it out of the page that undoes it.
  *
  * THE UNMAPPED ROUTE. A path that belongs to no area (who am I, the top bar's
- * light, the search box, a refresh) is open to anybody who may see at least
- * one area; a refresh, which is a change, to anybody who may change one.
+ * light, the search box, the list of jobs) is open to anybody who may see at
+ * least one area. Three things that look like one are not:
+ *
+ *   the activity feed   is the Command Center's. It carries every part of the
+ *                       desk's news, so it is an area's route like any other,
+ *                       and the bell shows somebody without the Command
+ *                       Center only the rows that lead to a page they have
+ *                       (`readsFeed`, `noticeFor`).
+ *   running a job       is a change, and it follows the areas the job feeds:
+ *                       edit on Automations runs any job; anybody else who
+ *                       may change something runs the jobs behind the areas
+ *                       they see (`JOB_AREAS`, `mayRunJob`). What a job's
+ *                       last run said is read by the same people (`seesJob`).
+ *   an SEO address      that is no single page's follows the page switches
+ *                       all the same: the earlier screen needs every page, a
+ *                       button the pages that draw it, the rest one page.
+ *
  * Somebody with nothing yet (a newcomer waiting for the owner) gets /me and
  * nothing else. When you add a screen, add its area here in the same commit.
  */
@@ -51,7 +66,11 @@ export interface Page {
   label: string;
   /** Only the owner ever sees it, whatever the grants say. */
   ownerOnly?: boolean;
-  /** API prefixes that are this page's alone, so switching the page off refuses them too. */
+  /**
+   * API prefixes that are this page's, so switching the page off refuses them
+   * too. Several pages may list the same prefix (a button drawn on each): the
+   * address then follows the highest of their levels.
+   */
   api?: readonly string[];
 }
 
@@ -80,8 +99,9 @@ export const AREAS: readonly Area[] = [
     key: "overview",
     label: "Command Center",
     about: "The website today: tiles, traffic, what needs attention and the recent activity.",
-    pages: [{ key: "overview", label: "Command Center", api: [`${V}/overview`] }],
-    api: [`${V}/overview`],
+    /* The activity feed is the Command Center's: it tells every part of the desk's news (people, proposals, incidents), so it is not a route for anybody with one page. */
+    pages: [{ key: "overview", label: "Command Center", api: [`${V}/overview`, `${V}/activity`] }],
+    api: [`${V}/overview`, `${V}/activity`],
     levels: ["none", "view"],
   },
   {
@@ -90,7 +110,8 @@ export const AREAS: readonly Area[] = [
     about: "Articles: plan, write and publish. Edit lets them create, retry and publish under their own address.",
     pages: [{ key: "insights", label: "Insights" }],
     api: [`${V}/insights`, `${V}/article`],
-    console: ["/draft", "/link"],
+    /* The covers the desk drew (a draft's too, before anything is published) and the matcher are Insights' own, like the pages that show them. */
+    console: ["/draft", "/link", "/cover", "/match"],
   },
   {
     key: "traffic",
@@ -103,19 +124,21 @@ export const AREAS: readonly Area[] = [
   {
     key: "seo",
     label: "SEO",
-    about: "Search queries, keywords, indexing, technical checks and the SEO engine. Edit lets them run audits and work the opportunities.",
+    about: "Search queries, keywords, indexing, technical checks and the SEO engine. Edit lets them run audits and work the opportunities. Its AI buttons, and the answers they lead to, need the AI Operator as well.",
+    /* A button's address belongs to the pages that draw it: the cluster map is Keywords', "sent to
+       Google" is on Technical and on Search Console, an owner task is closed from three pages. */
     pages: [
       { key: "seo", label: "Overview", api: [`${V}/seo/overview`] },
       seo("opportunities", "Opportunities"),
       seo("pages", "Pages", [`${V}/seo/pages`, `${V}/seo/optimize`]),
-      seo("keywords", "Keywords"),
-      seo("content-gaps", "Content Gaps"),
-      seo("backlinks", "Backlinks"),
-      seo("technical", "Technical", [`${V}/seo/technical`, `${V}/spider`]),
-      seo("search-console", "Search Console"),
+      seo("keywords", "Keywords", [`${V}/seo/keywords`, `${V}/seo/clusters`]),
+      seo("content-gaps", "Content Gaps", [`${V}/seo/content-gaps`, `${V}/seo/owner-tasks`]),
+      seo("backlinks", "Backlinks", [`${V}/seo/backlinks`, `${V}/seo/owner-tasks`]),
+      seo("technical", "Technical", [`${V}/seo/technical`, `${V}/spider`, `${V}/seo/indexing`]),
+      seo("search-console", "Search Console", [`${V}/seo/search-console`, `${V}/seo/indexing`]),
       seo("competitors", "Competitors"),
       seo("ai-search", "AI Search"),
-      seo("automations", "Automations"),
+      seo("automations", "Automations", [`${V}/seo/automations`, `${V}/seo/owner-tasks`]),
     ],
     api: [`${V}/seo`, `${V}/spider`],
   },
@@ -179,7 +202,7 @@ export const AREAS: readonly Area[] = [
   {
     key: "automations",
     label: "Automations",
-    about: "The scheduled jobs and the article writer. Edit lets them run what is due; switching a job off stays the owner's.",
+    about: "The scheduled jobs and the article writer. Edit lets them run any job, and what is due; switching a job off stays the owner's.",
     pages: [{ key: "automations", label: "Automations" }],
     api: [`${V}/automations`],
   },
@@ -194,7 +217,7 @@ export const AREAS: readonly Area[] = [
   {
     key: "operator",
     label: "AI Operator",
-    about: "Ask about the website and approve its proposals. It reads every area's figures to answer, so give it to people who may see them.",
+    about: "Ask about the website and work with its proposals. It reads every area's figures to answer, so give it to people who may see them. Approving a proposal changes the live site, so it also needs publishing: an address and edit on Insights.",
     pages: [{ key: "operator", label: "AI Operator" }],
     api: [`${V}/operator`],
   },
@@ -246,11 +269,24 @@ export function areaOfPath(path: string): Area | null {
   return AREA_PREFIXES.find(([pre]) => within(p, pre))?.[1] ?? null;
 }
 
-/** Which page's own API this path is, or null when it belongs to its area as a whole. */
-export function pageOfPath(path: string): (Page & { area: string }) | null {
+/** The pages whose own API this path is: every page that lists the longest prefix it falls under. Empty when it belongs to its area as a whole. */
+export function pagesOfPath(path: string): (Page & { area: string })[] {
   const p = path.split("?")[0];
-  return PAGE_PREFIXES.find(([pre]) => within(p, pre))?.[1] ?? null;
+  const longest = PAGE_PREFIXES.find(([pre]) => within(p, pre))?.[0];
+  return longest === undefined ? [] : PAGE_PREFIXES.filter(([pre]) => pre === longest).map(([, page]) => page);
 }
+
+/** The first of them, or null: for a caller that only needs to name one. */
+export const pageOfPath = (path: string): (Page & { area: string }) | null => pagesOfPath(path)[0] ?? null;
+
+/**
+ * THE EARLIER SEO SCREEN (src/cc/routes/seo.ts: the first screen, its lists
+ * and its report) draws several SEO pages' panels in one answer, so it is no
+ * single page's. Exactly `/api/v1/seo` and what is under /list and /report:
+ * never `/api/v1/seo` as a prefix, which would claim /nav, /audit and every
+ * page's own address.
+ */
+const isEarlierSeo = (p: string): boolean => p === `${V}/seo` || within(p, `${V}/seo/list`) || within(p, `${V}/seo/report`);
 
 /**
  * Which page an address of the interface is: "/seo/pages/view" is SEO's Pages,
@@ -367,8 +403,20 @@ export function pageLevel(who: Holder, key: string): Level {
   return o && levelsOf(area).includes(o) ? o : base;
 }
 
-/** The higher of two levels. */
+/** The higher, and the lower, of two levels. */
 export const higher = (a: Level, b: Level): Level => (RANK[a] >= RANK[b] ? a : b);
+const lower = (a: Level, b: Level): Level => (RANK[a] <= RANK[b] ? a : b);
+
+/**
+ * What the earlier SEO screen is to this person: the LOWEST of SEO's pages. It
+ * carries panels of several of them in one answer, so it opens only for
+ * somebody for whom no SEO page is switched off; the owner and a person with
+ * no grants get the ceiling, as everywhere.
+ */
+export function earlierSeo(who: Holder): Level {
+  const area = BY_KEY.get("seo")!;
+  return area.pages.map((p) => pageLevel(who, p.key)).reduce(lower, ceilingOf(area));
+}
 
 /** Does a request of this method pass at this level? A change needs edit. */
 export function allows(level: Level, method: string): boolean {
@@ -380,6 +428,86 @@ export function allows(level: Level, method: string): boolean {
 /** May see at least one page / may change on at least one: the rule for paths that belong to no area. */
 export const seesAnything = (who: Holder): boolean => PAGE_LIST.some((p) => pageLevel(who, p.key) !== "none");
 export const changesAnything = (who: Holder): boolean => PAGE_LIST.some((p) => pageLevel(who, p.key) === "edit");
+
+/**
+ * THE BELL. The top bar's notices are the newest rows of the activity feed,
+ * and the feed is the Command Center's. Somebody who has the Command Center
+ * reads the whole feed anyway (`readsFeed`: the owner and a person with no
+ * grants come out true by themselves). Anybody else is shown a row only when
+ * it LEADS to a page they may open (`noticeFor`): a row with no link, or one
+ * that leads outside the desk, says something about a part of the desk nobody
+ * can vouch they were given (a person switched off, a deployment, an
+ * incident), so it is left out, never passed through.
+ */
+export const readsFeed = (who: Holder): boolean => pageLevel(who, "overview") !== "none";
+export function noticeFor(who: Holder, href: string | null | undefined): boolean {
+  if (!href) return false;
+  const page = pageOfHref(href);
+  return !!page && pageLevel(who, page.key) !== "none";
+}
+
+/* ---------- the scheduled jobs --------------------------------------------------- */
+
+/**
+ * WHAT EACH SCHEDULED JOB FEEDS: the areas whose screens it fills, and whose
+ * "refresh" button asks for it. Running a job is no single area's, so the
+ * gate decides it from this table:
+ *
+ *   run it          edit on Automations (any job, and what is due); or, for
+ *                   somebody who may change something on the desk at all, at
+ *                   least view on one area the job feeds: the refresh behind
+ *                   a screen they have. Not edit on that area: seven of them
+ *                   offer only none and view.
+ *   read its note   view on one of the same areas, or Automations. What the
+ *                   last run said (pages crawled, queries read) is those
+ *                   areas' figures.
+ *
+ * A job that is not in the table is Automations' alone: a collector added
+ * later stays closed until somebody says here what it feeds, and cannot open
+ * by being forgotten. Keep in step with the collectors' own headers (src/cc).
+ */
+const JOB_AREAS = new Map<string, readonly string[]>(
+  Object.entries({
+    /* The website, read page by page: every screen that shows a page, a link, a picture or an issue. */
+    crawl: ["overview", "pages", "content", "seo", "site-health", "assets", "operator"],
+    assets: ["assets"],
+    speed: ["seo", "site-health"],
+    "crux-daily": ["seo", "site-health"],
+    probe: ["site-health", "overview"],
+    sitemap: ["seo", "site-health", "pages"],
+    /* The website's history, Vercel and the engine's health. */
+    repo: ["hosting", "site-health"],
+    vercel: ["hosting", "site-health"],
+    "vercel-status": ["hosting", "site-health"],
+    engine: ["hosting", "site-health"],
+    /* Visitors. */
+    "ga4-live": ["traffic", "conversions", "overview"],
+    "ga4-warm": ["traffic", "conversions", "overview"],
+    "clarity-daily": ["traffic", "conversions", "overview"],
+    /* Search, and the SEO engine's own. */
+    "gsc-access": ["seo"],
+    "gsc-daily": ["seo"],
+    "gsc-inspect": ["seo"],
+    "bing-daily": ["seo"],
+    "seo-snapshot": ["seo"],
+    "seo-engine": ["seo"],
+    "seo-readiness": ["seo"],
+    "seo-referrals": ["seo"],
+    "seo-research": ["seo"],
+    "seo-competitors": ["seo"],
+    "seo-presence": ["seo"],
+  }),
+);
+
+const feedsThem = (who: Holder, job: string): boolean => (JOB_AREAS.get(job) ?? []).some((k) => areaLevel(who, k) !== "none");
+
+/** May this person run this job now. True for the owner and for a person with no grants without a special case: both have Automations on edit. */
+export const mayRunJob = (who: Holder, job: string): boolean => areaLevel(who, "automations") === "edit" || (changesAnything(who) && feedsThem(who, job));
+
+/** May this person read what the job's last run said. */
+export const seesJob = (who: Holder, job: string): boolean => areaLevel(who, "automations") !== "none" || feedsThem(who, job);
+
+const JOB_RUN = /^\/api\/v1\/jobs\/([^/]+)\/run$/;
 
 export interface Verdict {
   ok: boolean;
@@ -396,21 +524,54 @@ export function judge(who: Holder, path: string, method: string): Verdict {
   if (who.owner) return { ok: true };
   const p = path.split("?")[0];
   if (EXEMPT.some((x) => within(p, x))) return { ok: true };
+  const change = !allows("view", method);
+
+  /* Running a job: decided here and not in its handler, so a refusal is the gate's and is recorded as one. */
+  const job = change ? JOB_RUN.exec(p) : null;
+  if (job) {
+    if (!seesAnything(who)) return { ok: false, why: "The owner has not given you access to anything on the desk yet." };
+    if (mayRunJob(who, job[1])) return { ok: true };
+    if (!changesAnything(who)) return { ok: false, why: "You can look at the desk but not change anything on it." };
+    return { ok: false, why: "That job reads for a part of the desk the owner has not given you. Ask the owner for that part, or for edit access to Automations." };
+  }
+
   const area = areaOfPath(p);
   if (!area) {
     const isApi = p === "/api" || p.startsWith("/api/");
     if (!isApi) return { ok: true };
     if (!seesAnything(who)) return { ok: false, why: "The owner has not given you access to anything on the desk yet." };
-    if (!allows("view", method) && !changesAnything(who)) return { ok: false, why: "You can look at the desk but not change anything on it." };
+    if (change && !changesAnything(who)) return { ok: false, why: "You can look at the desk but not change anything on it." };
     return { ok: true };
   }
-  const page = pageOfPath(p);
-  const level = page && page.area === area.key ? pageLevel(who, page.key) : areaLevel(who, area.key);
+
+  const several = area.pages.length > 1;
+  const mine = pagesOfPath(p).filter((x) => x.area === area.key);
+  let level: Level;
+  let what = area.label;
+  let first = "";
+  if (area.key === "seo" && isEarlierSeo(p)) {
+    level = earlierSeo(who);
+    const off = area.pages.find((x) => pageLevel(who, x.key) === "none");
+    if (off && areaLevel(who, area.key) !== "none") {
+      what = `${area.label} › ${off.label}`;
+      first = "This screen shows figures of every SEO page at once. ";
+    }
+  } else if (mine.length) {
+    /* A button drawn on several pages follows the highest of them: refusing it for one page's level would refuse the other page's button. */
+    level = mine.map((x) => pageLevel(who, x.key)).reduce(higher, "none");
+    if (several) what = `${area.label} › ${mine.map((x) => x.label).join(" or ")}`;
+  } else {
+    level = areaLevel(who, area.key);
+    /* An address of the area as a whole, where the area has several pages (SEO's counts, its audit): it also
+       needs one page of the area open at that level, so an area left "on" with every page off opens nothing. */
+    if (several) level = lower(level, area.pages.map((x) => pageLevel(who, x.key)).reduce(higher, "none"));
+  }
   if (allows(level, method)) return { ok: true };
-  const what = page && page.area === area.key && area.pages.length > 1 ? `${area.label} › ${page.label}` : area.label;
+  if (level === "none") return { ok: false, why: `${first}You do not have access to ${what}. Ask the owner for it.` };
+  /* Where the area offers nothing to edit, nobody can be given it: say whose it is instead of sending them to ask. */
   return {
     ok: false,
-    why: level === "none" ? `You do not have access to ${what}. Ask the owner for it.` : `You can view ${what} but not change it. Ask the owner for edit access.`,
+    why: levelsOf(area).includes("edit") ? `You can view ${what} but not change it. Ask the owner for edit access.` : `Only the owner changes anything in ${what}.`,
   };
 }
 
@@ -453,8 +614,9 @@ export const PRESETS: readonly Preset[] = [
   {
     key: "seo-analyst",
     label: "SEO Analyst",
-    about: "Works SEO end to end; reads traffic, pages, content and site health.",
-    grants: { overview: "view", seo: "edit", pages: "view", content: "view", traffic: "view", "site-health": "view", insights: "view", conversions: "view", team: "view" },
+    about: "Works SEO end to end, with the AI Operator that writes its briefs and proposals; reads traffic, pages, content and site health. Approving a proposal stays with people who publish.",
+    /* SEO's own AI buttons post to the AI Operator and their answers open there, so the two go together. */
+    grants: { overview: "view", seo: "edit", operator: "edit", pages: "view", content: "view", traffic: "view", "site-health": "view", insights: "view", conversions: "view", team: "view" },
   },
   {
     key: "developer",
@@ -476,7 +638,8 @@ export const PRESETS: readonly Preset[] = [
   },
 ];
 
-const sameGrants = (a: Grants | null, b: Grants | null): boolean => {
+/** The same access, whatever order the row lists it in: NULL (no row) only equals NULL. */
+export const sameGrants = (a: Grants | null, b: Grants | null): boolean => {
   if (a === null || b === null) return a === b;
   const ka = Object.keys(a).sort();
   const kb = Object.keys(b).sort();
@@ -486,11 +649,14 @@ const sameGrants = (a: Grants | null, b: Grants | null): boolean => {
 /**
  * What a person's grants are called: the template they match exactly, or
  * "Custom". Worked out every time rather than stored, so the name on the team
- * list can never disagree with what the person can actually do.
+ * list can never disagree with what the person was given. It names the STORED
+ * row: somebody switched off keeps the name of the access they come back to
+ * (that they are off is said beside it), and "No access yet" is only for a
+ * row that opens nothing.
  */
 export function roleOf(who: Holder): { key: string; label: string } {
   if (who.owner) return { key: "owner", label: "Owner" };
-  if (who.grants && !seesAnything(who)) return { key: "waiting", label: "No access yet" };
+  if (who.grants && !seesAnything({ ...who, revoked: false })) return { key: "waiting", label: "No access yet" };
   const hit = PRESETS.find((p) => sameGrants(p.grants === null ? null : clean(p.grants), who.grants));
   return hit ? { key: hit.key, label: hit.label } : { key: "custom", label: "Custom" };
 }

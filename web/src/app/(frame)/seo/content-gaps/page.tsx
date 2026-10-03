@@ -3,6 +3,7 @@ import { api, ask } from "@/lib/api";
 import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { CoverageList, ViewSwitch } from "@/components/seo/content-gaps/Coverage";
 import { GroupPanel } from "@/components/seo/content-gaps/Group";
 import { Headline, TableCoverage } from "@/components/seo/content-gaps/Headline";
@@ -41,6 +42,8 @@ export default async function SeoContentGapsPage({ searchParams }: { searchParam
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoContentGapsPayload>("/api/v1/seo/content-gaps", params);
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Content Gaps" icon="layers">
         <Empty icon="alert" title="The desk did not answer for this page">

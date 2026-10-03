@@ -949,7 +949,9 @@ routes.post("/create", async (c) => {
   const got = await takeLink(`${body.url} ${FORMATS[format].button}`, { user: who.telegram, name: who.name });
   if (!got) throw new HTTPException(400, { message: "The desk found no web address in that." });
 
-  const l = db.prepare("SELECT id, state, error, format FROM links WHERE id = ?").get(got.id) as { id: number; state: string; error: string | null; format: string | null } | undefined;
+  const l = db.prepare("SELECT id, state, error, format, title, url FROM links WHERE id = ?").get(got.id) as
+    | { id: number; state: string; error: string | null; format: string | null; title: string | null; url: string }
+    | undefined;
   /* intake.ts keeps an unreadable link without its format; set it, so "Try it again" writes it as it was asked. */
   if (!got.already && l && l.format !== format) {
     db.prepare("UPDATE links SET format = ? WHERE id = ? AND format IS NULL").run(format, got.id);
@@ -967,6 +969,10 @@ routes.post("/create", async (c) => {
         : `Queued for the workstation, to be written ${FORMATS[format].as}. It will wait as a draft until somebody publishes it.`;
 
   const answer: CreateAnswer = { linkId: got.id, already: got.already, href: draft.id ? `/insights/${draft.id}` : `/insights/link/${got.id}`, said };
+  /* For the owner's record of the team (src/presence.ts): a link already on the desk changed nothing; a new
+     one is one act, said here so the row names the page and opens it. (The link itself is not counted a
+     second time as "shared with the bot": that is for links that came through a chat.) */
+  c.set("did", got.already ? null : { text: `Started a new insight from “${(l?.title ?? l?.url ?? body.url).slice(0, 120)}”`, href: answer.href });
   return c.json(answer, got.already ? 200 : 201);
 });
 

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { HTTPException } from "hono/http-exception";
 import { db } from "../../db.ts";
-import type { Person } from "../../people.ts";
+import { publishBlock, type Person } from "../../people.ts";
 import { commitSiteFiles, readSiteFile } from "../../publish.ts";
 import { abs, get, pathOf } from "../site/http.ts";
 import { commitUrl, inventory, lastSitemap } from "../site/index.ts";
@@ -38,8 +38,10 @@ import type { ProposalRow } from "../../../web/src/contract/operator.ts";
  * while the page still says what it was proposed against.
  *
  * WHO. Approving and withdrawing change the live site, so they take the same
- * right as publishing an article: an email Vercel knows (Person.canPublish).
- * Rejecting a proposal changes nothing on the site; anybody signed in may.
+ * right as publishing an article (Person.canPublish): an email Vercel knows,
+ * and edit on Insights. Edit on the AI Operator alone does not approve. The
+ * refusal says which of the two is missing (`cannotApprove`). Rejecting a
+ * proposal changes nothing on the site; anybody with the AI Operator may.
  *
  * A DEVELOPMENT COPY NEVER PUSHES TO THE REAL SITE. On a workstation copy of
  * the desk (the same three locks as the development sign-in) an approval is
@@ -288,9 +290,24 @@ const row = (id: number): ProposalRow => shape(proposalById(id)!, liveWords());
 /** A proposal that may be approved (or applied again, or rejected): waiting, or approved and failed or cut off. */
 const open = (p: ProposalDb): boolean => p.state === "waiting" || (p.state === "approved" && (!!p.error || stuck(p)));
 
+/**
+ * Why this person may not approve or withdraw, in a sentence with the true
+ * reason (src/people.ts `publishBlock`); null when they may. Somebody the
+ * owner gave Insights to read only is not sent to add an email that would
+ * change nothing for them.
+ */
+export function cannotApprove(by: Person, doing: "approving" | "withdrawing"): string | null {
+  const block = publishBlock(by);
+  if (!block) return null;
+  return block === "access"
+    ? `${by.name} cannot publish: ${doing} changes the live site, and that needs edit on Insights. The owner gives it under Team › Access & Roles.`
+    : `${by.name} cannot publish yet: ${doing} changes the live site, and Vercel only builds a commit from an email it knows. Add the email on the people page first.`;
+}
+
 /** Approve and apply. Throws an HTTPException with the reason when it may not, or when the push failed (the proposal then stays approved, with the error, to be applied again). */
 export async function approve(id: number, by: Person): Promise<ProposalRow> {
-  if (!by.canPublish) fail(403, `${by.name} cannot publish yet: approving changes the live site, and Vercel only builds a commit from an email it knows. Add the email on the people page first.`);
+  const blocked = cannotApprove(by, "approving");
+  if (blocked) fail(403, blocked);
   const p = proposalById(id) ?? fail(404, `There is no proposal #${id}.`);
   if (p.state === "applied") fail(409, "That proposal is already live on the site.");
   if (!open(p)) fail(409, `That proposal is ${p.state}; only a waiting one can be approved.`);
@@ -380,7 +397,8 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
 
 /** Take an applied change off the site again: its entry is removed and the page says what its source says. */
 export async function withdraw(id: number, by: Person): Promise<ProposalRow> {
-  if (!by.canPublish) fail(403, `${by.name} cannot publish yet: withdrawing changes the live site. Add the email on the people page first.`);
+  const blocked = cannotApprove(by, "withdrawing");
+  if (blocked) fail(403, blocked);
   const p = proposalById(id) ?? fail(404, `There is no proposal #${id}.`);
   if (p.state !== "applied") fail(409, `That proposal is ${p.state}; only one that is live can be withdrawn.`);
   const after = JSON.parse(p.after_json) as { title?: string; description?: string; to?: string };

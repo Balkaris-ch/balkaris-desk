@@ -221,17 +221,31 @@ export interface ArticleMeta {
   from: "live" | "approved" | "built";
 }
 
-/** Which of the old console's actions the old page would offer, with its conditions. */
+/**
+ * Which of the old console's actions the old page would offer, with its
+ * conditions. Every one of them is a change in Insights, which the server's
+ * gate takes only from somebody with edit there: an action is offered only
+ * when `edit` is true.
+ */
 export interface ArticleOffers {
-  /** The person has an email, so a commit under their name is accepted. Without it no site action is offered. */
+  /** The person has edit on Insights. Without it nothing below is offered, and no form of the page is drawn. */
+  edit: boolean;
+  /** Both conditions hold: edit on Insights, and an email, so a commit under their name is accepted. Without it no site action is offered. */
   canPublish: boolean;
+  /**
+   * Why not, for the sentence that says so; null when they can publish.
+   * "access": Insights is read-only for them, and the owner changes that under
+   * Team › Access & Roles (an email would not help). "address": they have
+   * edit and no email yet.
+   */
+  why: "access" | "address" | null;
   /** The site actions, in the order offered: publish (from draft), list (from unlisted), unlist (from listed), takedown. */
   site: ("publish" | "list" | "unlist" | "takedown")[];
-  /** Draw another cover: offered once there is one. */
+  /** Draw another cover: offered once there is one, to somebody with `edit`. */
   redraw: boolean;
-  /** A video link: attach the video or just the text, and cut the silent clip again. */
+  /** A video link: attach the video or just the text, and cut the silent clip again. Its forms are for somebody with `edit`. */
   video: boolean;
-  /** Delete the draft: only while it is not on the site. */
+  /** Delete the draft: only while it is not on the site, and only with `edit`. */
   remove: boolean;
 }
 
@@ -289,6 +303,6 @@ export interface LinkPayload {
   draft: { id: number; title: string; state: SiteState } | null;
   work: ArticleWork;
   history: ActivityItem[];
-  /** "Try it again": offered while the link has no draft. */
+  /** "Try it again": offered while the link has no draft, to somebody with edit on Insights. */
   offers: { retry: boolean };
 }

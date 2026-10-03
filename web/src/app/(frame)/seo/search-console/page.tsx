@@ -2,6 +2,7 @@ import type { SeoSearchConsolePayload } from "@/contract/seo/search-console";
 import { api, ask } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { ScChart } from "@/components/seo/search-console/Chart";
 import { Explorer } from "@/components/seo/search-console/Explorer";
 import { ScFilters } from "@/components/seo/search-console/Filters";
@@ -40,6 +41,8 @@ export default async function SeoSearchConsolePage({ searchParams }: { searchPar
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoSearchConsolePayload>("/api/v1/seo/search-console", params);
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Search Console" icon="line-chart">
         <Empty icon="alert" title="The desk did not answer for this page">

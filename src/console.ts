@@ -2,7 +2,8 @@ import { db, log, queueState, reclaim } from "./db.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { CLOSING_JOBS, type ClosingJob } from "./templates.ts";
 import type { PostBlock } from "./blocks.ts";
-import type { Person } from "./people.ts";
+import { areaLevel } from "./grants.ts";
+import { publishBlock, type Person } from "./people.ts";
 import { spell, type PageStats } from "./ga4.ts";
 
 /**
@@ -193,11 +194,16 @@ export function page(title: string, inner: string): string {
 }
 
 
-/** Who is signed in, and the way to the people page. On every page. */
+/**
+ * Who is signed in, and the way to the people page. On every page. The
+ * warning is only for somebody an email would help: a person the owner gave
+ * Insights to read only, or not at all, sees this bar too (on the people
+ * page), and "no email yet" would be the wrong reason.
+ */
 function bar(who: Person): string {
   return `<div class="who">
     <span>Signed in as <b style="color:var(--fg)">${esc(who.name)}</b>${
-      who.canPublish ? "" : ` \u2014 <span style="color:var(--warn)">no email yet, so you cannot publish</span>`
+      publishBlock(who) === "address" ? ` \u2014 <span style="color:var(--warn)">no email yet, so you cannot publish</span>` : ""
     }</span>
     <span><a href="/console">Everything</a> &nbsp;\u00b7&nbsp; <a href="/people">People</a> &nbsp;
       <form method="post" action="/logout"><button>Sign out</button></form></span>
@@ -420,6 +426,11 @@ export function draftPage(
     d.state === "listed" ? "listed" : d.state === "unlisted" ? "unlisted" : "draft";
   const shelf = TOPICS.find((t) => t.id === l.topic)?.name ?? "";
   const kind = String(l.kind ?? "article");
+  /* A form is drawn only for somebody the gate will take it from: every one of them is a change in
+     Insights, so a person given Insights to read gets the article and no buttons. And the sentence
+     under it gives the true reason they cannot publish (src/people.ts `publishBlock`). */
+  const edit = areaLevel(who, "insights") === "edit";
+  const block = publishBlock(who);
 
   /* The source's own numbers and, once it is live, the article's. Both are
      shown with the same weight because the question they answer together is
@@ -482,10 +493,14 @@ export function draftPage(
          /* The real picture, served by the desk from what it drew. */
          d.cover_alt
            ? `<img src="/cover/${esc(d.slug)}.webp" alt="${esc(d.cover_alt)}"
-                   style="width:100%;border-radius:10px;margin:0 0 10px;display:block" />
+                   style="width:100%;border-radius:10px;margin:0 0 ${edit ? 10 : 22}px;display:block" />${
+                edit
+                  ? `
               <form method="post" action="/draft/${d.id}/redraw" style="margin:0 0 22px">
                 <button class="off">Draw another cover</button>
               </form>`
+                  : ""
+              }`
            : `<p class="caveat" style="margin:0 0 20px">No cover drawn yet \u2014 it is queued for the workstation.</p>`
        }
        ${
@@ -493,7 +508,7 @@ export function draftPage(
             an article link and a carousel have nothing to play, and a button
             offering to attach nothing is a button that teaches you to
             distrust the page. */
-         l.kind === "video"
+         l.kind === "video" && edit
            ? `<form method="post" action="/draft/${d.id}/attach" style="margin:0 0 22px">
                 <button class="off">${l.attach === 0 ? "Attach the video" : "Just the text, no video"}</button>
                 <span class="caveat" style="margin-left:10px">${
@@ -539,7 +554,10 @@ export function draftPage(
 
      <div class="acts">
        ${
-         !who.canPublish
+         block === "access"
+           ? `<p class="caveat" style="margin:0">Insights is read-only for you, so this article is not yours to publish
+              or change. The owner changes that under Team › Access &amp; Roles.</p>`
+           : block === "address"
            ? `<p class="caveat" style="margin:0">Add your Vercel email on the <a href="/people">people page</a>
               before you can publish \u2014 the commit goes out under your name and Vercel will refuse it otherwise.</p>`
            : onSite === "draft"
@@ -556,7 +574,7 @@ export function draftPage(
          /* Only when it is needed. Five ways to end an article is machinery,
             and machinery on a page somebody reads every day is clutter — so it
             appears beside the warning that calls for it and nowhere else. */
-         d.echo
+         d.echo && edit
            ? `<form method="post" action="/draft/${d.id}/reclose">
                 <select name="job">${jobs}</select>
                 <button>End it differently</button>
@@ -564,7 +582,7 @@ export function draftPage(
            : ""
        }
        ${
-         onSite === "draft"
+         onSite === "draft" && edit
            ? `<form method="post" action="/draft/${d.id}/remove" onsubmit="return confirm('Delete this draft? The link stays and can be written again.')">
                 <button class="del">Delete the draft</button>
               </form>`
@@ -574,8 +592,8 @@ export function draftPage(
   );
 }
 
-/** A link with no draft yet: what we know, and why it is waiting. */
-export function linkPage(id: number): string | null {
+/** A link with no draft yet: what we know, and why it is waiting. "Try it again" is a change in Insights, drawn for somebody who has edit there. */
+export function linkPage(id: number, who: Person): string | null {
   const l = db.prepare("SELECT * FROM links WHERE id = ?").get(id) as Record<string, unknown> | undefined;
   if (!l) return null;
 
@@ -606,7 +624,7 @@ export function linkPage(id: number): string | null {
            }</p>`,
        )
        .join("")}
-     <form method="post" action="/link/${id}/retry"><button>Try it again</button></form>`,
+     ${areaLevel(who, "insights") === "edit" ? `<form method="post" action="/link/${id}/retry"><button>Try it again</button></form>` : ""}`,
   );
 }
 

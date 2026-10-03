@@ -7,8 +7,10 @@ import { askPost } from "@/lib/api";
  * Run SEO audit: ask the desk to read every page of the website again now.
  *
  * It is the desk's own "run now" for the crawl job (POST /api/v1/jobs/crawl/run),
- * which anyone signed in may ask for and which the desk server refuses when
- * the crawl is running or ran less than ten minutes ago. The visitor's cookie
+ * which the desk server takes from edit on Automations, or from somebody who
+ * may change something and sees an area the crawl feeds (src/grants.ts
+ * `mayRunJob`), and refuses when the crawl is running or ran less than ten
+ * minutes ago. The visitor's cookie
  * and Origin travel with it (lib/api.ts), so the server decides who is asking.
  * Nothing is sent anywhere but the desk server; the crawl only reads the site.
  *

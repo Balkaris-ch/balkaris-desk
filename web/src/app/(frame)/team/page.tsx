@@ -43,7 +43,7 @@ export default async function TeamActivityPage({ searchParams }: { searchParams:
       />
       <TeamTabs me={who} active="" />
       <ActivityTiles data={data} />
-      {data.person ? <PersonCard p={data.person} at={data.at} /> : null}
+      {data.person ? <PersonCard p={data.person} at={data.at} range={data.range} /> : null}
       <Grid cols="1.65fr 1fr" mid="minmax(0, 1fr)">
         <TimelineCard data={data} />
         <Stack className="dk-team-side">

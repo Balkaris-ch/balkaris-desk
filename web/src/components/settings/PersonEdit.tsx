@@ -49,12 +49,13 @@ function Answer({ said }: { said: Said | null }) {
 /**
  * The address, which is two things: what their commits carry, and (for
  * anybody who signs in with Google) how the desk finds them. So it is fixed
- * for the owner and for a switched-off person, and changing it for somebody
- * who signs in with Google takes a box that says what it does.
+ * for the owner, for a switched-off person and for one whose access the owner
+ * limited (the server refuses all three), and changing it for somebody who
+ * signs in with Google takes a box that says what it does.
  */
 function Address({ person }: { person: SettingsPerson }) {
   const detach = useId();
-  if (person.owner || (person.revoked && person.email)) {
+  if (person.owner || ((person.revoked || person.restricted) && person.email)) {
     return (
       <div className="dk-settings-fixed">
         <span className="dk-settings-fixed-label">Address for publishing</span>
@@ -62,7 +63,9 @@ function Address({ person }: { person: SettingsPerson }) {
         <span className="dk-settings-fixed-hint">
           {person.owner
             ? "The owner's address is DESK_OWNER in the server's configuration. Changing it here would take ownership away, so it changes there."
-            : "They are switched off, and Google sign-in finds a person by this address: changing or removing it would let them back in as a new person. It stays as it is while they are switched off."}
+            : person.revoked
+              ? "They are switched off, and Google sign-in finds a person by this address: changing or removing it would let them back in as a new person. It stays as it is while they are switched off."
+              : "Their access is limited, and Google sign-in finds a person by this address: changing or removing it would let them in as a new person, with what a newcomer gets. Lift the restriction under Team › Access & Roles before changing it."}
         </span>
       </div>
     );
@@ -82,7 +85,7 @@ function Address({ person }: { person: SettingsPerson }) {
             <span className="dk-settings-checklabel">Detach their Google sign-in</span>
             <span className="dk-settings-checkhint">
               Needed to change or remove the address. This row keeps its byline{person.telegram ? ", Telegram id" : ""} and rights under the new address; their next sign-in as{" "}
-              {person.email} makes a new person, with the studio byline and no enquiry right.
+              {person.email} makes a new person, with what a newcomer gets (Team › Access &amp; Roles), the studio byline and no enquiry right.
             </span>
           </label>
         </div>

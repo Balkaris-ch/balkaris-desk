@@ -4,6 +4,7 @@ import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { Absent } from "@/components/ui/Read";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { isTab, optimizeHref, type OptimizeTab } from "@/components/seo/optimize/bits";
 import { OperatorColumn } from "@/components/seo/optimize/OperatorColumn";
 import { CompetitorsPanel, PerformancePanel, PotentialPanel, StatusPanel } from "@/components/seo/optimize/Overview";
@@ -50,6 +51,8 @@ export default async function SeoPageOptimizationPage({ searchParams }: { search
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoPageViewPayload>("/api/v1/seo/optimize", params);
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Page Optimization" icon="pages">
         <Empty icon="alert" title="The desk did not answer for this page">

@@ -26,7 +26,8 @@ function YouCard({ me, people, access }: { me: Me; people: Reading<SettingsPeopl
       </div>
       <div className="dk-settings-chips">
         {me.owner ? <Chip tone="violet">Owner</Chip> : null}
-        {me.canPublish ? <Chip tone="good">Can publish</Chip> : <Chip tone="warn">Cannot publish: no address</Chip>}
+        {/* With an address and still not publishing, it is their access (no edit on Insights): the owner's choice, not something to fix. */}
+        {me.canPublish ? <Chip tone="good">Can publish</Chip> : me.email ? <Chip>Does not publish</Chip> : <Chip tone="warn">Cannot publish: no address</Chip>}
         {me.seesLeads ? <Chip tone="good">Sees enquiries</Chip> : <Chip>Enquiry counts only</Chip>}
       </div>
       <Facts

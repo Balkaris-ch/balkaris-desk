@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { startTransition, useActionState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/Button";
 import { Field, Input } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
@@ -49,8 +49,22 @@ export function NewcomersForm({ value, presets }: { value: string; presets: { ke
 export function InviteForm({ domain, presets, preset }: { domain: string; presets: { key: string; label: string; about: string }[]; preset?: string }) {
   const [said, act, busy] = useActionState(inviteMember, null);
   const chosen = presets.some((p) => p.key === preset) ? preset : (presets.find((p) => p.key === "content-editor") ?? presets[0])?.key;
+  /* React empties a form after its action, a refusal included, and Role would fall back to Content Editor: the submit is taken by hand, so what was typed and chosen stays, and only a success clears it. */
+  const form = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (said?.ok) form.current?.reset();
+  }, [said]);
   return (
-    <form action={act} className="dk-team-form">
+    <form
+      ref={form}
+      action={act}
+      className="dk-team-form"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const data = new FormData(e.currentTarget);
+        startTransition(() => act(data));
+      }}
+    >
       <Field label="Name" hint="As the team list should show it. Their Google name replaces it when they first sign in.">
         <Input name="name" placeholder="Jane Doe" autoComplete="off" required maxLength={80} />
       </Field>

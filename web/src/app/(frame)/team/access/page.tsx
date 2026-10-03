@@ -149,7 +149,8 @@ function Glance({ data, people }: { data: TeamAccess; people: AccessPerson[] }) 
       key: "who",
       head: "Person",
       sort: (p) => p.name.toLowerCase(),
-      cell: (p) => <Who name={p.name} sub={p.role.label} />,
+      /* The cells show the access stored for them, a switched-off person's too: the row says it does not apply today. */
+      cell: (p) => <Who name={p.name} sub={p.revoked ? `Switched off · ${p.role.label}` : p.role.label} />,
     },
     ...data.areas.map(
       (a): Column<AccessPerson> => ({

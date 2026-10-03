@@ -54,9 +54,17 @@ export default async function TeamInvitationsPage({ searchParams }: { searchPara
       head: "Status",
       sort: (i) => (i.joinedAt ? 1 : 0),
       cell: (i) =>
-        i.joinedAt ? (
+        i.revoked ? (
+          <Badge tone="bad" dot>
+            Switched off
+          </Badge>
+        ) : i.joinedAt ? (
           <Badge tone="good" dot>
             <span suppressHydrationWarning>Joined {ago(i.joinedAt, at)}</span>
+          </Badge>
+        ) : i.linked ? (
+          <Badge tone="info" dot>
+            Linked to Telegram, not signed in yet
           </Badge>
         ) : (
           <Badge tone="info" dot>
@@ -73,7 +81,8 @@ export default async function TeamInvitationsPage({ searchParams }: { searchPara
           <LinkButton href={`/team/access?person=${i.id}`} size="xs" variant="quiet">
             Access
           </LinkButton>
-          {i.joinedAt ? null : <WithdrawButton id={i.id} name={i.name} />}
+          {/* The server refuses to withdraw a linked or a switched-off invitation (contract/team.ts): no button that could only be refused. */}
+          {i.joinedAt || i.linked || i.revoked ? null : <WithdrawButton id={i.id} name={i.name} />}
         </span>
       ),
     },
@@ -104,11 +113,11 @@ export default async function TeamInvitationsPage({ searchParams }: { searchPara
               <span className="dk-team-strong">The desk finds their invitation</span> by that address and opens exactly what you chose. Their status here turns to Joined.
             </li>
           </ol>
-          <p className="dk-team-note">Change what they may do at any time under Access & Roles, before or after they sign in. Withdrawing an unused invitation removes it; once they have signed in, switch them off in Settings › People instead.</p>
+          <p className="dk-team-note">Change what they may do at any time under Access & Roles, before or after they sign in. Withdrawing an unused invitation removes it; once they have signed in, switch them off in Settings › People instead. An invitation that was linked to a Telegram account, or switched off, is not withdrawn either: it is managed under Access & Roles and Settings › People.</p>
         </Card>
       </Grid>
 
-      <Card title="Invitations" icon="mail" count={data.invitations.length} sub={open ? `${open} not used yet.` : "Everybody invited has signed in."} flush>
+      <Card title="Invitations" icon="mail" count={data.invitations.length || undefined} sub={!data.invitations.length ? undefined : open ? `${open} not used yet.` : "Everybody invited has signed in."} flush>
         <Table caption="Invitations" rows={data.invitations} rowKey={(i) => i.id} columns={columns} density="roomy" minWidth={760} empty="Nobody has been invited yet. People who sign in by themselves are under Members." />
       </Card>
     </>

@@ -7,10 +7,12 @@ import { askPost } from "@/lib/api";
 
 /**
  * The Automations screen's three changes. Each asks the desk server, which
- * decides who may: anybody signed in may run a job now (the core API's
- * /jobs/:name/run, with its floor between two asks), only the owner may
- * switch one off or on (/jobs/:name/enabled). Nothing is decided here
- * beyond refusing a name that cannot be a job's.
+ * decides who may: running a job now (the core API's /jobs/:name/run, with
+ * its floor between two asks) takes edit on Automations, or, from somebody
+ * who may change something on the desk, a job that feeds an area they see
+ * (src/grants.ts `mayRunJob`); only the owner may switch one off or on
+ * (/jobs/:name/enabled). Nothing is decided here beyond refusing a name that
+ * cannot be a job's.
  *
  * Each returns what the server said, for the button that asked, and redraws
  * the screen so the job's new state shows.

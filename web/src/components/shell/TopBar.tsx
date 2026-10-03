@@ -10,7 +10,7 @@ import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { CommandPalette } from "./CommandPalette";
-import { mayOpen } from "./nav";
+import { mayOpen, type PageAccess } from "./nav";
 import { MenuButton } from "./NavDrawer";
 import { Popover } from "./Popover";
 import "./topbar.css";
@@ -32,6 +32,10 @@ export interface TopBarProps {
  * only when `SystemStatus.ok` says nothing is failing AND `checked` says
  * something was looked at. Over nothing checked, or when the server has not
  * reported, it is grey and says so, rather than assuming all is well.
+ *
+ * Its panels link only to pages this person may open (`Me.access.pages`): the
+ * status keeps its lines and a notice its text, without a link that would
+ * end at a refusal.
  */
 export function TopBar({ me, system }: TopBarProps) {
   const [palette, setPalette] = useState(false);
@@ -62,9 +66,9 @@ export function TopBar({ me, system }: TopBarProps) {
       </button>
 
       <div className="dk-top-right">
-        <StatusLight status={live.data} problem={live.error} />
+        <StatusLight status={live.data} problem={live.error} pages={me.access?.pages} />
         <span className="dk-top-sep" aria-hidden />
-        <Notices status={live.data} />
+        <Notices status={live.data} pages={me.access?.pages} />
         <span className="dk-top-sep" aria-hidden />
         <PersonMenu me={me} />
       </div>
@@ -74,7 +78,7 @@ export function TopBar({ me, system }: TopBarProps) {
   );
 }
 
-function StatusLight({ status, problem }: { status: SystemStatus | null; problem: string | null }) {
+function StatusLight({ status, problem, pages }: { status: SystemStatus | null; problem: string | null; pages: PageAccess | undefined }) {
   /* `ok` only says nothing is failing. Over nothing checked it vouches for
      nothing, so the light is then grey, neither green nor red. */
   const vouches = status !== null && status.checked > 0;
@@ -82,6 +86,8 @@ function StatusLight({ status, problem }: { status: SystemStatus | null; problem
   const line = status ? status.line : "Status not reported";
   const checks = status ? [...status.checks].sort((a, b) => Number(a.ok) - Number(b.ok)) : [];
   const failing = status ? status.sources.filter((s) => s.state === "failing") : [];
+  const health = mayOpen(pages, "/site-health");
+  const sources = mayOpen(pages, "/settings");
 
   return (
     <Popover
@@ -127,14 +133,20 @@ function StatusLight({ status, problem }: { status: SystemStatus | null; problem
 
       {status && problem ? <p className="dk-pop-note">Could not refresh just now: {problem}</p> : null}
 
-      <div className="dk-pop-links">
-        <Link href="/site-health" prefetch={false}>
-          Site Health
-        </Link>
-        <Link href="/settings" prefetch={false}>
-          Sources
-        </Link>
-      </div>
+      {health || sources ? (
+        <div className="dk-pop-links">
+          {health ? (
+            <Link href="/site-health" prefetch={false}>
+              Site Health
+            </Link>
+          ) : null}
+          {sources ? (
+            <Link href="/settings" prefetch={false}>
+              Sources
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
     </Popover>
   );
 }
@@ -176,7 +188,7 @@ const when = (a: { at: string }): number => {
  * first visit shows no count. Where the browser cannot remember (storage
  * refused), there is no count at all: a number on a bell must never be a guess.
  */
-function Notices({ status }: { status: SystemStatus | null }) {
+function Notices({ status, pages }: { status: SystemStatus | null; pages: PageAccess | undefined }) {
   const notices = status?.notices ?? [];
   /* The newest moment already shown, or null while it is not known. */
   const [seen, setSeen] = useState<number | null>(null);
@@ -256,7 +268,7 @@ function Notices({ status }: { status: SystemStatus | null }) {
             );
             return (
               <li key={a.id}>
-                {a.href ? (
+                {a.href && mayOpen(pages, a.href) ? (
                   <Go href={a.href} className="dk-notice dk-notice--link">
                     {body}
                   </Go>

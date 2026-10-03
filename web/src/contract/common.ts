@@ -199,6 +199,7 @@ export interface JobStatus {
   lastStart: string | null;
   lastEnd: string | null;
   lastOk: boolean | null;
+  /** What the last run said. Null as well for a person who sees none of the areas the job feeds: they are told that it ran and whether it worked, not what it read. */
   lastNote: string | null;
   nextRun: string | null;
   runs: number;

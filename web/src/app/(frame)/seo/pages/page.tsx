@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import type { SeoPagesPayload } from "@/contract/seo/pages";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { ContentCard, KeywordsCard, PerformanceCard, SerpCard } from "@/components/seo/pages/Below";
 import { Filters } from "@/components/seo/pages/Filters";
 import { PagesList } from "@/components/seo/pages/PagesList";
@@ -35,6 +36,8 @@ export default async function SeoPagesPage({ searchParams }: { searchParams: Sea
   if (!got.ok) {
     /* redirect() works by throwing, so it stays outside any try block. */
     if (got.kind === "signed-out") redirect("/auth/google");
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Pages" icon="pages">
         <Empty icon="alert" title={got.kind === "missing" ? "Not on this desk yet" : "The desk did not answer"}>

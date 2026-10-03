@@ -1,6 +1,6 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { TaskResult } from "@/contract/operator";
-import { ask, me as whoIsLooking } from "@/lib/api";
+import { ask, DeskError, me as whoIsLooking } from "@/lib/api";
 import { ago, clock, duration, fullDate, sourceLabel } from "@/lib/format";
 import { PageHead } from "@/components/shell/PageHead";
 import { Card } from "@/components/ui/Card";
@@ -27,11 +27,19 @@ export default async function OperatorResultPage({ params }: { params: Promise<{
   const got = await ask<TaskResult>(`/api/v1/operator/tasks/${id}`);
   if (!got.ok) {
     if (got.kind === "missing") notFound();
-    throw new Error(got.message);
+    if (got.kind === "signed-out") redirect("/auth/google");
+    /* With its digest, so a refusal at the gate is drawn as the access gate, not as a screen that broke. */
+    throw new DeskError(got.kind, got.status, got.message);
   }
   const r = got.value;
   const t = r.task;
   const who = await whoIsLooking();
+  /* The true reason somebody cannot approve, access asked first as the server asks it (src/people.ts `publishBlock`): an email would not help somebody whose Insights is read-only. */
+  const why = who.canPublish
+    ? null
+    : who.access?.pages?.insights !== undefined && who.access.pages.insights !== "edit"
+      ? "Approving changes the live site, and that needs edit on Insights. The owner gives it under Team › Access & Roles."
+      : "Approving changes the live site: it needs an email Vercel knows.";
 
   return (
     <div className="dk-operator">
@@ -125,7 +133,7 @@ export default async function OperatorResultPage({ params }: { params: Promise<{
                       <span className="dk-operator-ap-sub">{p.kind === "redirect" ? `Redirect to ${p.after.to}` : p.shownTitle ?? p.after.title ?? p.after.description}</span>
                     </span>
                     <span className="dk-operator-ap-actions">
-                      <ReviewButton p={p} mode={p.state === "applied" ? "withdraw" : "review"} canApprove={who.canPublish} why={who.canPublish ? null : "Approving changes the live site: it needs an email Vercel knows."} specimen={false} label={p.state === "applied" && who.canPublish ? "Withdraw" : "Review"} variant={p.state === "applied" && who.canPublish ? "danger" : "quiet"} />
+                      <ReviewButton p={p} mode={p.state === "applied" ? "withdraw" : "review"} canApprove={who.canPublish} why={why} specimen={false} label={p.state === "applied" && who.canPublish ? "Withdraw" : "Review"} variant={p.state === "applied" && who.canPublish ? "danger" : "quiet"} />
                     </span>
                   </li>
                 ))}

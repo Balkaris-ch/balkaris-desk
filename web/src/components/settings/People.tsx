@@ -22,6 +22,8 @@ function enquiries(p: SettingsPerson) {
   if (p.owner) return <Badge tone="good">Always, owner</Badge>;
   if (p.seesLeads) return <Badge tone="good">May see</Badge>;
   if (p.revoked && p.leadsGranted) return <Chip>Granted, while off: no</Chip>;
+  /* The right is given and their access does not include Leads, where it would show (Team › Access & Roles). */
+  if (p.leadsGranted) return <Chip>Granted, needs Leads</Chip>;
   return <span className="dk-settings-quiet">Counts only</span>;
 }
 
@@ -58,7 +60,7 @@ function columns(view: SettingsPeople): Column<SettingsPerson>[] {
       ),
     },
     {
-      /* Access and publishing in one: a switched-off person cannot publish, and anybody else can once they carry an address. */
+      /* Access and publishing in one: a switched-off person cannot publish; anybody else can with an address and edit on Insights. With an address and still not publishing, it is the access, which is the owner's choice and no warning. */
       key: "status",
       head: "Access",
       sort: (p) => (p.revoked ? 0 : p.canPublish ? 2 : 1),
@@ -70,6 +72,10 @@ function columns(view: SettingsPeople): Column<SettingsPerson>[] {
         ) : p.canPublish ? (
           <Badge tone="good" dot>
             Can publish
+          </Badge>
+        ) : p.email ? (
+          <Badge tone="quiet" dot>
+            Active, does not publish
           </Badge>
         ) : (
           <Badge tone="warn" dot>
@@ -184,8 +190,9 @@ export function PeopleSection({ people, domain }: { people: Reading<SettingsPeop
         <Card title="May see enquiries" icon="lock">
           <Prose>
             <p>
-              An enquiry is a stranger&apos;s personal data. Everybody signed in sees how many came in; the names, contact details and messages of people who wrote through the
-              website are shown only to the owner and to the people the owner allows here. A switched-off person never sees them, and the desk stores nothing about an enquiry.
+              An enquiry is a stranger&apos;s personal data. Everybody with the Command Center, Conversions or Leads sees how many came in; the names, contact details and messages
+              of people who wrote through the website are shown only to the owner and to the people the owner allows here, once they also have Leads. A switched-off person never
+              sees them, and the desk stores nothing about an enquiry.
             </p>
           </Prose>
           <Read reading={people} form="inline">

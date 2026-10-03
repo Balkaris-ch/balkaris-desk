@@ -1,5 +1,7 @@
 import { Hono, type Context } from "hono";
 import { HTTPException } from "hono/http-exception";
+import { seesJob } from "../grants.ts";
+import type { Person } from "../people.ts";
 import { me, requireOwner, toMe, type Vars } from "./access.ts";
 import { find } from "./find.ts";
 import { runNow, setEnabled, status } from "./scheduler.ts";
@@ -60,6 +62,21 @@ const shown = (j: JobListed): JobListed => ({
   progress: j.progress?.what ? { ...j.progress, what: scrub(j.progress.what) } : j.progress,
 });
 
+/**
+ * The same, for one person. What a run SAID is the figures of the areas the
+ * job feeds (pages crawled, queries read): somebody given none of those areas
+ * (src/grants.ts `seesJob`) is told that it ran, when, and whether it worked,
+ * which is what the watchers on every screen need, and not what it read.
+ * Every job stays listed for everybody.
+ */
+const shownTo =
+  (who: Person) =>
+  (j: JobListed): JobListed => {
+    const s = shown(j);
+    if (seesJob(who, j.name)) return s;
+    return { ...s, lastNote: null, progress: s.progress ? { done: s.progress.done, of: s.progress.of } : s.progress };
+  };
+
 /** One job by name, as shown, or undefined. */
 const oneJob = (name: string): JobListed | undefined => {
   const j = status().find((x) => x.name === name);
@@ -106,10 +123,12 @@ export function buildApi(screens: Record<string, Hono<Vars>>): Hono<Vars> {
   /* Who is looking. The interface asks this first on every page. */
   api.get("/me", (c) => c.json<Me>(toMe(me(c))));
 
-  /* The top bar's light, the sources behind Settings, and the bell. */
-  api.get("/system", (c) => c.json<SystemStatus>(systemStatus()));
+  /* The top bar's light, the sources behind Settings, and the bell: for this
+     person, who is shown only the notices that lead somewhere they may go. */
+  api.get("/system", (c) => c.json<SystemStatus>(systemStatus(me(c))));
 
-  /* Things that happened, newest first. ?limit=20 (1-100) ?kinds=a,b */
+  /* Things that happened, newest first. ?limit=20 (1-100) ?kinds=a,b
+     The Command Center's (src/grants.ts): the gate refuses it without that area. */
   api.get("/activity", (c) => {
     const kinds = (c.req.query("kinds") ?? "")
       .split(",")
@@ -120,12 +139,16 @@ export function buildApi(screens: Record<string, Hono<Vars>>): Hono<Vars> {
   });
 
   /* Every scheduled job: JobStatus, plus `ready` (false while its credential
-     does not exist) and `progress` while it runs. */
-  api.get("/jobs", (c) => c.json<JobListed[]>(status().map(shown)));
+     does not exist) and `progress` while it runs. What its last run said is
+     given to the people who see an area it feeds (`shownTo`). */
+  api.get("/jobs", (c) => c.json<JobListed[]>(status().map(shownTo(me(c)))));
 
-  /* Run one now, ahead of the queue. Anybody signed in may: it is the
-     "refresh" behind a screen, and the scheduler still runs one job at a
-     time. What it may not do is overrule the owner or hammer a source:
+  /* Run one now, ahead of the queue: the "refresh" behind a screen. WHO MAY
+     is decided at the server's gate before this is reached (src/grants.ts
+     `mayRunJob`): edit on Automations for any job, or, for somebody who may
+     change something on the desk, an area the job feeds. The scheduler still
+     runs one job at a time. What nobody may do is overrule the owner or
+     hammer a source:
 
        409  not ready (what it reads is not connected), or switched off by
             the owner, which a refresh button does not undo;

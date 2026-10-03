@@ -52,7 +52,7 @@ export function Trouble({ error, retry, form }: TroubleProps) {
       )}
       {kind === "forbidden" || kind === "missing" || (kind === "broken" && form === "panel") ? (
         <LinkButton href="/" icon="home">
-          Command Center
+          Back to the desk
         </LinkButton>
       ) : null}
     </Gate>

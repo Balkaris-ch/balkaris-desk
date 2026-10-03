@@ -68,7 +68,7 @@ export default async function TeamMembersPage({ searchParams }: { searchParams: 
           delta="none"
           noStamp
           reading={stat(data.counts.total, data.canEdit ? `${data.counts.online} online now` : "on the desk")}
-          info="Everybody who can sign in to the desk, invited people included. People known only from the Telegram bot are not counted."
+          info="Everybody with an address on the desk or an invitation. People known only from the Telegram bot, with no address, are not counted."
         />
         {roles.map((r) => (
           <Tile key={r.key} label={r.label} delta="none" noStamp reading={stat(r.count, r.count === 1 ? "person" : "people")} />

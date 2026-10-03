@@ -837,6 +837,14 @@ try {
       kw.length === 1 && kw[0]!.title === "specimen alpha" && kw[0]!.href === "/seo?open=specimen%20alpha" && /Google Search, .* 20 clicks, 400 impressions, average position 8/.test(kw[0]!.sub ?? "") && requests === asked,
       kw,
     );
+    /* The same reader with one SEO page switched off: a keyword leads to the earlier SEO screen, which is refused to them (src/grants.ts). */
+    const narrowed = { ...(reader as object), grants: { seo: "view", "page:seo/keywords": "none" } } as never;
+    const all = await find("alpha specimen", narrowed);
+    check(
+      "a reader with an SEO page switched off is offered no keyword, and still the rest",
+      !all.some((h) => h.kind === "keyword") && (await find("alpha specimen", reader)).some((h) => h.kind === "keyword" && h.href === "/seo?open=specimen%20alpha") && (await find("seo", narrowed)).some((h) => h.kind === "section" && h.href === "/seo"),
+      all,
+    );
 
     /* An answer of the general door from three days ago, which nothing reads any more. */
     db.prepare("INSERT INTO cc_cache (key, json, at) VALUES ('gsc:q:specimen-old', '{}', ?)").run(Date.now() - 72 * 3_600_000);

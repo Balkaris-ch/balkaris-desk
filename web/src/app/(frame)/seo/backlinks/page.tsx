@@ -3,6 +3,7 @@ import { api, ask } from "@/lib/api";
 import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { Bing } from "@/components/seo/backlinks/Bing";
 import { BlTiles } from "@/components/seo/backlinks/BlTiles";
 import { Nap } from "@/components/seo/backlinks/Nap";
@@ -36,6 +37,8 @@ export default async function SeoBacklinksPage({ searchParams }: { searchParams:
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoBacklinksPayload>("/api/v1/seo/backlinks", params);
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="Backlinks" icon="link">
         <Empty icon="alert" title="The desk did not answer for this page">

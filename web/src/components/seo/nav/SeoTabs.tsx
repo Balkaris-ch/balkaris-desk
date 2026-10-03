@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
 import { Icon } from "@/components/ui/icons";
+import { mayOpen, type PageAccess } from "@/components/shell/nav";
 import { SEO_PAGES, seoPlace } from "./pages";
 
 /**
@@ -19,8 +20,11 @@ import { SEO_PAGES, seoPlace } from "./pages";
  * strip is still wider than the screen it scrolls sideways, fades at the edge
  * that has more with an arrow there for a mouse, and brings the lit tab into
  * view.
+ *
+ * A page the owner withheld from this person has no tab (`pages`, as the
+ * sidebar's submenu follows it); on such a page's own address none is lit.
  */
-export function SeoTabs({ opportunities }: { opportunities: number | null }) {
+export function SeoTabs({ opportunities, pages }: { opportunities: number | null; pages?: PageAccess }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const active = seoPlace(pathname)?.page.key;
@@ -88,7 +92,7 @@ export function SeoTabs({ opportunities }: { opportunities: number | null }) {
         </button>
       ) : null}
       <ul ref={strip} onScroll={measure}>
-        {SEO_PAGES.map((p) => {
+        {SEO_PAGES.filter((p) => mayOpen(pages, p.href)).map((p) => {
           const on = p.key === active;
           const count = p.key === "opportunities" ? opportunities : null;
           return (

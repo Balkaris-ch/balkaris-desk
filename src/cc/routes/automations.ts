@@ -35,8 +35,9 @@ import type {
  *   POST /run-due   put every job whose time has come at the front of the queue.
  *
  * Running one job now and switching one off are the core API's routes
- * (POST /api/v1/jobs/:name/run, anybody signed in; /jobs/:name/enabled, the
- * owner only). This file does not repeat them.
+ * (POST /api/v1/jobs/:name/run, for edit on Automations or an area the job
+ * feeds, decided at the gate by src/grants.ts `mayRunJob`; /jobs/:name/enabled,
+ * the owner only). This file does not repeat them.
  *
  * Everything here is read from the desk's own database and the scheduler in
  * memory: no source outside the box is asked, so the screen costs no quota.
@@ -683,10 +684,11 @@ routes.get("/", async (c) => {
 });
 
 /**
- * Put every job whose time has come at the front of the queue. Anybody
- * signed in may, as with one job: it asks for nothing the scheduler would not
- * start by itself within minutes, and the scheduler still runs one job at a
- * time. A job is due when it is ready, on, not running, and its next run has
+ * Put every job whose time has come at the front of the queue. It is
+ * Automations' own change, so it needs edit on Automations (the gate), the
+ * level that also runs any one job: it asks for nothing the scheduler would
+ * not start by itself within minutes, and the scheduler still runs one job at
+ * a time. A job is due when it is ready, on, not running, and its next run has
  * passed, which also means its last start is further back than the core
  * API's floor for asking.
  */

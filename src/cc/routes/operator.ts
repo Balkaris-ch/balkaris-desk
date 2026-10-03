@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { me, type Vars } from "../access.ts";
 import { articleStats, channels, gaRange, pages as gaPages, type GaRange } from "../ga4.ts";
-import { approve, proposalCount, proposalRow, proposals, proposeRedirect, reject, withdraw } from "../operator/apply.ts";
+import { approve, cannotApprove, proposalCount, proposalRow, proposals, proposeRedirect, reject, withdraw } from "../operator/apply.ts";
 import { contextInsights, contextIssues, contextPages, contextTraffic, fixable, waitingDrafts } from "../operator/context.ts";
 import { shownTitle } from "../operator/packs.ts";
 import { advanceAudits, allResults, allTasks, cancel, cards, createTask, latest, newest, openRows, result, runnerState, taskCounts, workingNow } from "../operator/queue.ts";
@@ -201,7 +201,7 @@ routes.get("/", async (c) => {
     range,
     me: {
       canApprove: who.canPublish,
-      why: who.canPublish ? null : `${who.name} cannot publish yet: approving changes the live site, and needs an email Vercel knows, added on the people page.`,
+      why: cannotApprove(who, "approving"),
     },
     runner: runnerState(),
     working: workingNow(),

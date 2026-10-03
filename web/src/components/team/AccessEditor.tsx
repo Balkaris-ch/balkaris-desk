@@ -56,7 +56,9 @@ function PresetForm({ person, presets }: { person: AccessPerson; presets: Access
       <input type="hidden" name="id" value={person.id} />
       <span className="dk-team-preset-label">Start from a template</span>
       <span className="dk-team-preset-pick">
+        {/* Keyed by the template they have: React does not re-apply a changed defaultValue to a mounted select, and after Apply the picker would still show the one before. */}
         <Select
+          key={person.role.key}
           name="preset"
           label="Template"
           defaultValue={presets.some((p) => p.key === person.role.key) ? person.role.key : ""}

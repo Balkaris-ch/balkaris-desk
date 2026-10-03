@@ -146,6 +146,18 @@ export const getPerson = (telegram: number): Person | null =>
   row(db.prepare("SELECT * FROM people WHERE telegram = ?").get(telegram) as Record<string, unknown> | undefined);
 
 /**
+ * Why this person cannot publish, for the sentence that tells them; null when
+ * they can. "access": they do not have edit on Insights (or are switched
+ * off), and the owner changes that. "address": they have it and no email.
+ * Access is asked FIRST, so somebody with neither is not sent to add an email
+ * that would not help them.
+ */
+export function publishBlock(p: Person): "access" | "address" | null {
+  if (p.canPublish) return null;
+  return areaLevel(p, "insights") !== "edit" ? "access" : "address";
+}
+
+/**
  * The same person, found by the address they signed in with.
  *
  * Since the login became Google, the EMAIL is the identity and it arrives
@@ -164,6 +176,43 @@ export const byEmail = (email: string): Person | null =>
  * otherwise a new one is made with a NEGATIVE id, because `telegram` is the
  * primary key and this person may never write to the bot at all. When they
  * do, `remember()` links the real id to the same address.
+ *
+ * THE ROW ALREADY IN ITS PLACE. The id is made from the address, so a row
+ * sitting there without the address is the row of somebody whose address the
+ * owner changed or removed since. It used to be replaced whole, which handed
+ * a restricted or switched-off person every area back the next time they
+ * signed in with the old address. What happens now goes by what the row
+ * carries (`landing`):
+ *
+ *   ANOTHER address   The row is found by the address the owner gave it, and
+ *                     a sign-in with the former one does not touch it: not
+ *                     its address, byline, enquiry right, grants or
+ *                     switch-off. Moving it back would leave the address the
+ *                     owner restricted with no row, and that address would
+ *                     then sign in as a newcomer. The arriving address goes
+ *                     one id below, with what a newcomer gets. While a row it
+ *                     passed is restricted or switched off it gets NOTHING,
+ *                     and the same switch-off: it may be the same person
+ *                     coming in by their former address, so they wait for the
+ *                     owner, who sees them on the team as waiting.
+ *   NO address        Nobody else is found by this row, so it gets the
+ *                     address back and keeps what the owner decided: grants
+ *                     that are stored stay exactly as stored and switched off
+ *                     stays switched off. With no grants it gets what a
+ *                     newcomer gets, as a new row would. The byline and the
+ *                     enquiry right do not come back.
+ *
+ * The id below is read the same way, and the one below that, because that is
+ * where the rows made beside the place are: one of them re-addressed in its
+ * turn is passed like the first, and one whose address was removed takes the
+ * address back, with nothing instead of a newcomer's share, and the same
+ * switch-off, where a row passed on the way to it is restricted or switched
+ * off.
+ *
+ * So a sign-in never undoes what the owner decided about a row, and never
+ * takes a person off the address the owner gave them. The owner's own address
+ * is the one exception, the other way: it always lands on its id unrestricted
+ * and switched on, so a row planted there cannot lock the owner out.
  */
 export function rememberGoogle(email: string, name: string): Person {
   const had = byEmail(email);
@@ -171,17 +220,18 @@ export function rememberGoogle(email: string, name: string): Person {
     db.prepare("UPDATE people SET name = ? WHERE telegram = ?").run(name, had.telegram);
     return { ...had, name };
   }
+  const owner = email.toLowerCase() === OWNER_EMAIL;
+  const { id, there, limited, off } = landing(email);
   /* Somebody nobody invited starts with what the owner chose for newcomers
      (Team › Access & Roles): everything, as before, unless the owner chose otherwise. */
-  const grants = email.toLowerCase() === OWNER_EMAIL ? null : newcomerGrants();
-  const id = googleId(email);
-  db.prepare("INSERT OR REPLACE INTO people (telegram, name, email, author, grants) VALUES (?,?,?,?,?)").run(
-    id,
-    name,
-    email,
-    "balkaris",
-    grantsColumn(grants),
-  );
+  const stored = !!there && parseGrants(there.grants) !== null;
+  const grants = owner ? null : stored ? (there?.grants ?? null) : limited || off ? grantsColumn({}) : grantsColumn(newcomerGrants());
+  const revoked = !owner && (off || there?.revoked) ? 1 : 0;
+  db.prepare(
+    `INSERT INTO people (telegram, name, email, author, grants, revoked) VALUES (?,?,?,'balkaris',?,?)
+     ON CONFLICT(telegram) DO UPDATE SET name = excluded.name, email = excluded.email, author = 'balkaris',
+       sees_leads = 0, grants = excluded.grants, revoked = excluded.revoked`,
+  ).run(id, name, email, grants, revoked);
   log("person.google", { email });
   return getPerson(id)!;
 }
@@ -191,10 +241,99 @@ function googleId(email: string): number {
   return -Math.abs([...email].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) || 1);
 }
 
+type Seat = { email: string | null; grants: string | null; revoked: number };
+
+/**
+ * Where a sign-in with an address no row carries lands, by `rememberGoogle`'s
+ * rule: past every row that carries another address, on the first id that is
+ * free or holds a row with no address (`there`). `limited` and `off` say
+ * whether the owner limited or switched off one of the rows passed, and
+ * `passed` is the first of them. The ids only go down, so they stay negative
+ * and are never a Telegram id; a row made beside its place is found by its
+ * address from then on, not by the number. The owner's address passes nobody.
+ */
+function landing(email: string): { id: number; there: Seat | undefined; passed: number | null; limited: boolean; off: boolean } {
+  const seat = db.prepare("SELECT email, grants, revoked FROM people WHERE telegram = ?");
+  const place = googleId(email);
+  const owner = email.toLowerCase() === OWNER_EMAIL;
+  let id = place;
+  let there = seat.get(id) as Seat | undefined;
+  let limited = false;
+  let off = false;
+  while (!owner && there?.email) {
+    off ||= !!there.revoked;
+    limited ||= parseGrants(there.grants) !== null;
+    there = seat.get(--id) as Seat | undefined;
+  }
+  return { id, there, passed: id === place ? null : place, limited, off };
+}
+
+/**
+ * Who sits where an address would sign in to, and how the address would
+ * arrive, for the invitation that cannot be made there (the invitation is the
+ * row at that place). "back": on this person's own row, which has no address
+ * and takes it back. Otherwise as a new person beside them: switched "off" or
+ * with "nothing" while a row it passes is, else as a "newcomer". Null when the
+ * place is free. Read from the same walk as the sign-in, so the sentence the
+ * owner is given cannot drift from what happens.
+ */
+export function inPlaceOf(email: string): { person: Person; arrives: "back" | "off" | "nothing" | "newcomer" } | null {
+  const l = landing(email);
+  const at = l.there ? l.id : l.passed;
+  const person = at === null ? null : getPerson(at);
+  if (!person) return null;
+  return { person, arrives: l.there ? "back" : l.off ? "off" : l.limited ? "nothing" : "newcomer" };
+}
+
+/**
+ * Why a person's address may not be changed or removed, or null when it may.
+ *
+ * Google sign-in finds a person by their address and nothing else
+ * (`rememberGoogle`). An address nobody carries any more is a NEW person the
+ * next time somebody signs in with it, with what a newcomer gets. So while a
+ * person is switched off ("off") or their access is limited ("restricted"),
+ * the address they have stays: changing it would be a way round what the
+ * owner decided. Adding one where there was none only closes a door. Asked by
+ * both doors that change an address (Settings › People and the old console's
+ * people form), so the two cannot drift.
+ */
+export function addressHeld(p: Person): "off" | "restricted" | null {
+  if (!p.email) return null;
+  return p.revoked ? "off" : p.grants !== null ? "restricted" : null;
+}
+
 export const everyone = (): Person[] =>
   (db.prepare("SELECT * FROM people ORDER BY name").all() as Record<string, unknown>[])
     .map(row)
     .filter((p): p is Person => !!p);
+
+/**
+ * WHO THE BOT PUBLISHES AS, for a link somebody shared with it.
+ *
+ * The Telegram door never passes the server's gate, so the access the owner
+ * gave is asked here, once, for the automatic publishing (src/server.ts
+ * `autoPublish`):
+ *
+ *   held     the desk knows the sharer and they do not have edit on Insights:
+ *            read-only, not given at all, or switched off. The piece is
+ *            written and waits on the desk for somebody who may publish. It
+ *            goes by the grants and never by "has an address": falling back
+ *            to the owner here would publish, under the owner's name, for
+ *            exactly the people the owner told the desk not to publish for.
+ *   by       the sharer, when they can publish; else the owner, which is the
+ *            rule for somebody the desk does not know and for a teammate the
+ *            bot met who has no address and no restriction (Settings ›
+ *            Writing documents it).
+ *   nobody   neither can: no address on the desk at all.
+ */
+export type Publisher = { by: Person } | { held: Person } | { nobody: true };
+
+export function publisherFor(sharer: Person | null, all: Person[]): Publisher {
+  if (sharer && areaLevel(sharer, "insights") !== "edit") return { held: sharer };
+  if (sharer?.canPublish) return { by: sharer };
+  const owner = all.find((p) => p.owner && p.canPublish);
+  return owner ? { by: owner } : { nobody: true };
+}
 
 /**
  * Remember somebody who wrote to the bot.
@@ -308,10 +447,17 @@ export function invite(email: string, name: string, grants: Grants | null, by: s
   return getPerson(id)!;
 }
 
-/** Take back an invitation nobody has used: the row goes, as if it had never been made. */
-export function withdraw(telegram: number): void {
-  db.prepare("DELETE FROM people WHERE telegram = ? AND telegram < 0 AND invited_at IS NOT NULL").run(telegram);
-  log("person.withdrawn", { telegram });
+/**
+ * Take back an invitation nobody has used: the row goes, as if it had never
+ * been made. Only a row sign-in made for an address (a negative id) that was
+ * an invitation: never the bot's row for a person, whose Telegram identity and
+ * byline would go with it. Answers whether a row went, and writes it down
+ * only then, so the caller can say what really happened.
+ */
+export function withdraw(telegram: number): boolean {
+  const gone = Number(db.prepare("DELETE FROM people WHERE telegram = ? AND telegram < 0 AND invited_at IS NOT NULL").run(telegram).changes) > 0;
+  if (gone) log("person.withdrawn", { telegram });
+  return gone;
 }
 
 export function setAuthor(telegram: number, author: string): void {

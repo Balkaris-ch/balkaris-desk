@@ -3,6 +3,7 @@ import type { SeoAutomationsPayload } from "@/contract/seo/automations";
 import { ask, me } from "@/lib/api";
 import { parseRange } from "@/lib/format";
 import { Watch } from "@/components/automations/Watch";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { Browser } from "@/components/seo/automations/Browser";
 import { JobTable } from "@/components/seo/automations/JobTable";
 import { Recent } from "@/components/seo/automations/Recent";
@@ -40,6 +41,8 @@ export default async function SeoAutomationsPage({ searchParams }: { searchParam
 
   if (!answer.ok) {
     if (answer.kind === "signed-out") redirect("/auth/google");
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (answer.kind === "forbidden") return <SeoRefused message={answer.message} />;
     return (
       <Card title="Automations" icon="clock">
         <Empty icon="alert" title="The SEO automations could not be read">

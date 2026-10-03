@@ -6,6 +6,7 @@ import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { Grid } from "@/components/ui/Grid";
+import { SeoRefused } from "@/components/seo/nav/Refused";
 import { Answers, type ListedAt } from "@/components/seo/ai-search/Answers";
 import { Engines } from "@/components/seo/ai-search/Engines";
 import { ImportPanel } from "@/components/seo/ai-search/Imports";
@@ -50,6 +51,8 @@ export default async function SeoAiSearchPage({ searchParams }: { searchParams: 
   if (!got.ok) {
     /* Signed out or switched off: the usual way, through `api`, which redirects or shows the calm screen. */
     if (got.kind === "signed-out" || got.kind === "off") await api<SeoAiSearchPayload>("/api/v1/seo/ai-search", { range });
+    /* A page the owner has not given this person: the server did answer, with a refusal, and the gate says so. */
+    if (got.kind === "forbidden") return <SeoRefused message={got.message} />;
     return (
       <Card title="AI Search" icon="sparkles">
         <Empty icon="alert" title="The desk did not answer for this page">

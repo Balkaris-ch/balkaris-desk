@@ -28,7 +28,8 @@ export interface JobTableProps {
 /**
  * The board's table (113, panel 9): one row per job, in two groups, with
  * its status, schedule, last run and next run, and its actions: Run now
- * (anybody signed in, through the core API's floor), the owner's on/off
+ * (whoever the server lets run that job, src/grants.ts `mayRunJob`, through
+ * the core API's floor), the owner's on/off
  * switch, and View, which opens what it reads, what it writes and its last
  * runs under the row.
  *

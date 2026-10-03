@@ -6,7 +6,7 @@ export default function FrameNotFound() {
   return (
     <Gate kind="not-found">
       <LinkButton href="/" variant="primary" icon="home">
-        Command Center
+        Back to the desk
       </LinkButton>
     </Gate>
   );

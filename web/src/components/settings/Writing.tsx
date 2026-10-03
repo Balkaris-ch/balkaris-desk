@@ -39,7 +39,11 @@ function PublishingCard({ writing }: { writing: Reading<SettingsWriting> }) {
                         note: "If the desk has an address for them: the commit is theirs, and Vercel builds it because they are on the team.",
                       },
                       w.fallback
-                        ? { label: "Otherwise as", value: w.fallback, note: "The owner, when the person who shared it has no address yet." }
+                        ? {
+                            label: "Otherwise as",
+                            value: w.fallback,
+                            note: "The owner, when the person who shared it has no address yet. A link shared by somebody without edit on Insights is written and waits on the desk as a draft.",
+                          }
                         : {
                             label: "Otherwise as",
                             value: (

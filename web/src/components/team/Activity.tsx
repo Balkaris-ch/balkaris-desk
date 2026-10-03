@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { TeamActivity, TeamEvent, TeamEventKind, TeamPersonActivity } from "@/contract/team";
+import type { TeamActivity, TeamEvent, TeamEventKind, TeamPersonActivity, TeamRange } from "@/contract/team";
 import { BarList } from "@/components/charts/BarList";
 import { Donut } from "@/components/charts/Donut";
 import { Legend, shareTexts } from "@/components/charts/Legend";
@@ -38,7 +38,7 @@ export function ActivityTiles({ data }: { data: TeamActivity }) {
       <Tile
         label="Total actions"
         icon="bolt"
-        info="Every change the desk accepted from a person (a publish, a saved comparison, a refresh, an access change), every link shared with the bot, and every website deployment by a team member. Sign-ins are not actions."
+        info="Every change the desk accepted from a person (a publish, a saved comparison, a refresh, an access change) and every link shared with the bot. Sign-ins and deployments are not actions."
         reading={data.tiles.actions}
         chart={(s) => <SparkBars data={s.series} label="Actions per period" />}
       />
@@ -109,7 +109,8 @@ export function TimelineCard({ data }: { data: TeamActivity }) {
     const key = zurich(e.at)?.key ?? e.at.slice(0, 10);
     (days.get(key) ?? days.set(key, []).get(key)!).push(e);
   }
-  const filtered = data.person !== null || data.timeline.length < 200;
+  /* Whether the desk has kept anything at all is the payload's to say (`since`), not this card's to guess from the filters. */
+  const nothingKept = data.since === null;
   return (
     <Card
       title="Team activity timeline"
@@ -138,8 +139,8 @@ export function TimelineCard({ data }: { data: TeamActivity }) {
           ))}
         </div>
       ) : (
-        <Empty icon="clock" title={filtered ? "Nothing in this period" : "Nothing recorded yet"} compact>
-          The desk writes down every change it accepts from a person, every sign-in and every link shared with the bot. A wider period or another filter may show more.
+        <Empty icon="clock" title={nothingKept ? "Nothing recorded yet" : "Nothing in this period"} compact>
+          The desk writes down every change it accepts from a person, every sign-in and every link shared with the bot.{nothingKept ? "" : " A wider period or another filter may show more."}
         </Empty>
       )}
     </Card>
@@ -192,7 +193,8 @@ export function ByMemberCard({ data }: { data: TeamActivity }) {
           label: m.name,
           value: m.actions,
           text: `${num(m.actions)} action${m.actions === 1 ? "" : "s"}`,
-          second: m.minutes ? `${num(m.minutes)} min` : undefined,
+          /* Minutes are summed by Zurich day, so on 24 hours they are today's. */
+          second: m.minutes ? `${num(m.minutes)} min${data.range === "24h" ? " today" : ""}` : undefined,
           href: `/team?member=${m.id}`,
         }))}
         emptyNote="Nobody did anything the desk records in this period."
@@ -251,14 +253,26 @@ export function DeploysCard({ data }: { data: TeamActivity }) {
   );
 }
 
-/** One person, when the activity is filtered to them: their minutes by day and the pages they spend them on. */
-export function PersonCard({ p, at }: { p: TeamPersonActivity; at: string }) {
+/**
+ * One person, when the activity is filtered to them: their minutes by day and
+ * the pages they spend them on.
+ *
+ * Minutes, screens and days are kept by Zurich day, so they cover the days
+ * drawn: on 24 hours that is today, and the labels say so, while Actions is
+ * the exact window (contract/team.ts, TeamPersonActivity).
+ */
+export function PersonCard({ p, at, range }: { p: TeamPersonActivity; at: string; range: TeamRange }) {
+  const today = range === "24h";
   const maxPage = Math.max(1, ...p.pages.map((x) => x.minutes * 3 + x.opens));
   return (
     <Card
       title={p.name}
       icon="user"
-      sub={<>What {p.name.split(/\s+/)[0]} did on the desk in the period.</>}
+      sub={
+        <>
+          What {p.name.split(/\s+/)[0]} did on the desk in the period. {today ? "Minutes and screens are today's, by the Zurich day; actions are those of the last 24 hours." : "Minutes, screens and days are counted by calendar day (Zurich)."}
+        </>
+      }
       right={
         <span className="dk-team-person-right">
           <RoleChip role={p.role} />
@@ -279,17 +293,19 @@ export function PersonCard({ p, at }: { p: TeamPersonActivity; at: string }) {
       <div className="dk-team-person">
         <dl className="dk-team-person-facts">
           <div>
-            <dt>Minutes of attention</dt>
+            <dt>{today ? "Minutes of attention today" : "Minutes of attention"}</dt>
             <dd className="dk-num">{num(p.totalMinutes)}</dd>
           </div>
           <div>
-            <dt>Screens opened</dt>
+            <dt>{today ? "Screens opened today" : "Screens opened"}</dt>
             <dd className="dk-num">{num(p.opens)}</dd>
           </div>
-          <div>
-            <dt>Days on the desk</dt>
-            <dd className="dk-num">{num(p.daysActive)}</dd>
-          </div>
+          {today ? null : (
+            <div>
+              <dt>Days on the desk</dt>
+              <dd className="dk-num">{num(p.daysActive)}</dd>
+            </div>
+          )}
           <div>
             <dt>Actions</dt>
             <dd className="dk-num">{num(p.actions)}</dd>
