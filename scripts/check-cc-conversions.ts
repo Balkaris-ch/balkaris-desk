@@ -352,7 +352,7 @@ check("starts: an unreadable method parameter is absent with its step", unregist
 
 /* ---- 6. through the route -------------------------------------------------------- */
 
-const person = (seesLeads: boolean): Person => ({ telegram: 1, name: "Zzyzx Viewer", email: "viewer@example.invalid", author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads });
+const person = (seesLeads: boolean): Person => ({ telegram: 1, name: "Zzyzx Viewer", email: "viewer@example.invalid", author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads, grants: null, invitedAt: null });
 async function ask(query: string, seesLeads: boolean): Promise<{ status: number; body: import("../web/src/contract/conversions.ts").ConversionsPayload }> {
   const app = new Hono<import("../src/cc/access.ts").Vars>();
   app.use("*", async (c, next) => {

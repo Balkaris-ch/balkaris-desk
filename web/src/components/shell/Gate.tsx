@@ -9,7 +9,7 @@ import "./gate.css";
  * (lib/failure.ts); `broken` is a fault in the interface itself, and
  * `not-found` an address with nothing behind it.
  */
-export type GateKind = ShownFailure | "broken" | "not-found";
+export type GateKind = ShownFailure | "broken" | "not-found" | "waiting";
 
 const TEXT: Record<GateKind, { icon: IconName; title: string; text: string }> = {
   down: {
@@ -25,7 +25,12 @@ const TEXT: Record<GateKind, { icon: IconName; title: string; text: string }> = 
   forbidden: {
     icon: "lock",
     title: "This part is not open to this account",
-    text: "The desk lets this account in, but not into this. The owner decides who sees enquiries and who changes settings, under People.",
+    text: "The desk lets this account in, but not into this. The owner chooses what each person sees and changes, under Team › Access & Roles.",
+  },
+  waiting: {
+    icon: "clock",
+    title: "Waiting for access",
+    text: "You are signed in, and the owner has not given this account any part of the desk yet. Once that is done, the desk opens here: there is nothing else to do.",
   },
   missing: {
     icon: "search",

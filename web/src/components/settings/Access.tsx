@@ -115,11 +115,13 @@ function RightsCard({ access }: { access: Reading<SettingsAccess> }) {
         {(a) => {
           const n = a.counts;
           const rows: Right[] = [
-            { what: "Open every screen and its figures", who: "Everyone signed in who is not switched off", how: `${n.active} of ${n.people}` },
-            { what: "Refresh a source now", who: "Everyone signed in; a second ask within minutes is refused, so a source is not hammered", how: `${n.active} of ${n.people}` },
-            { what: "Publish an article", who: "Everyone with an address for publishing", how: `${n.publish} of ${n.people}` },
+            { what: "Open a screen and its figures", who: "Everyone signed in who is not switched off, in the areas the owner gave them (Team › Access & Roles); anybody the owner has not restricted sees every area", how: `${n.active} of ${n.people}` },
+            { what: "Change something in an area", who: "Everyone with edit on that area; view lets them look and nothing more", how: "—" },
+            { what: "Refresh a source now", who: "Everyone with edit on any area; a second ask within minutes is refused, so a source is not hammered", how: "—" },
+            { what: "Publish an article", who: "Everyone with an address for publishing and edit on Insights", how: `${n.publish} of ${n.people}` },
             { what: "Read enquiries: names, contact details, messages", who: "The owner, and the people the owner allows", how: `${n.leads} of ${n.people}` },
             { what: "Change people, access and enquiry rights", who: "The owner only", how: "1" },
+            { what: "See the team's activity and invite people", who: "The owner only", how: "1" },
             { what: "Switch scheduled jobs off or on", who: "The owner only", how: "1" },
             { what: "Become the owner", who: "Nobody from the desk: DESK_OWNER in the server's configuration", how: "—" },
           ];

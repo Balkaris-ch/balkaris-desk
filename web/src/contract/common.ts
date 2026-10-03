@@ -129,6 +129,9 @@ export interface ActivityItem {
   actor?: string;
 }
 
+/** What somebody may do in a part of the desk (src/grants.ts): a look needs view, a change needs edit. */
+export type AccessLevel = "none" | "view" | "edit";
+
 /** Who is looking, as the interface needs to know them. */
 export interface Me {
   name: string;
@@ -137,6 +140,19 @@ export interface Me {
   canPublish: boolean;
   /** May read enquiries (names, contact details, messages). */
   seesLeads: boolean;
+  /**
+   * What the owner gave them, page by page: the sidebar draws only what is
+   * not "none". Keys are addresses without the leading slash ("traffic",
+   * "seo/keywords", "team/members"); the Command Center is "overview".
+   * The server refuses the rest whatever the sidebar shows.
+   */
+  access: {
+    /** True when the owner narrowed what they see; false for the owner and for everybody with every area. */
+    restricted: boolean;
+    pages: Record<string, AccessLevel>;
+    /** The first page they may open, or null while the owner has given them nothing. */
+    home: string | null;
+  };
 }
 
 /** One source in Settings and behind "All systems operational". */

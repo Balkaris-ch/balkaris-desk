@@ -10,6 +10,7 @@ import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { CommandPalette } from "./CommandPalette";
+import { mayOpen } from "./nav";
 import { MenuButton } from "./NavDrawer";
 import { Popover } from "./Popover";
 import "./topbar.css";
@@ -68,7 +69,7 @@ export function TopBar({ me, system }: TopBarProps) {
         <PersonMenu me={me} />
       </div>
 
-      <CommandPalette open={palette} onClose={() => setPalette(false)} />
+      <CommandPalette open={palette} onClose={() => setPalette(false)} pages={me.access?.pages} />
     </header>
   );
 }
@@ -289,15 +290,25 @@ function PersonMenu({ me }: { me: Me }) {
         <span className="dk-menu-name">{me.name}</span>
         {me.email ? <span className="dk-menu-mail">{me.email}</span> : null}
       </div>
-      <Link href="/settings" prefetch={false} className="dk-menu-row">
-        <Icon name="settings" size={16} />
-        Settings
-      </Link>
+      {mayOpen(me.access?.pages, "/settings") ? (
+        <Link href="/settings" prefetch={false} className="dk-menu-row">
+          <Icon name="settings" size={16} />
+          Settings
+        </Link>
+      ) : null}
+      {me.owner ? (
+        <Link href="/team" prefetch={false} className="dk-menu-row">
+          <Icon name="users" size={16} />
+          Team activity
+        </Link>
+      ) : null}
       {/* The classic console is drawn by the desk server, not by this app: a plain link. */}
-      <a href="/console" className="dk-menu-row">
-        <Icon name="terminal" size={16} />
-        Classic console
-      </a>
+      {mayOpen(me.access?.pages, "/content") ? (
+        <a href="/console" className="dk-menu-row">
+          <Icon name="terminal" size={16} />
+          Classic console
+        </a>
+      ) : null}
       <form method="post" action="/logout" className="dk-menu-form">
         <button type="submit" className="dk-menu-row">
           <Icon name="logout" size={16} />

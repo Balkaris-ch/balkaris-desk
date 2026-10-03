@@ -16,6 +16,8 @@ import { coverPath, saveClip, saveCover } from "./covers.ts";
 import { allowed, authUrl, checkState, client, DOMAIN, exchange, mintState } from "./google.ts";
 import { clear, devUser, issue, whoIs } from "./session.ts";
 import { explainForChat } from "./why.ts";
+import { judge } from "./grants.ts";
+import { acted, feedMark, seen } from "./presence.ts";
 import type { Vars } from "./cc/access.ts";
 
 /**
@@ -172,6 +174,15 @@ const REVOKED = page(
    <form method="post" action="/logout" style="margin:26px 0"><button>Sign out</button></form>`,
 );
 
+/* Shown on the old console to somebody whose grants leave that part of the desk out (src/grants.ts). */
+const NO_ACCESS = (why: string) =>
+  page(
+    "No access",
+    `<h1>Not part of your access</h1>
+     <p class="sub">${why.replace(/[&<>]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[ch]!)}</p>
+     <p style="margin:26px 0"><a class="btn" href="/">Open the desk</a></p>`,
+  );
+
 /* Shown when a change arrives from somewhere that is not one of the desk's pages. */
 const FOREIGN = page(
   "Refused",
@@ -248,6 +259,12 @@ function fromOurPages(c: { req: { header: (name: string) => string | undefined }
  *                      and OPTIONS is a change. The machine doors above never
  *                      reach this (they carry no Origin and prove themselves
  *                      by secret), and /logout and /auth are routed before it.
+ *   a part of the desk the owner did not give them: 403, with which part and
+ *                      who to ask (src/grants.ts). The owner is never refused.
+ *
+ * Past it, what they do is written down for the owner's Team › Activity
+ * (src/presence.ts): that they are here, which screens they open, and every
+ * change the desk accepted from them.
  */
 app.use("*", async (c, next) => {
   const p = c.req.path;
@@ -268,8 +285,23 @@ app.use("*", async (c, next) => {
     return api ? c.json({ error: "That request did not come from the desk's own pages." }, 403) : c.html(FOREIGN, 403);
   }
 
+  /* What the owner gave them (src/grants.ts): the area this path belongs to,
+     view for a look and edit for a change. The one door for every route, the
+     API's and the old console's, so no route can forget it. */
+  const verdict = judge(who, p, c.req.method);
+  /* Present, whatever the answer: a person refused a page is still on the desk. */
+  if (api) seen(who.telegram, p, c.req.method, verdict.ok);
+  if (!verdict.ok) {
+    const why = verdict.why ?? "That is not part of your access.";
+    return api ? c.json({ error: why }, 403) : c.html(NO_ACCESS(why), 403);
+  }
+
+  const change = !["GET", "HEAD", "OPTIONS"].includes(c.req.method);
+  const mark = change ? feedMark() : null;
   c.set("who", who);
   await next();
+  /* What they changed, once the desk has said it worked (src/presence.ts). */
+  if (change) acted(who, p, c.req.method, c.res.status, mark, c.get("did"));
 });
 
 const me = (c: { get: (k: "who") => Person }) => c.get("who");
