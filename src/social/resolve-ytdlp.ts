@@ -44,7 +44,18 @@ interface YtDlpJson {
   comment_count?: number
   url?: string
   thumbnail?: string
-  formats?: Array<{ url?: string; vcodec?: string; acodec?: string; ext?: string; height?: number; protocol?: string }>
+  formats?: YtDlpFormat[]
+}
+
+interface YtDlpFormat {
+  url?: string
+  format_id?: string
+  vcodec?: string
+  acodec?: string
+  ext?: string
+  height?: number
+  abr?: number
+  protocol?: string
 }
 
 function n(v: unknown): number | null {
@@ -55,19 +66,38 @@ function s(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null
 }
 
-/** Best directly-downloadable mp4 the extractor found. */
-function pickMediaUrl(j: YtDlpJson): string | null {
-  const http = (j.formats ?? []).filter(
-    (f) => s(f.url) && f.vcodec && f.vcodec !== 'none' && (!f.protocol || f.protocol.startsWith('http')),
-  )
+/** Best directly-downloadable mp4 the extractor found, and its sound when it has none. */
+function pickMedia(j: YtDlpJson): { mediaUrl: string; audioUrl: string | null } | null {
+  const formats = j.formats ?? []
+  const viaHttp = (f: YtDlpFormat) => s(f.url) && (!f.protocol || f.protocol.startsWith('http'))
+  const http = formats.filter((f) => viaHttp(f) && f.vcodec && f.vcodec !== 'none')
   // Instagram lists video-only DASH streams at the top resolutions. A file
   // without an audio track has nothing for Whisper (2026-09-03: ffmpeg
-  // "does not contain any stream"), so prefer a muxed format and fall back
-  // to video-only only when nothing else exists.
+  // "does not contain any stream"), so prefer a muxed format.
   const muxed = http.filter((f) => f.acodec && f.acodec !== 'none')
-  const pool = muxed.length > 0 ? muxed : http
-  const best = pool.sort((a, b) => (a.height ?? 0) - (b.height ?? 0)).pop()
-  return best?.url ?? s(j.url)
+  if (muxed.length > 0) {
+    const best = muxed.sort((a, b) => (a.height ?? 0) - (b.height ?? 0)).pop()!
+    return { mediaUrl: best.url!, audioUrl: null }
+  }
+  // YouTube stopped offering a muxed format for some Shorts (2026-10-03: 50
+  // formats, none with both, so the desk took silent video and ffmpeg found
+  // no audio three times). Take the video and the best audio-only stream and
+  // let fetchMedia join them. AAC first, so the join is a copy; the "-drc"
+  // variants are volume-squashed duplicates.
+  const best = http.sort((a, b) => (a.height ?? 0) - (b.height ?? 0)).pop()
+  const mediaUrl = best?.url ?? s(j.url)
+  if (!mediaUrl) return null
+  const audio = formats
+    .filter((f) => viaHttp(f) && (!f.vcodec || f.vcodec === 'none') && f.acodec && f.acodec !== 'none')
+    .sort((a, b) => rank(a) - rank(b))
+    .pop()
+  return { mediaUrl, audioUrl: audio?.url ?? null }
+}
+
+function rank(f: YtDlpFormat): number {
+  const aac = f.ext === 'm4a' || /^mp4a/.test(f.acodec ?? '') ? 1_000_000 : 0
+  const drc = /drc/.test(f.format_id ?? '') ? 0 : 100_000
+  return aac + drc + (f.abr ?? 0)
 }
 
 /** Ask yt-dlp about one page. `label` only shapes the error wording. */
@@ -106,8 +136,8 @@ async function probeWithYtDlp(pageUrl: string, label: string): Promise<YtDlpJson
 
 export async function resolveInstagram(pageUrl: string, shortcode: string): Promise<Resolved> {
   const j = await probeWithYtDlp(pageUrl, 'instagram')
-  const mediaUrl = pickMediaUrl(j)
-  if (!mediaUrl) throw new ResolveError('no downloadable video format found', 'upstream_failed')
+  const media = pickMedia(j)
+  if (!media) throw new ResolveError('no downloadable video format found', 'upstream_failed')
 
   const source: SourceRecord = {
     platform: 'instagram',
@@ -127,7 +157,7 @@ export async function resolveInstagram(pageUrl: string, shortcode: string): Prom
     saves: null,
   }
 
-  return { source, transient: { mediaUrl, coverUrl: s(j.thumbnail), sizeBytes: null } }
+  return { source, transient: { ...media, coverUrl: s(j.thumbnail), sizeBytes: null } }
 }
 
 /**
@@ -137,8 +167,8 @@ export async function resolveInstagram(pageUrl: string, shortcode: string): Prom
  */
 export async function resolveYouTube(pageUrl: string, videoId: string): Promise<Resolved> {
   const j = await probeWithYtDlp(pageUrl, 'youtube')
-  const mediaUrl = pickMediaUrl(j)
-  if (!mediaUrl) throw new ResolveError('no downloadable video format found', 'upstream_failed')
+  const media = pickMedia(j)
+  if (!media) throw new ResolveError('no downloadable video format found', 'upstream_failed')
 
   const title = s(j.title)
   const description = s(j.description)
@@ -162,5 +192,5 @@ export async function resolveYouTube(pageUrl: string, videoId: string): Promise<
     saves: null,
   }
 
-  return { source, transient: { mediaUrl, coverUrl: s(j.thumbnail), sizeBytes: null } }
+  return { source, transient: { ...media, coverUrl: s(j.thumbnail), sizeBytes: null } }
 }

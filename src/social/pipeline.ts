@@ -3,7 +3,7 @@ import { promisify } from "node:util";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { canonicalUrl, classify, expandUrl, ResolveError, resolve } from "./resolve.ts";
-import { download, probe, rmWork, workDir } from "./media.ts";
+import { download, fetchMedia, probe, rmWork, workDir } from "./media.ts";
 import { makePreview, type Preview } from "./preview.ts";
 import { transcribeVideo } from "./transcribe.ts";
 import type { Platform, SourceRecord } from "./types.ts";
@@ -267,7 +267,7 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
     const { source, transient } = await resolve(expanded);
 
     const file = path.join(dir, `${videoId}.mp4`);
-    await download(transient.mediaUrl, file, 120_000);
+    await fetchMedia(transient, file);
     const meta = await probe(file);
 
     /* Cut it while the file is still here. Everything that needs the media

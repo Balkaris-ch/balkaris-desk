@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { classify, expandUrl, resolve } from "./social/resolve.ts";
-import { download, probe } from "./social/media.ts";
+import { fetchMedia, probe } from "./social/media.ts";
 import { makePreview } from "./social/preview.ts";
 import { draft, type DraftInput } from "./draft.ts";
 import { health, WRITE_MODEL } from "./llm.ts";
@@ -282,7 +282,7 @@ async function doClip(draft: { id: number; slug: string }, url: string): Promise
     const { transient } = await resolve(expanded);
 
     const file = path.join(dir, `${videoId}.mp4`);
-    await download(transient.mediaUrl, file, 120_000);
+    await fetchMedia(transient, file);
     const meta = await probe(file);
 
     const out = await makePreview(file, dir, meta.durationS);

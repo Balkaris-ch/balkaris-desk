@@ -3,6 +3,7 @@ import { promisify } from "node:util";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
+import type { TransientMedia } from "./types.ts";
 
 /**
  * Getting a file, measuring it, and getting rid of it.
@@ -35,6 +36,7 @@ const require = createRequire(import.meta.url);
 /* Vendored binaries — identical behaviour on every machine. Never depend on
    whatever ffmpeg happens to be lying around. */
 const ffprobePath: string = require("ffprobe-static").path;
+const ffmpegPath: string = require("ffmpeg-static");
 
 export interface ProbeResult {
   durationS: number;
@@ -103,6 +105,35 @@ export async function download(url: string, outFile: string, timeoutMs = 60_000)
   } catch (e) {
     const m = (e as Error).name === "TimeoutError" ? `body read timed out after ${timeoutMs}ms` : (e as Error).message;
     throw new Error(`download failed: ${m}`);
+  }
+}
+
+/**
+ * The resolved media as one file with picture and sound. Usually that is one
+ * download; when the platform only offered them apart (`audioUrl`), both are
+ * fetched and ffmpeg joins them, copying the picture and re-encoding only the
+ * sound, so an Opus track fits the mp4 too.
+ */
+export async function fetchMedia(t: TransientMedia, outFile: string, timeoutMs = 120_000): Promise<void> {
+  if (!t.audioUrl) {
+    await download(t.mediaUrl, outFile, timeoutMs);
+    return;
+  }
+  const video = `${outFile}.video`;
+  const audio = `${outFile}.audio`;
+  try {
+    await download(t.mediaUrl, video, timeoutMs);
+    await download(t.audioUrl, audio, timeoutMs);
+    await execFileP(ffmpegPath, [
+      "-y", "-hide_banner", "-loglevel", "error",
+      "-i", video, "-i", audio,
+      "-map", "0:v:0", "-map", "1:a:0",
+      "-c:v", "copy", "-c:a", "aac", "-shortest",
+      outFile,
+    ]);
+  } finally {
+    await rm(video, { force: true });
+    await rm(audio, { force: true });
   }
 }
 

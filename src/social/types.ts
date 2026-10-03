@@ -47,6 +47,9 @@ export interface SourceRecord {
 export interface TransientMedia {
   /** Direct MP4. Valid for hours. Download it now or lose it. */
   mediaUrl: string;
+  /** Separate audio track, set only when `mediaUrl` is video without sound.
+   *  Same expiry as `mediaUrl`; `fetchMedia` joins the two into one file. */
+  audioUrl?: string | null;
   /** Cover image. Same expiry problem — download, never hot-link. */
   coverUrl: string | null;
   sizeBytes: number | null;
