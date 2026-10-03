@@ -1,4 +1,5 @@
 import { db, log } from "./db.ts";
+import { areaLevel, grantsColumn, newcomerGrants, parseGrants, type Grants } from "./grants.ts";
 
 /**
  * Who works this desk, and whose name goes on what.
@@ -44,7 +45,11 @@ export interface Person {
    * typo costs a byline and never a broken page.
    */
   author: string;
-  /** Publishing needs an email. Everything else does not. */
+  /**
+   * Publishing needs an email, and edit on Insights (src/grants.ts): somebody
+   * the owner gave Insights to read only cannot publish, from the desk or by
+   * the bot's automatic publishing.
+   */
   canPublish: boolean;
   /**
    * The owner can change anybody's email, byline and access; everyone else
@@ -68,9 +73,19 @@ export interface Person {
    * An enquiry is a stranger's personal data, and "has a @balkaris.ch
    * account" is not a reason to read it. So this is off for everybody until
    * the owner switches it on for them, the owner always has it, and a revoked
-   * person never does whatever the column says.
+   * person never does whatever the column says. Nor does somebody whose
+   * grants take Leads away: the right to read them is meaningless without
+   * the area, and every place that names an enquirer reads this.
    */
   seesLeads: boolean;
+  /**
+   * What the owner gave them, area by area (src/grants.ts). NULL is no row:
+   * everything, as the desk gave everybody before access existed. Never
+   * applies to the owner.
+   */
+  grants: Grants | null;
+  /** When the owner added them by address, before they ever signed in; null for everybody who arrived by themselves. */
+  invitedAt: string | null;
 }
 
 /** The one account that can change other people. */
@@ -98,8 +113,8 @@ db.exec(`
   );
 `);
 
-/* Added after the table existed. */
-for (const column of ["revoked INTEGER NOT NULL DEFAULT 0", "sees_leads INTEGER NOT NULL DEFAULT 0"]) {
+/* Added after the table existed. `grants` NULL is "no row": everything, as before (src/grants.ts). */
+for (const column of ["revoked INTEGER NOT NULL DEFAULT 0", "sees_leads INTEGER NOT NULL DEFAULT 0", "grants TEXT", "invited_at TEXT", "invited_by TEXT"]) {
   try {
     db.exec(`ALTER TABLE people ADD COLUMN ${column}`);
   } catch {
@@ -110,15 +125,20 @@ for (const column of ["revoked INTEGER NOT NULL DEFAULT 0", "sees_leads INTEGER 
 const row = (r: Record<string, unknown> | undefined): Person | null => {
   if (!r) return null;
   const owner = String(r.email ?? "").toLowerCase() === OWNER_EMAIL;
+  const revoked = !!r.revoked;
+  const grants = owner ? null : parseGrants(r.grants);
+  const holder = { owner, revoked, grants };
   return {
     telegram: Number(r.telegram),
     name: String(r.name),
     email: (r.email as string | null) ?? null,
     author: String(r.author ?? "balkaris"),
-    canPublish: !!r.email && !r.revoked,
+    canPublish: !!r.email && !revoked && areaLevel(holder, "insights") === "edit",
     owner,
-    revoked: !!r.revoked,
-    seesLeads: !r.revoked && (owner || !!r.sees_leads),
+    revoked,
+    seesLeads: !revoked && (owner || !!r.sees_leads) && areaLevel(holder, "leads") !== "none",
+    grants,
+    invitedAt: (r.invited_at as string | null) ?? null,
   };
 };
 
@@ -151,18 +171,24 @@ export function rememberGoogle(email: string, name: string): Person {
     db.prepare("UPDATE people SET name = ? WHERE telegram = ?").run(name, had.telegram);
     return { ...had, name };
   }
-  const id = -Math.abs(
-    [...email].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) || 1,
-  );
-  db.prepare("INSERT OR REPLACE INTO people (telegram, name, email, author) VALUES (?,?,?,?)").run(
+  /* Somebody nobody invited starts with what the owner chose for newcomers
+     (Team › Access & Roles): everything, as before, unless the owner chose otherwise. */
+  const grants = email.toLowerCase() === OWNER_EMAIL ? null : newcomerGrants();
+  const id = googleId(email);
+  db.prepare("INSERT OR REPLACE INTO people (telegram, name, email, author, grants) VALUES (?,?,?,?,?)").run(
     id,
     name,
     email,
     "balkaris",
+    grantsColumn(grants),
   );
   log("person.google", { email });
-  const owner = email.toLowerCase() === OWNER_EMAIL;
-  return { telegram: id, name, email, author: "balkaris", canPublish: true, owner, revoked: false, seesLeads: owner };
+  return getPerson(id)!;
+}
+
+/** The row id for somebody known only by their address: negative, so it can never be a Telegram id. */
+function googleId(email: string): number {
+  return -Math.abs([...email].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) >>> 0, 7) || 1);
 }
 
 export const everyone = (): Person[] =>
@@ -185,7 +211,7 @@ export function remember(telegram: number, name: string): Person {
   }
   db.prepare("INSERT INTO people (telegram, name) VALUES (?, ?)").run(telegram, name);
   log("person.new", { telegram, name });
-  return { telegram, name, email: null, author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads: false };
+  return { telegram, name, email: null, author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads: false, grants: null, invitedAt: null };
 }
 
 export function setEmail(telegram: number, email: string | null): void {
@@ -230,12 +256,62 @@ export function link(telegram: number, email: string): boolean {
      is stored, not as `seesLeads` reads (which is always true for the owner). */
   db.prepare(
     `UPDATE people SET email = ?, author = ?, revoked = ?,
-            sees_leads = (SELECT sees_leads FROM people WHERE telegram = ?)
+            sees_leads = (SELECT sees_leads FROM people WHERE telegram = ?),
+            grants     = (SELECT grants FROM people WHERE telegram = ?),
+            invited_at = (SELECT invited_at FROM people WHERE telegram = ?),
+            invited_by = (SELECT invited_by FROM people WHERE telegram = ?)
       WHERE telegram = ?`,
-  ).run(acct.email, acct.author, acct.revoked ? 1 : 0, acct.telegram, telegram);
+  ).run(acct.email, acct.author, acct.revoked ? 1 : 0, acct.telegram, acct.telegram, acct.telegram, acct.telegram, telegram);
   db.prepare("DELETE FROM people WHERE telegram = ?").run(acct.telegram);
+  /* What they did on the desk was done as the Google row; it is this person's now. */
+  for (const fn of onLink) fn(acct.telegram, telegram);
   log("person.linked", { telegram, email });
   return true;
+}
+
+/** Called with (old id, kept id) when two rows become one, so whoever keeps records by id can follow (src/presence.ts). */
+const onLink: ((from: number, to: number) => void)[] = [];
+export const whenLinked = (fn: (from: number, to: number) => void): void => void onLink.push(fn);
+
+/**
+ * What a person may do, area by area: the owner's choice, or NULL for no
+ * restriction. The caller checks that the owner is asking; this writes it
+ * down and records that it happened. The owner's own row is never written.
+ */
+export function setGrants(telegram: number, grants: Grants | null): void {
+  const p = getPerson(telegram);
+  if (!p || p.owner) return;
+  db.prepare("UPDATE people SET grants = ? WHERE telegram = ?").run(grantsColumn(grants), telegram);
+  log("person.grants", { telegram, grants: grants === null ? "all" : Object.keys(grants) });
+}
+
+/**
+ * Give somebody access before they ever sign in.
+ *
+ * The desk's identity is a Google account of the studio's domain, and Google
+ * sign-in finds a person by their address (`rememberGoogle`). So an
+ * invitation is simply the row their first sign-in will find: their name,
+ * their address, the access the owner chose, made now. Nothing is sent: the
+ * desk has no mail of its own, and the address is all they need to sign in.
+ */
+export function invite(email: string, name: string, grants: Grants | null, by: string): Person {
+  const id = googleId(email);
+  db.prepare("INSERT INTO people (telegram, name, email, author, grants, invited_at, invited_by) VALUES (?,?,?,?,?,datetime('now'),?)").run(
+    id,
+    name,
+    email,
+    "balkaris",
+    grantsColumn(grants),
+    by,
+  );
+  log("person.invited", { email, by });
+  return getPerson(id)!;
+}
+
+/** Take back an invitation nobody has used: the row goes, as if it had never been made. */
+export function withdraw(telegram: number): void {
+  db.prepare("DELETE FROM people WHERE telegram = ? AND telegram < 0 AND invited_at IS NOT NULL").run(telegram);
+  log("person.withdrawn", { telegram });
 }
 
 export function setAuthor(telegram: number, author: string): void {

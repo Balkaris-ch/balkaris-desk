@@ -6,7 +6,7 @@ import { useState, type CSSProperties } from "react";
 import { cx } from "@/lib/cx";
 import { Icon } from "@/components/ui/icons";
 import { seoPlace } from "@/components/seo/nav/pages";
-import { SECTIONS, sectionOf, type Section } from "./nav";
+import { sectionOf, visibleSections, type PageAccess, type Section } from "./nav";
 import "./side-group.css";
 
 /**
@@ -14,30 +14,35 @@ import "./side-group.css";
  * follows the address, and the frame's layout is not drawn again when the
  * address changes.
  *
- * A section with pages of its own (SEO) is a group: its row opens and closes
- * a submenu of those pages instead of going anywhere. The submenu is open
- * whenever the address is inside the section, and a click on the row opens it
- * from anywhere else; leaving the section closes it again. Inside the section
- * the lit row is the page's, not the section's, unless the submenu has been
- * closed or the address is none of its pages (SEO's earlier screen), when
- * the section's row is lit as any other.
+ * Only the sections and pages this person may open are drawn (`pages`, from
+ * /me: what the owner gave them, src/grants.ts). Hiding a row is courtesy;
+ * the server refuses the rest whatever is drawn here.
+ *
+ * A section with pages of its own (SEO, Team) is a group: its row opens and
+ * closes a submenu of those pages instead of going anywhere. The submenu is
+ * open whenever the address is inside the section, and a click on the row
+ * opens it from anywhere else (closing any other); leaving the section closes
+ * it again. Inside the section the lit row is the page's, not the section's,
+ * unless the submenu has been closed or the address is none of its pages
+ * (SEO's earlier screen), when the section's row is lit as any other.
  */
-export function SideNav() {
+export function SideNav({ pages }: { pages?: PageAccess | null }) {
   const pathname = usePathname();
+  const sections = visibleSections(pages);
   const active = sectionOf(pathname);
-  const group = SECTIONS.find((s) => s.children?.length);
-  const inGroup = group !== undefined && active?.key === group.key;
-  const [open, setOpen] = useState(inGroup);
+  const group = active?.children?.length ? sections.find((s) => s.key === active.key) : undefined;
+  const inGroup = group !== undefined;
+  const [open, setOpen] = useState<string | null>(inGroup ? group.key : null);
   const [at, setAt] = useState(pathname);
 
   /*
-   * Into the section (or from one of its pages to another): open. Out of it:
+   * Into a section (or from one of its pages to another): open. Out of it:
    * closed. Reset while drawing, not in an effect, so the screen a click led
    * to never shows one frame of the submenu as it was on the screen before.
    */
   if (at !== pathname) {
     setAt(pathname);
-    setOpen(inGroup);
+    setOpen(inGroup ? group.key : null);
   }
 
   /*
@@ -51,17 +56,28 @@ export function SideNav() {
    * finger.
    */
   const grown = inGroup && group?.children ? group.children.length : 0;
-  const fit = { "--side-rows": SECTIONS.length, "--side-subs": grown } as CSSProperties;
+  const fit = { "--side-rows": sections.length, "--side-subs": grown } as CSSProperties;
 
   return (
     <nav className={cx("dk-nav", grown > 0 && "dk-nav--grown")} aria-label="Sections" style={fit}>
       <ul>
-        {SECTIONS.map((s) => {
-          if (s.children?.length) return <Group key={s.key} section={s} open={open} inside={inGroup} pathname={pathname} onToggle={() => setOpen((o) => !o)} />;
+        {sections.map((s) => {
+          if (s.children?.length) {
+            return (
+              <Group
+                key={s.key}
+                section={s}
+                open={open === s.key}
+                inside={active?.key === s.key}
+                pathname={pathname}
+                onToggle={() => setOpen((o) => (o === s.key ? null : s.key))}
+              />
+            );
+          }
           const on = s.key === active?.key;
           return (
             <li key={s.key}>
-              {/* Not prefetched: fifteen rows would each render the frame on the box for nothing. */}
+              {/* Not prefetched: sixteen rows would each render the frame on the box for nothing. */}
               <Link href={s.href} prefetch={false} className={cx("dk-nav-row", on && "dk-nav-row--on")} aria-current={on ? "page" : undefined}>
                 <Icon name={s.icon} size={18} />
                 <span>{s.label}</span>
@@ -74,6 +90,13 @@ export function SideNav() {
   );
 }
 
+/** The page of a section's submenu an address is: the longest address that holds it, so /team/members is Members and not Activity's /team. */
+function litChild(section: Section, pathname: string): string | undefined {
+  if (section.key === "seo") return seoPlace(pathname)?.page.key;
+  const path = pathname.replace(/\/+$/, "") || "/";
+  return [...(section.children ?? [])].sort((a, b) => b.href.length - a.href.length).find((c) => path === c.href || path.startsWith(`${c.href}/`))?.key;
+}
+
 /**
  * A section with a submenu: a disclosure button and, under it, the pages as
  * indented rows with small icons. The pages' list is the section's own
@@ -81,7 +104,7 @@ export function SideNav() {
  * asks its own rule (Page Optimization lights Pages).
  */
 function Group({ section, open, inside, pathname, onToggle }: { section: Section; open: boolean; inside: boolean; pathname: string; onToggle: () => void }) {
-  const lit = section.key === "seo" ? seoPlace(pathname)?.page.key : undefined;
+  const lit = inside ? litChild(section, pathname) : undefined;
   /* An address inside the section that is none of its pages (SEO's earlier screen) lights the section's row. */
   const pageLit = inside && open && section.children?.some((c) => c.key === lit);
   const id = `dk-nav-sub-${section.key}`;

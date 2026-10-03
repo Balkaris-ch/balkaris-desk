@@ -69,6 +69,8 @@ the source is rejected before a human ever sees it.
 | `src/draft.ts` | Extract + match + template → a `Post`. |
 | `src/publish.ts` | Post → a file in the site repo, committed and pushed. |
 | `src/console.ts` | The small web console behind the tunnel. |
+| `src/grants.ts` | **Who sees what.** The desk's areas, none / view / edit per person, the role templates. Enforced at the server's one gate. |
+| `src/presence.ts` | What people do on the desk: online, pages opened, minutes, every change accepted. Read by the owner under Team › Activity. |
 
 ## Running it
 

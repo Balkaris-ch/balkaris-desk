@@ -1,15 +1,20 @@
 import { db } from "../db.ts";
+import { pageLevel, pageOfHref } from "../grants.ts";
 import type { Person } from "../people.ts";
 import type { SearchHit } from "../../web/src/contract/common.ts";
 
 /**
  * The search box in the top bar.
  *
- * It answers from what the desk has, by title: the fifteen sections (and the
+ * It answers from what the desk has, by title: the sixteen sections (and the
  * SEO section's own pages), and the desk's own articles and shared links.
  * That is all it knows today. Pages, keywords and assets arrive when their
  * collectors do, through
  * `registerSearch`, and nothing here has to change when they land.
+ *
+ * ACCESS. A hit that leads into a part of the desk the owner did not give
+ * this person (src/grants.ts) is never sent: sections, articles and every
+ * registered searcher's hits alike, by the address each one leads to.
  *
  * ENQUIRIES. A hit of kind "lead" carries somebody's name. Whatever a
  * registered searcher returns, a person who may not read enquiries
@@ -30,7 +35,7 @@ export interface Section {
 }
 
 /**
- * The fifteen, in the sidebar's order.
+ * The sixteen, in the sidebar's order.
  *
  * Site Health is NOT at /health: that address is the desk server's own
  * "are you up" answer, which Caddy and the uptime check ask, and it has to
@@ -52,6 +57,8 @@ export const SECTIONS: Section[] = [
   { name: "assets", title: "Assets", href: "/assets" },
   { name: "operator", title: "AI Operator", href: "/operator" },
   { name: "settings", title: "Settings", href: "/settings" },
+  /* Members, not Activity: the search box finds the page everybody given Team may open; the owner's pages are in its submenu. */
+  { name: "team", title: "Team", href: "/team/members" },
 ];
 
 /**
@@ -218,8 +225,14 @@ export async function find(query: string, who: Person, limit = 20): Promise<Sear
   for (const part of await Promise.all(searchers.map((fn) => ask(fn, q, who)))) hits.push(...part);
 
   const seen = new Set<string>();
+  /* Nothing from a part of the desk the owner did not give them: the hit would lead to a refusal, and its title is already a look. */
+  const mayOpen = (h: SearchHit): boolean => {
+    const page = pageOfHref(h.href);
+    return !page || pageLevel(who, page.key) !== "none";
+  };
   return hits
     .filter((h) => h.kind !== "lead" || who.seesLeads)
+    .filter(mayOpen)
     .filter((h) => !seen.has(`${h.kind} ${h.href}`) && !!seen.add(`${h.kind} ${h.href}`))
     .slice(0, limit);
 }

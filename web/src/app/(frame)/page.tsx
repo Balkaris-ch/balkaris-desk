@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import type { Overview } from "@/contract/overview";
 import { PageHead } from "@/components/shell/PageHead";
 import { Grid } from "@/components/ui/Grid";
@@ -35,7 +36,10 @@ export default async function CommandCenterPage({ searchParams }: { searchParams
   /* Only a fixed code and a recent time are taken from the address; anything else is ignored. */
   const said = readAudit(first(q.audit));
 
-  const [who, data] = await Promise.all([askMe(), api<Overview>("/api/v1/overview", { range, ...(specimen ? { specimen: "1" } : {}) })]);
+  /* Somebody the owner did not give the Command Center starts on the first page they were given (src/grants.ts `home`). */
+  const who = await askMe();
+  if (who.ok && who.value.access?.pages.overview === "none" && who.value.access.home && who.value.access.home !== "/") redirect(who.value.access.home);
+  const data = await api<Overview>("/api/v1/overview", { range, ...(specimen ? { specimen: "1" } : {}) });
   const name = who.ok ? firstName(who.value.name) : "";
   const keep = new URLSearchParams({ ...(range !== "30d" ? { range } : {}), ...(data.specimen ? { specimen: "1" } : {}) }).toString();
 

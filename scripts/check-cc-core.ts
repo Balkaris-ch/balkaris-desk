@@ -315,7 +315,10 @@ console.log("\n2. signed in");
 a = await ask("/api/v1/me", { who: member });
 check(
   "a member is told who they are, and nothing more",
-  a.status === 200 && JSON.stringify(Object.keys(a.json).sort()) === JSON.stringify(["canPublish", "email", "name", "owner", "seesLeads"]) && a.json.email === "member@desk.test",
+  a.status === 200 &&
+    JSON.stringify(Object.keys(a.json).sort()) === JSON.stringify(["access", "canPublish", "email", "name", "owner", "seesLeads"]) &&
+    JSON.stringify(Object.keys(a.json.access).sort()) === JSON.stringify(["home", "pages", "restricted"]) &&
+    a.json.email === "member@desk.test",
   show(a),
 );
 check("a member is not the owner and does not read enquiries", a.json?.owner === false && a.json?.seesLeads === false);
@@ -602,7 +605,7 @@ registerSearch(
 const search = async (q: string, who: Person) => ((await ask(`/api/v1/search?q=${encodeURIComponent(q)}`, { who })).json ?? []) as any[];
 let hits = await search("site health", member);
 check("a section is found by its name", hits[0]?.kind === "section" && hits[0].title === "Site Health" && typeof hits[0].href === "string", JSON.stringify(hits[0] ?? null));
-check("all fifteen sections can be found", (await Promise.all(SECTIONS.map(async (s) => (await search(s.title, member)).some((h) => h.kind === "section" && h.href === s.href)))).every(Boolean) && SECTIONS.length === 15);
+check("all sixteen sections can be found", (await Promise.all(SECTIONS.map(async (s) => (await search(s.title, member)).some((h) => h.kind === "section" && h.href === s.href)))).every(Boolean) && SECTIONS.length === 16);
 hits = await search("specimen", member);
 check("an article is found by its title, and leads to the article", hits.some((h) => h.kind === "insight" && h.title === "Specimen article of the check" && h.href === "/insights/1"));
 check("a link with no article yet is found too, and leads to the link", hits.some((h) => h.kind === "insight" && h.title === "Specimen link still waiting" && h.href === "/insights/link/2"));
@@ -623,7 +626,7 @@ a = await ask("/api", { who: member });
 check("and at /api itself", isError(a, 404), show(a));
 const mounted = await Promise.all(SECTIONS.map(async (s) => ({ name: s.name, a: await ask(`/api/v1/${s.name}/check-no-such-path`, { who: owner }) })));
 const notJson = mounted.filter((m) => !isJson(m.a) || m.a.type.startsWith("text/html"));
-check("each of the fifteen screens answers under its name, in JSON", notJson.length === 0, notJson.length ? notJson.map((m) => `${m.name}: ${show(m.a)}`).join("; ") : mounted.map((m) => m.a.status).join(" "));
+check("each of the sixteen screens answers under its name, in JSON", notJson.length === 0, notJson.length ? notJson.map((m) => `${m.name}: ${show(m.a)}`).join("; ") : mounted.map((m) => m.a.status).join(" "));
 if (!planted) check("the test routes could be planted on a screen's router", false, said.find((s) => s.startsWith("could not plant")) ?? "");
 else {
   a = await ask("/api/v1/experiments/check-throws", { who: member });

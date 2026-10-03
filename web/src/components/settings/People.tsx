@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Reading } from "@/contract/common";
 import type { SettingsPeople, SettingsPerson } from "@/contract/settings";
 import { Avatar } from "@/components/ui/Avatar";
@@ -113,9 +114,17 @@ export function PeopleSection({ people, domain }: { people: Reading<SettingsPeop
         footer={
           people.state === "ok" ? (
             <p className="dk-settings-foot">
-              {people.value.canEdit
-                ? "You are the owner: Edit changes a person's address, byline, enquiry right and access. Every change is checked on the server and written to the activity feed. Google sign-in finds a person by their address, so a switched-off person's address stays as it is."
-                : "You can see the team. Only the owner changes addresses, bylines and access."}
+              {people.value.canEdit ? (
+                <>
+                  You are the owner: Edit changes a person&apos;s address, byline, enquiry right and access. What each person may see, area by area, is under{" "}
+                  <Link href="/team/access" prefetch={false} className="dk-settings-strong">
+                    Team › Access &amp; Roles
+                  </Link>
+                  . Every change is checked on the server and written to the activity feed. Google sign-in finds a person by their address, so a switched-off person&apos;s address stays as it is.
+                </>
+              ) : (
+                "You can see the team. Only the owner changes addresses, bylines and access."
+              )}
             </p>
           ) : undefined
         }

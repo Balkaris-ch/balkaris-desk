@@ -12,7 +12,7 @@ import type { ApiError } from "../../web/src/contract/common.ts";
  *   const { mountCommandCenter } = await import("./cc/index.ts");
  *   await mountCommandCenter(app);    once, in src/server.ts, before it listens
  *
- * It loads the collectors and registers their jobs, loads the fifteen screen
+ * It loads the collectors and registers their jobs, loads the sixteen screen
  * routers and mounts the API at /api/v1, mounts the Vercel drain's door at
  * /drain (public, proven by its signature), then starts the scheduler.
  *
@@ -89,6 +89,7 @@ const screens: Record<string, () => Promise<{ routes: Hono<Vars> }>> = {
   assets: () => import("./routes/assets.ts"),
   operator: () => import("./routes/operator.ts"),
   settings: () => import("./routes/settings.ts"),
+  team: () => import("./routes/team.ts"),
 };
 
 /**

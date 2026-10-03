@@ -1,0 +1,839 @@
+/*
+ * Team: Activity, Members, Access & Roles, Invitations. Drawn in the boards'
+ * language (panels, tiles, the dense table, chips) from the team boards of
+ * 3 October 2026. Every value is a token; the classes are this section's own
+ * (dk-team-).
+ */
+
+/* ---------- small words ---------- */
+.dk-team-quiet {
+  color: var(--ink-3);
+}
+
+.dk-team-strong {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-team-wrap {
+  display: block;
+  min-width: 0;
+  white-space: normal;
+  line-height: var(--lh-body);
+}
+
+.dk-team-code {
+  padding: var(--x1) var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-team-note {
+  margin-top: var(--x12);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-team-note--warn {
+  margin: 0 0 var(--x12);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+}
+
+.dk-team-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+  margin-bottom: var(--x14);
+}
+
+/* ---------- a person ---------- */
+.dk-team-who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-team-who-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-team-who-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-team-who-sub {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+.dk-team-faces {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dk-team-face {
+  box-shadow: 0 0 0 var(--x2) var(--card);
+}
+
+.dk-team-face + .dk-team-face {
+  margin-left: calc(var(--x6) * -1);
+}
+
+.dk-team-face--more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--avatar-sm);
+  height: var(--avatar-sm);
+  border-radius: var(--r-pill);
+  background: var(--card-3);
+  color: var(--ink-2);
+  font-size: var(--t-micro);
+  font-weight: var(--w-semi);
+}
+
+/* ---------- the head's strip and the filters ---------- */
+.dk-team-tabs {
+  align-self: flex-start;
+}
+
+.dk-team-filters {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+.dk-team-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  width: calc(var(--x56) * 3.4);
+  max-width: 100%;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-team-search:focus-within {
+  border-color: var(--green-2);
+  box-shadow: 0 0 0 var(--x3) var(--green-glow);
+}
+
+.dk-team-search--busy {
+  opacity: 0.7;
+}
+
+.dk-team-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-team-search input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-team-rowbtns {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+/* ---------- the timeline ---------- */
+.dk-team-days {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-team-day + .dk-team-day {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-team-day-head {
+  padding: var(--x12) var(--pad) var(--x4);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-team-evs {
+  display: flex;
+  flex-direction: column;
+  padding: 0 var(--pad) var(--x8);
+}
+
+.dk-team-ev {
+  display: grid;
+  grid-template-columns: var(--timeline-time) var(--x8) auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--x12);
+  padding: var(--x8) 0;
+}
+
+.dk-team-ev + .dk-team-ev {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-team-ev-time {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-team-ev-dot {
+  width: var(--x8);
+  height: var(--x8);
+  border-radius: var(--r-pill);
+  background: var(--ink-4);
+}
+
+.dk-team-ev-dot--good {
+  background: var(--green);
+}
+
+.dk-team-ev-dot--violet {
+  background: var(--violet);
+}
+
+.dk-team-ev-dot--info {
+  background: var(--blue);
+}
+
+.dk-team-ev-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x3);
+  min-width: 0;
+}
+
+.dk-team-ev-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-snug);
+}
+
+.dk-team-ev-who {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-team-ev-who:hover {
+  color: var(--green);
+}
+
+.dk-team-ev-what {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.dk-team-ev-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-team-ev-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 48ch;
+}
+
+/* ---------- the side column ---------- */
+/* Each panel its own height; the last takes what the timeline leaves, so the column ends with it. */
+.dk-stack.dk-team-side > * {
+  flex: 0 0 auto;
+}
+
+.dk-stack.dk-team-side > :last-child {
+  flex: 1 1 auto;
+}
+
+.dk-team-now {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-team-now-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x10);
+  padding: var(--x8) 0;
+}
+
+.dk-team-now-row + .dk-team-now-row {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-team-now-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+}
+
+.dk-team-donut {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--x24);
+  min-width: 0;
+}
+
+.dk-team-donut > .dk-legend {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-team-deploys {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-team-deploy {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--x10);
+  row-gap: var(--x2);
+  padding: var(--x8) 0;
+}
+
+.dk-team-deploy + .dk-team-deploy {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-team-deploy > .dk-team-who-sub {
+  grid-column: 2;
+}
+
+.dk-team-sha {
+  padding: 0 var(--x6);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-chip);
+  background: var(--card-2);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+}
+
+a.dk-team-sha:hover {
+  color: var(--green);
+}
+
+.dk-team-deploy-text {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: var(--t-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- one person's activity ---------- */
+.dk-team-person-right {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+.dk-team-person {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1.4fr);
+  gap: var(--x24);
+  align-items: start;
+}
+
+.dk-team-person-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--x14) var(--x16);
+}
+
+.dk-team-person-facts dt {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-team-person-facts dd {
+  color: var(--ink);
+  font-size: var(--t-figure-3, var(--t-title));
+  font-weight: var(--w-semi);
+}
+
+.dk-team-mini-head {
+  margin-bottom: var(--x8);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+/* ---------- members ---------- */
+.dk-team-presets {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--x56) * 3.2), 1fr));
+  gap: var(--x10);
+}
+
+.dk-team-presetcard {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-team-presetcard-name {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-team-presetcard-about {
+  flex: 1;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+/* ---------- access ---------- */
+.dk-team-people {
+  display: flex;
+  flex-direction: column;
+  padding: var(--x6);
+}
+
+/* The chips drop under the name rather than break an address in two. */
+.dk-team-person-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10);
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid transparent;
+  border-radius: var(--r-row);
+  transition: background-color var(--fast) var(--ease);
+}
+
+.dk-team-person-link:hover {
+  background: var(--hover);
+}
+
+.dk-team-person-link--on,
+.dk-team-person-link--on:hover {
+  border-color: var(--green-4);
+  background: var(--row-on);
+}
+
+.dk-team-person-link > .dk-team-who {
+  flex: 1 1 auto;
+}
+
+.dk-team-person-link-role {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-team-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-team-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x14);
+}
+
+.dk-team-preset {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-team-preset-label {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-team-preset-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-team-preset .dk-team-said {
+  flex-basis: 100%;
+}
+
+.dk-team-areas {
+  display: flex;
+  flex-direction: column;
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+}
+
+.dk-team-area {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x6) var(--x16);
+  padding: var(--x10) var(--x14);
+}
+
+.dk-team-area + .dk-team-area {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-team-area--head {
+  padding-block: var(--x8);
+  background: var(--card-2);
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-team-area--sensitive {
+  background: linear-gradient(90deg, var(--amber-ground), transparent 40%);
+}
+
+.dk-team-area-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-team-area-name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-team-area-name .dk-icon {
+  color: var(--amber);
+}
+
+.dk-team-area-about {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-team-pages {
+  grid-column: 1 / -1;
+}
+
+.dk-team-pages-sum {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  padding: var(--x2) 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-team-pages-sum::-webkit-details-marker {
+  display: none;
+}
+
+.dk-team-pages-sum:hover {
+  color: var(--ink);
+}
+
+.dk-team-pages-sum .dk-icon {
+  transition: transform var(--fast) var(--ease);
+}
+
+.dk-team-pages[open] > .dk-team-pages-sum .dk-icon {
+  transform: rotate(90deg);
+}
+
+.dk-team-pages-count {
+  color: var(--amber);
+}
+
+.dk-team-pages > .dk-team-sub {
+  margin-top: var(--x4);
+}
+
+.dk-team-sub {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--x16);
+  margin-left: var(--x14);
+  padding: var(--x4) 0 var(--x4) var(--x12);
+  border-left: var(--x1) solid var(--line-2);
+}
+
+.dk-team-sub--check {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--x10);
+  align-items: start;
+}
+
+.dk-team-sub-name {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-team-sub-fixed {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  font-size: var(--t-small);
+}
+
+.dk-team-check {
+  flex: none;
+  width: var(--x16);
+  height: var(--x16);
+  margin-top: var(--x2);
+  accent-color: var(--green-2);
+  cursor: pointer;
+}
+
+/* None / View / Edit: radio buttons drawn as one segmented switch. */
+.dk-team-seg {
+  display: inline-flex;
+  padding: var(--x2);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card-2);
+}
+
+.dk-team-seg-opt {
+  position: relative;
+  display: inline-flex;
+}
+
+.dk-team-seg-opt input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dk-team-seg-opt span {
+  display: inline-flex;
+  align-items: center;
+  height: calc(var(--ctl-sm) - var(--x6));
+  padding: 0 var(--x10);
+  border-radius: calc(var(--r-ctl) - var(--x2));
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  white-space: nowrap;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.dk-team-seg-opt:hover span {
+  color: var(--ink);
+}
+
+.dk-team-seg-opt input:focus-visible + span {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-team-seg-opt input:checked + span {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-team-seg-opt--view input:checked + span {
+  background: var(--blue-ground);
+  color: var(--blue);
+}
+
+.dk-team-seg-opt--edit input:checked + span {
+  background: var(--green-4);
+  color: var(--green);
+}
+
+.dk-team-formfoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x10);
+}
+
+.dk-team-said {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-team-said--ok {
+  color: var(--green);
+}
+
+.dk-team-said--bad {
+  color: var(--red);
+}
+
+.dk-team-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+}
+
+/* Everybody at a glance. */
+.dk-team-glance th,
+.dk-team-glance td {
+  white-space: nowrap;
+}
+
+.dk-team-cell {
+  display: inline-block;
+  min-width: calc(var(--x40) + var(--x4));
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  text-align: center;
+}
+
+.dk-team-cell--none {
+  color: var(--ink-4);
+}
+
+.dk-team-cell--view {
+  background: var(--blue-ground);
+  color: var(--blue);
+}
+
+.dk-team-cell--edit {
+  background: var(--green-4);
+  color: var(--green);
+}
+
+/* ---------- invitations ---------- */
+.dk-team-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  padding-left: var(--x20);
+  color: var(--ink-2);
+  font-size: var(--t-body);
+  line-height: var(--lh-body);
+  list-style: decimal;
+}
+
+.dk-team-copyline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-top: var(--x6);
+}
+
+/* ---------- narrow windows ---------- */
+@media (max-width: 1100px) {
+  .dk-team-person {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .dk-team-person-pages {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 700px) {
+  .dk-team-ev {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    row-gap: var(--x4);
+  }
+
+  .dk-team-ev-dot,
+  .dk-team-ev .dk-avatar {
+    display: none;
+  }
+
+  .dk-team-person {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-team-area {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-team-sub {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-team-filters {
+    justify-content: flex-start;
+  }
+}

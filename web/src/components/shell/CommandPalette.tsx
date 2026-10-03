@@ -6,7 +6,7 @@ import type { SearchHit } from "@/contract/common";
 import { cx } from "@/lib/cx";
 import { hrefKind } from "@/lib/href";
 import { Icon, type IconName } from "@/components/ui/icons";
-import { SECTIONS } from "./nav";
+import { mayOpen, visibleSections, type PageAccess } from "./nav";
 import "./palette.css";
 
 interface Entry {
@@ -36,15 +36,15 @@ const PATIENCE = 10_000;
 /**
  * The command palette: Ctrl/⌘K, or a click on the top bar's search field.
  *
- * The fourteen sections are always offered and are matched here, so the
- * palette is useful with the server down. From two letters on it also asks
+ * The sections this person may open are always offered and are matched
+ * here, so the palette is useful with the server down. From two letters on it also asks
  * `/api/v1/search?q=` for pages, insights, keywords, leads and assets, and
  * lists what comes back under its kind. When that fails it says so in one
  * line and keeps the sections.
  *
  * Arrows move, Enter opens, Escape closes.
  */
-export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function CommandPalette({ open, onClose, pages }: { open: boolean; onClose: () => void; pages?: PageAccess | null }) {
   const router = useRouter();
   const dialog = useRef<HTMLDialogElement>(null);
   const input = useRef<HTMLInputElement>(null);
@@ -118,7 +118,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const entries = useMemo<Entry[]>(() => {
     const needle = term.toLowerCase();
-    const sections: Entry[] = SECTIONS.filter((s) => !needle || s.label.toLowerCase().includes(needle) || s.hint.toLowerCase().includes(needle)).map((s) => ({
+    const shown = visibleSections(pages);
+    const sections: Entry[] = shown.filter((s) => !needle || s.label.toLowerCase().includes(needle) || s.hint.toLowerCase().includes(needle)).map((s) => ({
       kind: "section",
       title: s.label,
       sub: s.hint,
@@ -130,7 +131,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
        name alone lists only the section. */
     const asked = needle.trim().replace(/\s+/g, " ");
     if (asked) {
-      for (const s of SECTIONS) {
+      for (const s of shown) {
         const own = s.label.toLowerCase();
         for (const c of s.children ?? []) {
           const name = c.label.toLowerCase();
@@ -142,10 +143,10 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
     }
     const found: Entry[] = hits
       /* The server may offer sections too; ours are already listed. */
-      .filter((h) => h.kind !== "section")
+      .filter((h) => h.kind !== "section" && mayOpen(pages, h.href))
       .map((h) => ({ ...h, icon: KIND[h.kind].icon }));
     return [...sections, ...found].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
-  }, [term, hits]);
+  }, [term, hits, pages]);
 
   /* The marked row never points past the end of a list that just got shorter. */
   const marked = Math.min(at, Math.max(0, entries.length - 1));
