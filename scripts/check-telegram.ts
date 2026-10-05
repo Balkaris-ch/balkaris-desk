@@ -160,6 +160,20 @@ check("and so is a format that does not exist", row(4).format === null);
 await press(ME, row(4).tg_msg!, "f:4:simple");
 check("the right one still works afterwards", row(4).format === "simple" && String(last("editMessageText")?.body.text).endsWith("Writing it now, short and in plain words."));
 
+console.log("\n7. a line to the owner, unasked (an outage)");
+{
+  const { ownerChat, tellOwner } = await import("../src/telegram.ts");
+  /* ME wrote first, so ME claimed the bot (src/server.ts, mayUse). */
+  check("the owner's chat is the one that claimed the bot", ownerChat() === ME, String(ownerChat()));
+  const before = sent.length;
+  const told = await tellOwner("<b>The website stopped answering</b> at 08:28: two checks in a row failed (answered 402).");
+  const m = last("sendMessage");
+  check("it goes to that chat and nowhere else", told && sent.length - before === 1 && m?.body.chat_id === ME && String(m?.body.text).includes("stopped answering"), `${told} ${sent.length - before} ${m?.body.chat_id}`);
+  process.env.TELEGRAM_OWNER_ID = "424242";
+  check("TELEGRAM_OWNER_ID, when set, is the owner's chat", ownerChat() === 424242, String(ownerChat()));
+  delete process.env.TELEGRAM_OWNER_ID;
+}
+
 console.log(`\n${failed ? `${failed} FAILED` : "all passed"}; ${sent.length} calls to Telegram recorded, none sent.`);
 db.close();
 try {

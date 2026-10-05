@@ -4,6 +4,7 @@ import https from "node:https";
 import tls from "node:tls";
 import type { DayPoint, Range, Reading, Share } from "../../../web/src/contract/common.ts";
 import { db } from "../../db.ts";
+import { esc, tellOwner } from "../../telegram.ts";
 import type { Job } from "../scheduler.ts";
 import { keep, kept, note, off, ok, record, series, setState, state, today, waiting } from "../store.ts";
 import { abs, median, percentile, siteHost, twinHost, UA } from "./http.ts";
@@ -357,19 +358,37 @@ const minutes = (ms: number): string => {
   return m < 120 ? `${m} minute${m === 1 ? "" : "s"}` : `${Math.round(m / 60)} hours`;
 };
 
-/** Two failures in a row open an incident; the first success after closes it. */
+/** The studio's clock, for a line a person reads on a phone. */
+const zurich = (iso: string): string => new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Zurich", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+
+/**
+ * What a failure most likely means, where the status says it. Vercel answers
+ * 402 for a whole team whose invoice is unpaid (5 October 2026: the website,
+ * down for eight hours over 43 dollars); nothing on the site is wrong then,
+ * and no deploy brings it back.
+ */
+const meaning = (status: number): string =>
+  status === 402 ? " Vercel answers 402 when the team's invoice is unpaid: paying it under Team Settings › Invoices brings the site back by itself." : "";
+
+/**
+ * Two failures in a row open an incident; the first success after closes it.
+ * Both are said to the owner on Telegram as well as written in the feed: an
+ * outage is the one thing that cannot wait for somebody to open the desk.
+ */
 function watch(home: Sample): void {
   const open = db.prepare("SELECT id, started FROM cc_incidents WHERE ended IS NULL ORDER BY id DESC LIMIT 1").get() as { id: number; started: string } | undefined;
   if (home.ok) {
     setState("probe:fails", "0");
     if (open) {
       db.prepare("UPDATE cc_incidents SET ended = ? WHERE id = ?").run(home.at, open.id);
-      note("incident", `The website answers again after ${minutes(Date.parse(home.at) - Date.parse(open.started))}`, {
+      const after = minutes(Date.parse(home.at) - Date.parse(open.started));
+      note("incident", `The website answers again after ${after}`, {
         tone: "good",
         detail: `It stopped at ${open.started} and answered ${home.status} at ${home.at}.`,
         href: abs("/"),
         dedupe: `incident:${open.id}:end`,
       });
+      void tellOwner(`The website answers again, after ${after}.`);
     }
     return;
   }
@@ -387,6 +406,7 @@ function watch(home: Sample): void {
       href: abs("/"),
       dedupe: `incident:${id}:start`,
     });
+    void tellOwner(`<b>The website stopped answering</b> at ${zurich(started)}: two checks in a row failed (${esc(cause)}).${meaning(home.status)}`);
   }
 }
 

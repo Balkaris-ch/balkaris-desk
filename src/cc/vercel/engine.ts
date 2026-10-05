@@ -1,6 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { db } from "../../db.ts";
+import { esc, tellOwner } from "../../telegram.ts";
 import type { Job } from "../scheduler.ts";
 import { keep, kept, note, record, setState, state, today } from "../store.ts";
 import type { EngineCheck, EngineLocal, EnginePublic } from "../../../web/src/contract/hosting.ts";
@@ -120,6 +121,7 @@ function watch(c: EngineCheck): void {
     if (openSince) {
       setState("engine:down", "");
       note("engine", `The engine answers again after ${minutes(Date.parse(c.at) - Date.parse(openSince))}`, { tone: "good", detail: `${c.url} answered 200 at ${c.at}.`, href: "/hosting", dedupe: `engine:down:${openSince}:end` });
+      void tellOwner(`The engine answers again, after ${minutes(Date.parse(c.at) - Date.parse(openSince))}.`);
     }
     return;
   }
@@ -130,6 +132,8 @@ function watch(c: EngineCheck): void {
     const started = state("engine:firstfail") || c.at;
     setState("engine:down", started);
     note("engine", "The engine stopped answering", { tone: "bad", at: started, detail: `Two checks of ${c.url} in a row failed (${c.failure ?? "no answer"}). The website's enquiry form and booking calendar call it.`, href: "/hosting", dedupe: `engine:down:${started}:start` });
+    /* Said to the owner too, like the website's (src/cc/site/probes.ts): while it is down no enquiry arrives. */
+    void tellOwner(`<b>The engine stopped answering</b>: two checks in a row failed (${esc(c.failure ?? "no answer")}). The website's enquiry form and booking calendar call it.`);
   }
 }
 

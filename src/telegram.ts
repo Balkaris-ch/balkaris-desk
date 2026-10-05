@@ -12,6 +12,8 @@
  * recoverable.
  */
 
+import { db } from "./db.ts";
+
 const TOKEN = process.env.TELEGRAM_BOT_TOKEN ?? "";
 const API = `https://api.telegram.org/bot${TOKEN}`;
 
@@ -66,6 +68,40 @@ export async function send(chat: number, text: string, replyTo?: number, keys?: 
     ...(keys?.length ? markup(keys) : {}),
   });
   return (r?.message_id as number | undefined) ?? null;
+}
+
+/**
+ * The owner's own chat: `TELEGRAM_OWNER_ID` when it is set, else the chat that
+ * claimed the bot first (src/server.ts, mayUse). Null before either exists.
+ */
+export function ownerChat(): number | null {
+  const env = Number(process.env.TELEGRAM_OWNER_ID ?? 0);
+  if (env) return env;
+  try {
+    const row = db.prepare("SELECT detail FROM events WHERE what = 'owner.claimed' ORDER BY id LIMIT 1").get() as { detail: string } | undefined;
+    const chat = row ? Number((JSON.parse(row.detail) as { chat?: number }).chat) : 0;
+    return chat || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One line to the owner, unasked: the things he must not find out by himself.
+ *
+ * On 5 October 2026 Vercel switched the website off for an unpaid invoice at
+ * 08:28. The desk saw it within two minutes, turned its light red, wrote it in
+ * the feed, and told nobody; the owner found out in the afternoon. A feed is
+ * read by somebody who is already looking.
+ *
+ * `text` is HTML as `send` takes it: pass anything that is not ours through
+ * `esc`. True when Telegram took it; false without a token, without a known
+ * owner, or when the send failed. Never throws.
+ */
+export async function tellOwner(text: string): Promise<boolean> {
+  const chat = ownerChat();
+  if (!chat) return false;
+  return (await send(chat, text)) !== null;
 }
 
 /** Rewrite the message we already sent, so one reply tells the whole story.
