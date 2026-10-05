@@ -17,6 +17,10 @@ import { readFileSync } from "node:fs";
 export const SCOPES = {
   analytics: "https://www.googleapis.com/auth/analytics.readonly",
   searchConsole: "https://www.googleapis.com/auth/webmasters.readonly",
+  /* The one scope that changes anything at Google, asked for only when a person presses "Submit to
+     Google" for a sitemap (src/cc/seo/google-actions.ts). Every read keeps the read-only token above;
+     this second token is cached apart from it (tokens are kept per scope). */
+  searchConsoleWrite: "https://www.googleapis.com/auth/webmasters",
 } as const;
 
 const KEY_FILE = (): string => process.env.GA4_CREDENTIALS_FILE ?? "/opt/balkaris-desk/ga4.json";

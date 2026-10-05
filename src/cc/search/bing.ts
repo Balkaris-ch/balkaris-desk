@@ -1,7 +1,7 @@
 import { db } from "../../db.ts";
 import type { Range, Reading, SourceStatus, Stat } from "../../../web/src/contract/common.ts";
 import type { Job } from "../scheduler.ts";
-import { cached, note, off, record, series, setState, state, today, waiting } from "../store.ts";
+import { cached, kept, note, off, record, series, setState, state, today, waiting } from "../store.ts";
 import {
   answered,
   ask,
@@ -200,6 +200,19 @@ export function linkCounts(o: ReadOptions = {}): Promise<Reading<LinkCounts>> {
   );
 }
 
+/**
+ * The link counts the daily job last kept, however old, and never a request:
+ * what a page draws. `linkCounts()` asks Bing when its answer is over a day
+ * old, up to twenty requests of thirty seconds each, which a late or failing
+ * job would otherwise make every visitor of a screen wait for.
+ */
+export function linkCountsKept(): Reading<LinkCounts> {
+  if (!configured()) return off("bing", REASON, step());
+  const had = kept<LinkCounts>("bing:link-counts");
+  if (!had) return waiting("bing", "The first daily read of Bing's links has not run yet.");
+  return asReading("bing", had, `${LABEL} A count of zero means Bing knows no link to the site, not that there is none.`);
+}
+
 export interface InboundLink {
   /** The page that links to us. */
   source: string;
@@ -212,6 +225,10 @@ export interface InboundLink {
   path: string;
   /** The day the desk first saw Bing report it. */
   firstSeen: string;
+  /** The day Bing last listed it. */
+  lastSeen: string;
+  /** The day the desk read the page's links again and Bing no longer listed this one; null while it is listed. */
+  goneOn: string | null;
 }
 
 const hostOf = (url: string): string => {
@@ -230,11 +247,13 @@ const hostOf = (url: string): string => {
  * JSON-quoted (link=%22http%3a%5c%2f%5c%2f…%22) while the same request passes
  * siteUrl plain, and the XML sample passes both plain
  * (https://learn.microsoft.com/en-us/dotnet/api/microsoft.bing.webmaster.api.interfaces.iwebmasterapi.geturllinks,
- * read 2 October 2026). Plain is what every other method here sends; if the
- * first real key gets InvalidUrl (ErrorCode 7) for every page, quoting this
- * one value is the change to make.
+ * read 2 October 2026). Plain is what every other method here sends. Which
+ * of the two Bing takes can only be learned from a real key, so `daily`
+ * learns it: when Bing answers InvalidUrl (ErrorCode 7) for every page of a
+ * run, it reads them once more the other way and keeps the way that worked
+ * (`QUOTED`).
  */
-async function pullLinks(target: string, day: string): Promise<{ source: string; anchor: string }[]> {
+async function pullLinks(target: string, day: string, quoted = state(QUOTED) === "1"): Promise<{ source: string; anchor: string }[]> {
   const fresh: { source: string; anchor: string }[] = [];
   const known = db.prepare("SELECT 1 FROM cc_bing_links WHERE target = ? AND source = ?");
   const put = db.prepare(
@@ -243,7 +262,7 @@ async function pullLinks(target: string, day: string): Promise<{ source: string;
   );
   let total = 1;
   for (let page = 0; page < total && page < 5; page++) {
-    const got = await call<{ Details?: { Url?: string; AnchorText?: string }[]; TotalPages?: number } | null>("GetUrlLinks", { siteUrl: site(), link: target, page });
+    const got = await call<{ Details?: { Url?: string; AnchorText?: string }[]; TotalPages?: number } | null>("GetUrlLinks", { siteUrl: site(), link: quoted ? JSON.stringify(target) : target, page });
     total = Number(got?.TotalPages ?? 0);
     for (const d of got?.Details ?? []) {
       if (!d.Url) continue;
@@ -255,27 +274,60 @@ async function pullLinks(target: string, day: string): Promise<{ source: string;
   return fresh;
 }
 
+/** `"1"` once Bing was found to take `link` JSON-quoted and not plain (see `pullLinks`). */
+const QUOTED = "bing.links.quoted";
+
 /**
- * Every inbound link the desk has seen Bing report, newest first. No request:
- * it reads the desk's own list, which the daily job fills.
+ * The day a link was found gone, or null while Bing lists it. The desk's list
+ * only ever grows, so a link Bing stops reporting would be counted for ever
+ * unless its last sighting is set against the last time its page was read:
+ *
+ *   - the page's links were read again on a later day, and this one was not
+ *     among them; or
+ *   - Bing no longer lists the page as linked at all (its last whole list of
+ *     linked pages is newer than the link's last sighting).
+ *
+ * A page beyond the forty a run opens is listed but not read again, so its
+ * links stay as they were: unknown is not gone.
  */
-export function inboundLinks(limit = 200): Reading<InboundLink[]> {
-  if (!configured()) return off("bing", REASON, step());
-  const rows = db.prepare("SELECT target, source, anchor, first_seen FROM cc_bing_links ORDER BY first_seen DESC, source LIMIT ?").all(limit) as {
+function goneOn(target: string, lastSeen: string, m: LinkMemo): string | null {
+  const read = m.readOn[target];
+  if (read && read > lastSeen) return read;
+  if (m.countsDay && m.countsDay > lastSeen && !m.listed.includes(target)) return m.countsDay;
+  return null;
+}
+
+function listOf(limit: number): InboundLink[] {
+  const rows = db.prepare("SELECT target, source, anchor, first_seen, last_seen FROM cc_bing_links ORDER BY first_seen DESC, source LIMIT ?").all(limit) as {
     target: string;
     source: string;
     anchor: string | null;
     first_seen: string;
+    last_seen: string;
   }[];
+  const m = memo();
+  return rows.map((r) => ({ source: r.source, host: hostOf(r.source), anchor: r.anchor ?? "", target: r.target, path: pathOf(r.target), firstSeen: r.first_seen, lastSeen: r.last_seen, goneOn: goneOn(r.target, r.last_seen, m) }));
+}
+
+function listed(limit: number, gone: boolean, more: string): Reading<InboundLink[]> {
+  if (!configured()) return off("bing", REASON, step());
   const at = state("bing.links.at");
   if (!at) return waiting("bing", "The first daily read of Bing's links has not run yet.");
-  return {
-    state: "ok",
-    source: "bing",
-    asOf: at,
-    note: `${LABEL} The day beside a link is the day the desk first saw it, not the day it was made.`,
-    value: rows.map((r) => ({ source: r.source, host: hostOf(r.source), anchor: r.anchor ?? "", target: r.target, path: pathOf(r.target), firstSeen: r.first_seen })),
-  };
+  return { state: "ok", source: "bing", asOf: at, note: `${LABEL} ${more}`, value: listOf(limit).filter((l) => (l.goneOn !== null) === gone) };
+}
+
+/**
+ * Every inbound link Bing lists today, as far as the desk's last read knows,
+ * newest first. No request: it reads the desk's own list, which the daily job
+ * fills. A link Bing stopped reporting is left out (it is in `lostLinks`).
+ */
+export function inboundLinks(limit = 200): Reading<InboundLink[]> {
+  return listed(limit, false, "The day beside a link is the day the desk first saw it, not the day it was made.");
+}
+
+/** The links Bing listed once and no longer does, with the day the desk found them gone. No request. */
+export function lostLinks(limit = 5000): Reading<InboundLink[]> {
+  return listed(limit, true, "A link is called gone when a later read of its page's links no longer has it: Bing dropped it from its index, which is not proof the link was removed.");
 }
 
 /** The links Bing knows to one page of the site, from the desk's own list. No request. */
@@ -519,16 +571,29 @@ const ANNOUNCE = 10;
 interface LinkMemo {
   read: string[];
   listed: string[];
+  /** The last day each linked page's links were read whole: a link last seen before it is gone (`goneOn`). */
+  readOn: Record<string, string>;
+  /** The day of the last whole list of linked pages; null when the last list was cut short, or never read. */
+  countsDay: string | null;
 }
 
 function memo(): LinkMemo {
+  const none: LinkMemo = { read: [], listed: [], readOn: {}, countsDay: null };
   try {
     const had = JSON.parse(state("bing.links.memo") ?? "null") as Partial<LinkMemo> | null;
-    return { read: Array.isArray(had?.read) ? had.read : [], listed: Array.isArray(had?.listed) ? had.listed : [] };
+    return {
+      read: Array.isArray(had?.read) ? had.read : [],
+      listed: Array.isArray(had?.listed) ? had.listed : [],
+      readOn: had?.readOn && typeof had.readOn === "object" ? had.readOn : {},
+      countsDay: typeof had?.countsDay === "string" ? had.countsDay : null,
+    };
   } catch {
-    return { read: [], listed: [] };
+    return none;
   }
 }
+
+/** Bing's "InvalidUrl" (ErrorCode 7): it could not use an address the desk sent. */
+const invalidUrl = (e: unknown): boolean => e instanceof SourceError && /invalid\s*url/i.test(e.reason);
 
 /**
  * Once a day: the link counts into the daily series, each linked page's
@@ -560,24 +625,58 @@ export async function daily(day: string = today()): Promise<string> {
   const before = memo();
   const readBefore = new Set(before.read);
   const listedBefore = new Set(before.listed);
+  const readOn = { ...before.readOn };
+  const goneBefore = new Set(listOf(5000).filter((l) => l.goneOn).map((l) => `${l.source}>${l.target}`));
   const found: { source: string; anchor: string; target: string }[] = [];
+  const opened = counts.value.pages.slice(0, OPEN);
   let skipped = 0;
   let stop: unknown = null;
-  await inTurns(counts.value.pages.slice(0, OPEN), 2, async (p) => {
-    if (stop) return;
-    try {
-      const fresh = await pullLinks(p.url, day);
-      const news = !baseline && (readBefore.has(p.url) || !listedBefore.has(p.url));
-      if (news) for (const l of fresh) found.push({ ...l, target: p.url });
-      readBefore.add(p.url);
-    } catch (e) {
-      if (!(e instanceof SourceError) || e.kind === "auth" || e.kind === "forbidden" || e.kind === "quota") stop = e;
-      else skipped++;
-    }
-  });
+  const pull = async (pages: LinkedPage[], quoted: boolean): Promise<LinkedPage[]> => {
+    const refusedAsInvalid: LinkedPage[] = [];
+    await inTurns(pages, 2, async (p) => {
+      if (stop) return;
+      try {
+        const fresh = await pullLinks(p.url, day, quoted);
+        const news = !baseline && (readBefore.has(p.url) || !listedBefore.has(p.url));
+        if (news) for (const l of fresh) found.push({ ...l, target: p.url });
+        readBefore.add(p.url);
+        readOn[p.url] = day;
+      } catch (e) {
+        if (!(e instanceof SourceError) || e.kind === "auth" || e.kind === "forbidden" || e.kind === "quota") stop = e;
+        else if (invalidUrl(e)) refusedAsInvalid.push(p);
+        else skipped++;
+      }
+    });
+    return refusedAsInvalid;
+  };
+  const quoted = state(QUOTED) === "1";
+  let invalid = await pull(opened, quoted);
+  /* Every page refused as an invalid address: it is the way `link` is written that Bing refuses, not the pages. Read them once the other way, and keep that way when it works. */
+  if (!stop && opened.length > 0 && invalid.length === opened.length) {
+    const other = await pull(opened, !quoted);
+    if (!stop && other.length < opened.length) setState(QUOTED, quoted ? "0" : "1");
+    invalid = other;
+  }
+  skipped += invalid.length;
   if (stop) throw stop;
-  setState("bing.links.memo", JSON.stringify({ read: [...readBefore].slice(-2000), listed: counts.value.pages.map((p) => p.url) } satisfies LinkMemo));
+  const listedNow = counts.value.pages.map((p) => p.url);
+  for (const url of Object.keys(readOn)) if (!listedNow.includes(url) && !before.listed.includes(url)) delete readOn[url];
+  setState(
+    "bing.links.memo",
+    JSON.stringify({ read: [...readBefore].slice(-2000), listed: listedNow, readOn, countsDay: counts.value.complete ? day : before.countsDay } satisfies LinkMemo),
+  );
   setState("bing.links.at", new Date().toISOString());
+
+  /* Links Bing listed before and no longer does: said once each, as Bing's index, never as "the link was removed". */
+  const gone = baseline ? [] : listOf(5000).filter((l) => l.goneOn && !goneBefore.has(`${l.source}>${l.target}`));
+  for (const l of gone.slice(0, ANNOUNCE)) {
+    note("bing.link", `Bing no longer lists the link from ${hostOf(l.source)}`, {
+      tone: "warn",
+      detail: `To ${pathOf(l.target)}, last listed ${l.lastSeen}. From Bing's index of links, not Google's: the page may still link.`,
+      href: l.source,
+      dedupe: `bing.link.gone:${l.source}>${l.target}:${l.lastSeen}`,
+    });
+  }
 
   if (!baseline) {
     for (const l of found.slice(0, ANNOUNCE)) {
@@ -613,7 +712,7 @@ export async function daily(day: string = today()): Promise<string> {
   const crawl = await crawlStats();
   if (crawl.state === "ok" && crawl.value.length) record("bing.in_index", crawl.value.at(-1)!.inIndex, day);
 
-  const line = `Bing knows ${counts.value.total} links to ${counts.value.pages.length} pages${baseline ? " (first read, nothing announced)" : found.length ? `; ${found.length} new` : "; none new"}${skipped ? `; ${skipped} pages Bing would not answer for were skipped` : ""}`;
+  const line = `Bing knows ${counts.value.total} links to ${counts.value.pages.length} pages${baseline ? " (first read, nothing announced)" : found.length ? `; ${found.length} new` : "; none new"}${gone.length ? `; ${gone.length} no longer listed` : ""}${skipped ? `; ${skipped} pages Bing would not answer for were skipped` : ""}`;
   if (failures.length) throw new Error(`${line}. These reads failed and kept their last answer: ${failures.join(", ")}`);
   return line;
 }

@@ -56,6 +56,62 @@ export interface SeoNav {
   indexRequests: number;
   /** One entry per page of the section, in the tab strip's order. */
   tabs: SeoTab[];
+  /**
+   * The figures more than one page shows, counted once (src/cc/routes/seo/shared.ts
+   * `figures`): every page's head carries them, so two pages cannot disagree.
+   * Absent on an answer from a desk older than this field.
+   */
+  figures?: SeoFigures;
+}
+
+/**
+ * THE FIGURES TWO PAGES BOTH SHOW, each counted in one place and by one rule.
+ * A page that prints "tracked keywords", "indexed pages" or "open
+ * opportunities" prints these, never a count of its own.
+ */
+export interface SeoFigures {
+  /** Open opportunities the rules still find (the same number as `SeoNav.opportunities`). */
+  opportunities: number;
+  keywords: KeywordFigures;
+  /** Null before the first index check, or while Search Console is not connected. */
+  index: IndexFigures | null;
+}
+
+/** The keyword table, counted once. "Tracked" is every phrase nobody judged irrelevant. */
+export interface KeywordFigures {
+  /** Every phrase the desk knows, irrelevant ones included. */
+  all: number;
+  /** relevant + weak + unjudged: what the Keywords page lists by default. */
+  tracked: number;
+  relevant: number;
+  weak: number;
+  unjudged: number;
+  irrelevant: number;
+  /** Phrases a person marked as a target; null on a desk that has no targets yet. */
+  targets: number | null;
+  clusters: number;
+}
+
+/**
+ * What Google has indexed, from the daily URL Inspection of every sitemap
+ * address: EACH ADDRESS'S NEWEST RESULT (src/cc/seo/indexation.ts), so a day
+ * whose check was cut short changes only the addresses it reached.
+ */
+export interface IndexFigures {
+  indexed: number;
+  notIndexed: number;
+  /** Addresses with a result: indexed + notIndexed. */
+  inspected: number;
+  /** Sitemap addresses on the newest check's day; null when that was not kept. */
+  of: number | null;
+  /** The newest day any address was checked on, YYYY-MM-DD. */
+  day: string;
+  /** True when that day's check reached every sitemap address. */
+  complete: boolean;
+  /** Results carried from an earlier day because the newest check did not reach the address. */
+  carried: number;
+  /** One sentence saying all of the above, for a tile's note. */
+  line: string;
 }
 
 export type SeoTabKey =
@@ -77,9 +133,24 @@ export interface SeoTab {
   href: string;
   /** A count shown beside the label (Opportunities carries its open count); null for none. */
   count: number | null;
+  /**
+   * What the count is of, read out after the number ("open", "steps need
+   * you", "pages wait for Request indexing", "phrases to judge"). Absent with
+   * no count.
+   */
+  countSays?: string;
+  /** True for a count that is work waiting on a person, not a total: drawn as a quiet chip. */
+  todo?: boolean;
 }
 
-/** "Run full SEO audit": the crawl, Search Console, the snapshot, the readiness check and the opportunity engine, in that order. */
+/**
+ * "Run full SEO audit": every job the section's figures come from, one after
+ * the other on the desk's one scheduler (src/cc/seo/audit.ts lists them: the
+ * sitemap, the crawl, Search Console's figures, Google's index check, the
+ * rank history, PageSpeed, AI readiness, referrals, profiles, and the
+ * opportunity engine last; a deep audit also researches phrases and reads
+ * competitors' pages).
+ */
 export interface AuditRun {
   /** Stable for one run: the ISO time it was asked. */
   id: string;
@@ -89,10 +160,12 @@ export interface AuditRun {
   state: "running" | "done" | "failed";
   finishedAt: string | null;
   steps: AuditStep[];
+  /** True for a deep audit (keyword research and competitors' pages as well). */
+  deep?: boolean;
 }
 
 export interface AuditStep {
-  /** The scheduler's job name: "crawl", "gsc-daily", "seo-snapshot", "seo-readiness", "seo-engine". */
+  /** The scheduler's job name: "sitemap", "crawl", "gsc-daily", "gsc-inspect", "seo-snapshot", "speed", "seo-readiness", "seo-referrals", "seo-presence", "seo-research", "seo-competitors", "seo-engine". */
   job: string;
   title: string;
   state: "queued" | "running" | "done" | "failed" | "skipped";
@@ -352,3 +425,107 @@ export interface ImportAnswer {
 
 /** Lists that carry early signals use the shared type. */
 export type { EarlySignals, ActivityItem };
+
+/* ---------- the audits kept (GET /api/v1/seo/audits, /audits/:id) ------------------------- */
+
+/** The section's headline counts at one moment: taken as an audit is asked for and as it ends. Null where nothing has been read yet. */
+export interface AuditCounts {
+  /** The crawl's site score out of 100, and the pages it read. */
+  score: number | null;
+  pages: number | null;
+  /** The crawl's critical and warning findings. */
+  critical: number | null;
+  warning: number | null;
+  /** Open opportunities (`SeoFigures.opportunities`). */
+  opportunities: number;
+  /** Sitemap addresses in Google's index and not (`IndexFigures`). */
+  indexed: number | null;
+  notIndexed: number | null;
+  /** Tracked phrases (`KeywordFigures.tracked`). */
+  keywords: number;
+}
+
+/** What appeared in the desk's tables between an audit's start and its end. */
+export interface AuditChanges {
+  opportunitiesNew: number;
+  /** Opportunities the rules stopped finding. */
+  opportunitiesCleared: number;
+  /** Crawl findings first seen. */
+  findingsNew: number;
+  /** Pages Google newly reports as indexed, and pages it dropped. */
+  indexedNew: number;
+  indexedLost: number;
+  keywordsNew: number;
+}
+
+/** One audit as the history keeps it. */
+export interface AuditKept extends AuditRun {
+  deep: boolean;
+  before: AuditCounts;
+  /** Null while it runs. */
+  after: AuditCounts | null;
+  changes: AuditChanges | null;
+  /** Its own address in the interface. */
+  href: string;
+}
+
+/** One audit with what it found, row by row (fifty of each at most). */
+export interface AuditDetail extends AuditKept {
+  found: {
+    opportunities: AuditFound[];
+    cleared: AuditFound[];
+    findings: { rule: string; severity: string; path: string | null; text: string }[];
+    index: { indexed: boolean; text: string; at: string }[];
+  };
+}
+
+export interface AuditFound {
+  id: string;
+  title: string;
+  /** The page, the phrase or the cluster it is about. */
+  subject: string | null;
+  /** For a cleared one: why the rules stopped finding it. */
+  why: string | null;
+  href: string;
+}
+
+/** GET /api/v1/seo/audits */
+export interface AuditsAnswer {
+  audits: AuditKept[];
+  /** The steps an audit is made of, in order; `deep` for those only a deep audit runs. */
+  steps: { job: string; title: string; deep: boolean }[];
+  /** ?open=<id>: that audit with what it found; null when none was asked or none is kept under it. */
+  open: AuditDetail | null;
+}
+
+/* ---------- every SEO task in one list (GET /api/v1/seo/owner-tasks) ---------------------- */
+
+/** Who does a task: the owner (a login, a decision), the lead in the owner's browser, the website's code, or content. */
+export type TaskDoer = "owner" | "lead-chrome" | "code" | "content";
+
+export interface SeoTask extends OwnerTaskRow {
+  doer: TaskDoer;
+  /** Added by a person on the desk, not by the audit's import. */
+  byHand: boolean;
+  /** False for the owner's own step when somebody else is looking. */
+  mayMark: boolean;
+  /** Where its work is done or shown: the opportunity waiting on it, or the page that lists it. */
+  href: string;
+}
+
+export interface SeoTasksAnswer {
+  asked: { who: TaskDoer | "all"; done: "open" | "done" | "all"; q: string };
+  tasks: SeoTask[];
+  /** Counts over every task, whatever was asked. */
+  counts: { all: number; open: number; done: number; by: Record<TaskDoer, { open: number; done: number }> };
+  /** What this person may do here: add a task (anyone who may change this page), close the owner's own steps (the owner). */
+  can: { ownerSteps: boolean };
+}
+
+/** POST /api/v1/seo/owner-tasks: a task written by hand. */
+export interface NewSeoTask {
+  step: string;
+  why?: string;
+  impact?: Priority;
+  who?: TaskDoer;
+}

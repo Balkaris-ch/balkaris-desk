@@ -1,6 +1,8 @@
 /**
- * GET /api/v1/seo/ai-search?range=30d — AI search visibility: the owner's
- * "0% on that side", measured.
+ * GET /api/v1/seo/ai-search?range=30d&q=&show=&engine=&open=&named=&who=&fail=&find=&kind=&pages=&page=&psort=&asking=
+ * AI search visibility: the owner's "0% on that side", measured. Every
+ * filter, search and opened row is in the address (AiSearchAsked), so the
+ * server draws it and a view can be shared.
  *
  *   (a) AI checks: a question asked of an assistant, and whether its answer
  *       named Balkaris. Recorded by the audit, by the lead in Chrome, or by an
@@ -14,23 +16,42 @@
  *   (e) Search Console's "Generative AI" report and Bing's "AI Performance"
  *       report are in no API: monthly CSV imports, absent until the first.
  *
- * Changes:
- *   POST /api/v1/seo/ai-search/record        owner only  { check: NewAiCheck }         → RecordAnswer
- *   POST /api/v1/seo/ai-checks               owner only  { checks: NewAiCheck[] }      → { ok, added, rows }
- *   POST /api/v1/seo/imports/gsc-generative-ai   owner only  { month: "2026-10", csv }  → ImportAnswer
- *   POST /api/v1/seo/imports/bing-ai-performance owner only  { month, csv }            → ImportAnswer
+ * Changes, all under /api/v1/seo/ai-search so the page's own switch covers them:
+ *   POST /record              owner  { check: NewAiCheck }                 one answer            → RecordAnswer
+ *   POST /round               owner  { checks: NewAiCheck[] } | { text, engine?, day? }
+ *                                    a whole round, typed or pasted (JSON or CSV)                → RoundAnswer
+ *   POST /record/:id          owner  { check: NewAiCheck }                 correct a record      → AiDone
+ *   POST /record/:id/remove   owner  (also DELETE /record/:id)             remove a record       → AiDone
+ *   POST /questions           owner  { question, lang?, kind?, active }    track or retire one   → AiDone
+ *   POST /page/check                 { path }       read one page again now and judge it        → PageCheckAnswer
+ *   POST /readiness/run              ask for the readiness check of every page now             → AiDone
+ *   POST /act                        { ids }        an opportunity's action                      → OpportunitiesActed
+ *   POST /owner                      { id, done }   an owner task's done mark (his own steps: the owner) → OwnerTaskAnswer
+ *   POST /task                       NewTask        a task for the operator (the workstation's own model) → TaskAnswer
+ * And the engine's own (src/cc/seo/api.ts), the owner's:
+ *   POST /api/v1/seo/imports/gsc-generative-ai   { month: "2026-10", csv }  → ImportAnswer
+ *   POST /api/v1/seo/imports/bing-ai-performance { month, csv }            → ImportAnswer
  *
- * One page's readiness details, fetched when its row opens:
- *   GET /api/v1/seo/ai-search/page?path=/a-page   → PageReadinessAnswer
+ * Small reads:
+ *   GET /api/v1/seo/ai-search/page?path=/a-page   one page's readiness checks        → PageReadinessAnswer
+ *   GET /api/v1/seo/ai-search/question?q=…        one question with every answer kept → { question: AiQuestionDetail | null }
+ *   GET /api/v1/seo/ai-search/export?what=answers|readiness|named|directories        → text/csv
  *
  * Types only.
  */
 import type { Reading, SourceId } from "../common";
+import type { NewTask } from "../operator";
 import type { OperatorPanel, OpportunityRow, OpportunityType, OwnerTaskRow, SeoHead } from "./common";
 
 export interface SeoAiSearchPayload {
   head: SeoHead;
+  /** What the address asked for, as the server applied it. */
+  asked: AiSearchAsked;
   checks: Reading<AiChecks>;
+  /** The questions the filters let through, each with every assistant's newest answer, and the one opened in detail. */
+  answers: Reading<AiAnswers>;
+  /** Question-shaped searches from the keyword table, to choose what to track. */
+  asking: Reading<AiAsking>;
   referrals: Reading<AiReferrals>;
   crawlers: Reading<AiCrawlers>;
   readiness: Reading<Readiness>;
@@ -51,6 +72,127 @@ export interface SeoAiSearchPayload {
   importSteps: { gscGenerativeAi: ImportStep; bingAiPerformance: ImportStep };
   /** Every assistant a check can be recorded for, in the order the page lists them. */
   engines: { engine: AiEngine; label: string }[];
+}
+
+/* ---------- what the address asked for -------------------------------------------------- */
+
+export interface AiSearchAsked {
+  /** Search over the questions, the companies named, the sources cited and what the answers said. */
+  q: string;
+  /** Which questions: every one, those that do not name Balkaris (the default without a search), those that do, German, price. */
+  show: "all" | "unprompted" | "prompted" | "de" | "price";
+  /** One assistant's answers only, or "all". */
+  engine: AiEngine | "all";
+  /** The question opened in detail (its key: lower case, single spaces), or null: the first of the list is shown. */
+  open: string | null;
+  /** "Named instead": its first ten companies, every company, or the companies' own sites the answers cited. */
+  named: "top" | "all" | "sites";
+  /** Search in that panel's names. */
+  who: string;
+  /** Readiness table: only pages failing this check (its key), or null. */
+  fail: string | null;
+  /** Readiness table: search in a page's address and title. */
+  find: string;
+  /** Readiness table: one kind of page, or "". */
+  kind: string;
+  /** Readiness table: its first twelve rows, or all. */
+  pages: "top" | "all";
+  /** Readiness table: the page opened (its path), or null. */
+  page: string | null;
+  /** Readiness table's order: most failing checks first, by address, or most passing first. */
+  psort: "fails" | "path" | "pass";
+  /** "Questions people search": its first twelve, or all. */
+  asking: "top" | "all";
+}
+
+/* ---------- the questions and their answers ---------------------------------------------- */
+
+export interface AiAnswers {
+  /** Every assistant as a column, with how many of the questions shown it has answered. */
+  cols: { engine: AiEngine; label: string; answers: number }[];
+  /** The filter chips, each counted over the search and the assistant chosen. */
+  chips: { key: AiSearchAsked["show"]; label: string; count: number }[];
+  /**
+   * The questions the filters let through. A tracked question nobody has
+   * asked yet is a row of empty cells: what is still missing is in view.
+   */
+  questions: AiQuestionRow[];
+  /** Tracked questions before any filter, the answers counted for them, and the question and assistant pairs never asked, of all pairs. */
+  tracked: number;
+  counted: number;
+  neverAsked: number;
+  pairs: number;
+  /** The question in detail: the one the address opens, else the first of the list; null when the list is empty. */
+  open: AiQuestionDetail | null;
+  /** Questions a person retired: kept with their answers, not listed, not in any count above. */
+  retired: { key: string; question: string; lang: "de" | "en"; kind: AiCheckRow["kind"]; answers: number }[];
+}
+
+export interface AiQuestionRow {
+  /** The question in lower case with single spaces: what `?open=` carries. */
+  key: string;
+  question: string;
+  lang: "de" | "en";
+  kind: AiCheckRow["kind"];
+  /** Put on the list by a person (true), or tracked because it was recorded (false). */
+  listed: boolean;
+  /** The newest day any assistant answered it; null when nobody was asked yet. */
+  day: string | null;
+  /** In the columns' order: each assistant's newest answer, or null when it was never asked this. */
+  cells: (AiCell | null)[];
+  named: number;
+  asked: number;
+}
+
+export interface AiCell {
+  id: number;
+  mentioned: boolean | null;
+  position: number | null;
+  day: string;
+}
+
+export interface AiQuestionDetail extends AiQuestionRow {
+  /** False for a retired question opened by its address. */
+  active: boolean;
+  /** Each assistant that answered, in the columns' order: its newest answer, the ones before it and what changed. */
+  answers: AiAnswerNow[];
+  /** Tasks for the operator made from this question. They run on the studio workstation's own model, never a hosted one. */
+  tasks: { label: string; task: NewTask }[];
+}
+
+export interface AiAnswerNow {
+  now: AiCheckRow;
+  /** The assistant's earlier answers to the question, newest first: for each day, the record that counted. */
+  earlier: AiCheckRow[];
+  /** What changed since the answer before, in a sentence ("Not named on 2 Oct 2026, named at place 3 now. New: …"); null when there is none before. */
+  change: string | null;
+}
+
+/* ---------- questions people search ------------------------------------------------------- */
+
+export interface AiAsking {
+  /** Question-shaped phrases the keyword table holds that were not judged irrelevant. */
+  total: number;
+  /** The first twelve, or all: phrases Google showed the site for first, then price questions, then the rest. */
+  rows: AskedPhrase[];
+  /** The Search Console days the impressions cover; null when the desk has no history yet. */
+  window: { start: string; end: string } | null;
+}
+
+export interface AskedPhrase {
+  phrase: string;
+  lang: "de" | "en" | null;
+  /** It asks what something costs. */
+  price: boolean;
+  /** Where the phrase came from: "gsc", "autocomplete", "audit", "manual". */
+  sources: string[];
+  /** Search Console impressions and average position in the window; null when Google reported the phrase on no day of it. */
+  impressions: number | null;
+  position: number | null;
+  /** The page mapped to it, with the two checks an assistant quotes from; null when no page answers it yet. */
+  page: { path: string; answer: ReadinessCheck["state"] | null; faq: ReadinessCheck["state"] | null } | null;
+  /** Already on the list of questions asked of the assistants. */
+  tracked: boolean;
 }
 
 /* ---------- what moves the share ----------------------------------------------------- */
@@ -99,8 +241,11 @@ export interface AiListings {
   sites: { source: string; answers: number; engines: string[] }[];
   /** Answers that cited balkaris.ch itself. */
   own: { answers: number; engines: string[] };
-  /** The companies the answers named, most named first (Balkaris left out). */
+  /** The companies the answers named, most named first (Balkaris left out): the first ten, or all of them, as `asked.named` and `asked.who` say. */
   named: { name: string; answers: number; engines: string[]; questions: number }[];
+  /** Companies named in all, and companies' own sites cited in all, before the panel's search and its "first ten". */
+  namedTotal: number;
+  sitesTotal: number;
 }
 
 export interface CitedListing {
@@ -209,6 +354,30 @@ export interface NewAiCheck {
   note?: string | null;
 }
 
+/** What a change on this page answers: one sentence for the person who pressed the button. */
+export interface AiDone {
+  ok: true;
+  line: string;
+}
+
+/** POST /api/v1/seo/ai-search/round: what recording a round did, line by line. */
+export interface RoundAnswer extends AiDone {
+  results: { engine: AiEngine; question: string; result: "added" | "changed" | "unchanged" }[];
+  added: number;
+  changed: number;
+  unchanged: number;
+  /** Lines of a pasted round that could not be read, each with why. */
+  skipped: string[];
+}
+
+/** POST /api/v1/seo/ai-search/page/check: the page as read just now, or as it stood when it could not be read. */
+export interface PageCheckAnswer extends AiDone {
+  /** False when the page did not answer 200: `page` is then its last good read, or null. */
+  read: boolean;
+  page: PageReadiness | null;
+  checkedAt: string | null;
+}
+
 /** POST /api/v1/seo/ai-search/record: what recording one answer did. */
 export interface RecordAnswer {
   ok: true;
@@ -255,15 +424,29 @@ export interface Readiness {
    * others at the readiness run.
    */
   site: ReadinessCheck[];
-  /** Every page read, each check's state only; a page's details come with GET /page?path= when its row opens. */
+  /**
+   * The pages the table's filters let through, in its order: the first twelve
+   * unless all are asked for. Each check's state only; what a check read
+   * comes with the opened row (`opened`) or GET /page?path=.
+   */
   pages: PageReadinessRow[];
+  /** Pages read in all, pages the filters let through, and the kinds of page among those read. */
+  list: { total: number; matching: number; kinds: { kind: string; count: number }[] };
+  /** The page the address opens (`?page=`), with what each check read; null when none is opened. */
+  opened: PageReadinessAnswer | null;
   /** Pages passing every check that applies to them, of the pages checked. */
   ready: number;
   of: number;
   /** Each page check over every page it applies to, in the checks' order. */
   byCheck: ReadinessTally[];
-  /** What robots.txt says to each named AI and search crawler, as last read; null before the first site-wide check. */
+  /** What robots.txt says to each named AI and search crawler, as last read; null before the first site-wide check, or when robots.txt could not be read. */
   robots: { agent: string; family: string; allowed: boolean }[] | null;
+  /** Why `robots` is null although the site-wide checks ran: how robots.txt answered. */
+  robotsNote: string | null;
+  /** What the last run could not read, said whole ("The run of 5 Oct 2026 read none of the 98 pages: the website answered 402 …"); null when it read every page. */
+  unread: { at: string; line: string } | null;
+  /** The daily job as it stands, so "Run the check" can say what is happening; null when the desk has no such job. */
+  job: { running: boolean; progress: string | null; lastStart: string | null; lastOk: boolean | null; lastNote: string | null } | null;
 }
 
 export interface ReadinessTally {
@@ -300,6 +483,8 @@ export interface PageReadiness {
   checks: ReadinessCheck[];
   pass: number;
   of: number;
+  /** Set when the newest attempt to read the page failed: the checks are then its last good read's. */
+  unread?: { why: string; at: string };
 }
 
 /** A page in the readiness table: each check's state by its key, without what it read. */
@@ -311,12 +496,16 @@ export interface PageReadinessRow {
   states: Record<string, ReadinessCheck["state"]>;
   pass: number;
   of: number;
+  /** The newest attempt to read it failed; the marks are its last good read's. */
+  unread?: boolean;
 }
 
 /** GET /api/v1/seo/ai-search/page?path=: one page's checks with what each read, or null when the readiness check has not read it. */
 export interface PageReadinessAnswer {
   page: PageReadiness | null;
   checkedAt: string | null;
+  /** Tasks for the operator made from what this page fails (a brief for its answer and questions). The workstation's own model writes them. */
+  tasks?: { label: string; task: NewTask }[];
 }
 
 export interface ManualImport {

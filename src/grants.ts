@@ -126,16 +126,20 @@ export const AREAS: readonly Area[] = [
     label: "SEO",
     about: "Search queries, keywords, indexing, technical checks and the SEO engine. Edit lets them run audits and work the opportunities. Its AI buttons, and the answers they lead to, need the AI Operator as well.",
     /* A button's address belongs to the pages that draw it: the cluster map is Keywords', "sent to
-       Google" is on Technical and on Search Console, an owner task is closed from three pages. */
+       Google" is on Technical and on Search Console, an owner task is closed from three pages. What the desk
+       does at Google itself (/seo/google: inspect an address, submit a sitemap, IndexNow) is a panel of
+       Technical whose buttons Search Console and Pages draw too. */
     pages: [
       { key: "seo", label: "Overview", api: [`${V}/seo/overview`] },
-      seo("opportunities", "Opportunities"),
-      seo("pages", "Pages", [`${V}/seo/pages`, `${V}/seo/optimize`]),
+      /* Taking an opportunity's action and closing an audit step are drawn on Technical too (its opportunities
+         card), so both pages list those two addresses: listed by Technical alone they would stop being Opportunities'. */
+      seo("opportunities", "Opportunities", [`${V}/seo/opportunities`, `${V}/seo/opportunities/act`, `${V}/seo/opportunities/owner-task`]),
+      seo("pages", "Pages", [`${V}/seo/pages`, `${V}/seo/optimize`, `${V}/seo/google`]),
       seo("keywords", "Keywords", [`${V}/seo/keywords`, `${V}/seo/clusters`]),
       seo("content-gaps", "Content Gaps", [`${V}/seo/content-gaps`, `${V}/seo/owner-tasks`]),
       seo("backlinks", "Backlinks", [`${V}/seo/backlinks`, `${V}/seo/owner-tasks`]),
-      seo("technical", "Technical", [`${V}/seo/technical`, `${V}/spider`, `${V}/seo/indexing`]),
-      seo("search-console", "Search Console", [`${V}/seo/search-console`, `${V}/seo/indexing`]),
+      seo("technical", "Technical", [`${V}/seo/technical`, `${V}/spider`, `${V}/seo/indexing`, `${V}/seo/google`, `${V}/seo/opportunities/act`, `${V}/seo/opportunities/owner-task`]),
+      seo("search-console", "Search Console", [`${V}/seo/search-console`, `${V}/seo/indexing`, `${V}/seo/google`]),
       seo("competitors", "Competitors"),
       seo("ai-search", "AI Search"),
       seo("automations", "Automations", [`${V}/seo/automations`, `${V}/seo/owner-tasks`]),

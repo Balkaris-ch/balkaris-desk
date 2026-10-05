@@ -2,17 +2,18 @@ import { Hono } from "hono";
 import { db } from "../../../db.ts";
 import type { Vars } from "../../access.ts";
 import { runnerState } from "../../operator/queue.ts";
-import { history, status } from "../../scheduler.ts";
+import { status } from "../../scheduler.ts";
 import { sources } from "../../sources.ts";
-import { activity, off, ok, reading, waiting } from "../../store.ts";
+import { activity, off, ok, reading, today, waiting } from "../../store.ts";
 import { scrub, scrubItem } from "../../system.ts";
 import type { ActivityItem, Reading, SourceId, SourceStatus } from "../../../../web/src/contract/common.ts";
-import type { AutomationRun, FinishedRun, JobSource, JobState } from "../../../../web/src/contract/automations.ts";
-import type { SeoAutomationSplit, SeoAutomationsPayload, SeoJobRuns, SeoJobsDay } from "../../../../web/src/contract/seo/automations.ts";
-import type { OperatorPanel, OwnerTaskRow, SeoJob } from "../../../../web/src/contract/seo/common.ts";
+import type { AutomationRun, FinishedRun, JobSource } from "../../../../web/src/contract/automations.ts";
+import type { SeoAutomationSplit, SeoAutomationsPayload, SeoJobRuns, SeoJobState, SeoJobsDay, SeoJobsPeriod, SeoScheduler } from "../../../../web/src/contract/seo/automations.ts";
+import type { OperatorPanel, OwnerTaskRow, SeoJob, SeoRange } from "../../../../web/src/contract/seo/common.ts";
 import { IMPORT_KINDS, lastImport } from "../../seo/aisearch.ts";
-import { seoJobs } from "../../seo/jobs.ts";
+import { runsBegin, runsOf, runsSince, runTally, seoJobs, standings, WATCH, watchPending, watchState, type Standing } from "../../seo/jobs.ts";
 import { ownerTasks } from "../../seo/owner.ts";
+import { daysOf } from "../../seo/rank.ts";
 import { head, rangeFrom, SEO_KINDS } from "./shared.ts";
 
 /**
@@ -20,21 +21,31 @@ import { head, rangeFrom, SEO_KINDS } from "./shared.ts";
  * on, and plainly what the SEO tools do by themselves, what waits for a
  * person's approval and what only a person can do.
  *
- *   GET  /?range=…   the whole page (SeoAutomationsPayload, web/src/contract/seo/automations.ts)
+ *   GET  /?range=…            the whole page (SeoAutomationsPayload, web/src/contract/seo/automations.ts);
+ *                             the range is the window of the `period` panel and of each job's period counts
+ *   GET  /export.csv?range=…  every run of these jobs that started in the window, as CSV
  *
  * Nothing else: running a job now is the core API's POST /api/v1/jobs/:name/run
- * (anybody signed in, with its floor between two asks), switching one off or
- * on is POST /api/v1/jobs/:name/enabled (the owner only), and a step in the
- * owner's browser is marked done through the engine's POST
- * /api/v1/seo/owner-tasks/:id. This file repeats none of them.
+ * (with its floor between two asks), switching one off or on is
+ * POST /api/v1/jobs/:name/enabled (the owner only), and a step in the owner's
+ * browser is marked done through the engine's POST /api/v1/seo/owner-tasks/:id.
+ * This file repeats none of them.
  *
  * WHERE IT COMES FROM. The scheduler (in memory, and its cc_jobs and cc_runs
- * tables), the engine's job list (src/cc/seo/jobs.ts `seoJobs`: what each
- * does, its group, its request budget), the sources Settings lists, the
- * operator's queue and approval tables, the owner tasks, the AI checks and
- * the imports. All of it is the desk's own: nobody outside the box is asked
- * while the page is drawn, so drawing it costs no quota. Each part is its own
- * reading, so one table that cannot be read costs one panel.
+ * tables), the engine's job list and its watch over these jobs
+ * (src/cc/seo/jobs.ts: what each does, its group, its request budget, when it
+ * should start next and why, the runs kept longer than the scheduler's week),
+ * the sources Settings lists, the operator's queue and approval tables, the
+ * owner tasks, the AI checks and the imports. All of it is the desk's own:
+ * nobody outside the box is asked while the page is drawn, so drawing it costs
+ * no quota. Each part is its own reading, so one table that cannot be read
+ * costs one panel.
+ *
+ * A JOB THAT DOES NOT RUN IS SAID TO BE LATE. Its last result alone used to
+ * decide its word, so a job two days behind read "Success" and "Due now",
+ * and a desk whose scheduler had stopped looked like one that worked. Now a
+ * job more than ten minutes past its time is "late" with the time it was due,
+ * and `scheduler` says whether anything starts by itself here at all.
  */
 export const routes = new Hono<Vars>();
 
@@ -65,11 +76,13 @@ const ABOUT: Record<string, { source: SourceId | null; reads: string; writes: st
   "gsc-daily": { source: "gsc", reads: "Search Console's search figures for the last 7, 30 and 90 days, read-only.", writes: "The figures the screens show, kept in the desk." },
   "gsc-inspect": { source: "gsc", reads: "Google's URL Inspection, one sitemap address at a time.", writes: "Each address's index state per day, kept 400 days in the desk." },
   speed: { source: "psi", reads: "Google's PageSpeed Insights, a phone and a desktop run per page.", writes: "Lab speed, Lighthouse scores and field data when Google has any, in the desk." },
+  "crux-daily": { source: "crux", reads: "Google's Chrome UX Report: what real Chrome visitors experienced over the last 28 days, for phones, desktops and all together.", writes: "The field Core Web Vitals SEO › Technical shows, in the desk. Nothing while Google has no such data for the site." },
   "bing-daily": { source: "bing", reads: "Bing Webmaster's links and figures, once its key exists.", writes: "Bing's links with their anchor text and its search figures, in the desk." },
 };
 
 /* ---------- small helpers -------------------------------------------------------------- */
 
+const MIN = 60_000;
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
 
@@ -91,6 +104,15 @@ const count = (sql: string, ...args: (string | number)[]): number => {
   }
 };
 
+/** The same, but null when it could not be read: for a figure that must not turn into a 0. */
+const counted = (sql: string, ...args: (string | number)[]): number | null => {
+  try {
+    return (db.prepare(sql).get(...args) as { n: number | null }).n ?? 0;
+  } catch {
+    return null;
+  }
+};
+
 type Listed = ReturnType<typeof status>[number];
 
 function sourceOf(id: SourceId | null, all: SourceStatus[]): JobSource | null {
@@ -107,8 +129,14 @@ function sourceOf(id: SourceId | null, all: SourceStatus[]): JobSource | null {
   };
 }
 
-/** As the desk-wide Automations screen says it (src/cc/routes/automations.ts): one word for where a job stands. */
-function stateOf(j: Listed, source: JobSource | null, pausedUntil: string | null, hasSource: boolean): JobState {
+/**
+ * One word for where a job stands: the desk-wide Automations screen's words
+ * (src/cc/routes/automations.ts), and "late" for a job whose time passed more
+ * than ten minutes ago without a start. A failed last run is said before
+ * lateness (the row's Next run still says since when it is late); a success is
+ * not, because a job that does not run has nothing new to be right about.
+ */
+function stateOf(j: Listed, source: JobSource | null, pausedUntil: string | null, hasSource: boolean, standing: Standing | undefined): SeoJobState {
   if (j.running) return "running";
   if (!j.enabled) return "off";
   if (!j.ready) {
@@ -116,8 +144,9 @@ function stateOf(j: Listed, source: JobSource | null, pausedUntil: string | null
     /* Not ready while its source IS connected is a job with nothing left to ask, not a wait. */
     if (!hasSource || source?.state !== "connected") return "waiting";
   }
-  if (j.lastOk === null) return "new";
-  return j.lastOk ? "ok" : "failed";
+  if (j.lastOk === false) return "failed";
+  if (standing?.lateSince) return "late";
+  return j.lastOk === null ? "new" : "ok";
 }
 
 /** The speed test's pause after Google's 429, read from the website collector; a collector that failed to load costs the pause only. */
@@ -132,9 +161,12 @@ async function speedPause(): Promise<string | null> {
 
 /* ---------- the jobs' runs ----------------------------------------------------------- */
 
-function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Record<string, SeoJobRuns> {
+function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null, since: string): Record<string, SeoJobRuns> {
   const listed = new Map(status().map((j) => [j.name, j]));
   const all = sources();
+  const stands = standings(now);
+  const watch = watchState();
+  const pending = watchPending();
   const names = jobs.map((j) => j.name);
   const marks = names.map(() => "?").join(",");
   const day = new Map(
@@ -147,6 +179,12 @@ function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Recor
         .all(new Date(now - DAY).toISOString(), ...names) as { job: string; ok: number | null; failed: number | null }[]
     ).map((r) => [r.job, { ok: r.ok ?? 0, failed: r.failed ?? 0 }]),
   );
+  /* The head's period, from the scheduler's week and the desk's own longer copy of these runs. */
+  const inPeriod = new Map<string, { ok: number; failed: number; open: number; lastFailed: string | null }>();
+  for (const r of runTally(since)) {
+    const had = inPeriod.get(r.job) ?? { ok: 0, failed: 0, open: 0, lastFailed: null };
+    inPeriod.set(r.job, { ok: had.ok + r.ok, failed: had.failed + r.failed, open: had.open + r.open, lastFailed: r.lastFailed && (!had.lastFailed || r.lastFailed > had.lastFailed) ? r.lastFailed : had.lastFailed });
+  }
 
   const out: Record<string, SeoJobRuns> = {};
   for (const job of jobs) {
@@ -155,10 +193,11 @@ function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Recor
     const about = ABOUT[job.name];
     const source = sourceOf(about?.source ?? null, all);
     const pausedUntil = job.name === "speed" && !j.running && j.enabled && !j.ready ? pausedSpeed : null;
-    const state = stateOf(j, source, pausedUntil, !!about?.source);
+    const standing = stands.get(j.name);
+    const state = stateOf(j, source, pausedUntil, !!about?.source, standing);
     /* The scheduler writes no end for a run a restart cut off: an open row is the run in progress
        only when it is the newest row of the job running now; every other open row was cut off. */
-    const runs: AutomationRun[] = history(j.name, 20).map((r, i) => ({
+    const runs: AutomationRun[] = runsOf(j.name, 20).map((r, i) => ({
       start: r.start,
       end: r.end,
       state: r.ok === null ? (j.running && i === 0 ? "running" : "cut") : r.ok ? "ok" : "failed",
@@ -176,10 +215,20 @@ function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Recor
             return { start, end: j.lastEnd, ms: span(start, j.lastEnd), ok: j.lastOk, note: j.lastNote === null ? null : scrub(j.lastNote) };
           })()
         : null;
-    /* A paused job starts again when its pause is over and its interval since its last start has passed. */
+    /* A paused job starts again when its pause is over and its interval since its last start has passed.
+       Any other: when the watch's rules say (its regular time, sooner after a failure or a cut). A job that
+       never ran has a time only where a scheduler runs; a running one keeps its regular next time. */
     const nextRun =
-      state === "paused" && pausedUntil ? new Date(Math.max(Date.parse(pausedUntil), j.lastStart ? Date.parse(j.lastStart) + j.every * 1000 : 0)).toISOString() : j.nextRun;
-    const askable = j.ready && j.enabled && !j.running;
+      state === "paused" && pausedUntil
+        ? new Date(Math.max(Date.parse(pausedUntil), j.lastStart ? Date.parse(j.lastStart) + j.every * 1000 : 0)).toISOString()
+        : j.running
+          ? j.nextRun
+          : (standing?.dueAt ?? null);
+    const queued = pending?.name === j.name ? { at: pending.at, why: pending.why } : null;
+    const askable = j.ready && j.enabled && !j.running && !queued;
+    const tally = inPeriod.get(j.name);
+    /* The open row of the job running now is its run in progress, not one cut off. */
+    const runningRow = j.running && j.lastStart !== null && j.lastStart >= since ? 1 : 0;
     out[job.name] = {
       state,
       pausedUntil: state === "paused" ? pausedUntil : null,
@@ -188,8 +237,15 @@ function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Recor
       writes: about?.writes ?? "The desk's own database.",
       last,
       nextRun,
+      nextWhy: state === "paused" || j.running ? null : (standing?.why ?? null),
+      lateSince: standing?.lateSince ?? null,
+      queued,
+      retry: standing?.why === "retry" ? { attempt: standing.failsInRow, of: watch.on ? WATCH.retries : 0 } : null,
+      cutAt: standing?.cutAt ?? null,
+      gaveUp: standing?.gaveUp ?? null,
       recent: runs.slice(0, 8),
       day: day.get(j.name) ?? { ok: 0, failed: 0 },
+      period: { ok: tally?.ok ?? 0, failed: tally?.failed ?? 0, cut: Math.max(0, (tally?.open ?? 0) - runningRow), lastFailed: tally?.lastFailed ?? null },
       durations: runs
         .filter((r) => r.ms !== null)
         .slice(0, 20)
@@ -201,7 +257,7 @@ function jobRuns(jobs: SeoJob[], now: number, pausedSpeed: string | null): Recor
   return out;
 }
 
-/** These jobs' runs in the last 24 hours, and the jobs whose newest run failed. */
+/** These jobs' runs in the last 24 hours, the jobs whose newest run failed, and the jobs that are late. */
 function lastDay(jobs: SeoJob[], now: number): Reading<SeoJobsDay> {
   const names = jobs.map((j) => j.name);
   if (!names.length) return waiting("desk", "No SEO job is registered on this desk yet.");
@@ -221,15 +277,116 @@ function lastDay(jobs: SeoJob[], now: number): Reading<SeoJobsDay> {
     if (i >= 0 && i < 24) series[i] = (series[i] ?? 0) + 1;
   }
   const first = (db.prepare("SELECT MIN(started) AS s FROM cc_runs").get() as { s: string | null }).s;
+  const stands = standings(now);
   const value: SeoJobsDay = {
     ok: rows.filter((r) => r.ok === 1).length,
     failed: rows.filter((r) => r.ok === 0).length,
     cut: rows.filter((r) => r.ok === null && newestOpen.get(r.job) !== r.started).length,
     failing: jobs.filter((j) => j.enabled && j.lastOk === false).map((j) => j.title),
+    late: jobs.filter((j) => stands.get(j.name)?.lateSince).map((j) => j.title),
     series,
   };
   const partial = first && Date.parse(first) > now - DAY ? ` The scheduler began keeping runs at ${first.slice(11, 16)} UTC, so the day is not whole.` : "";
   return ok(value, "desk", new Date(now).toISOString(), `The desk's own scheduler, which keeps a week of runs.${partial}`);
+}
+
+/* ---------- whether anything starts by itself ----------------------------------------------- */
+
+/** The desk has jobs that start every two minutes: ten minutes without any start is a scheduler that has stopped. */
+const STALL_MS = 10 * MIN;
+
+function scheduler(now: number): SeoScheduler {
+  const on = process.env.CC_SCHEDULER !== "off";
+  let lastStart: string | null = null;
+  try {
+    lastStart = (db.prepare("SELECT MAX(last_start) AS s FROM cc_jobs").get() as { s: string | null }).s;
+  } catch {
+    lastStart = null;
+  }
+  const watch = watchState();
+  /* Not in the desk's first ten minutes: nothing is expected to have started in the seconds after a restart. */
+  const settled = now - Date.parse(watch.startedAt) > STALL_MS;
+  return {
+    on,
+    lastStart,
+    stalled: on && settled && (lastStart === null || now - Date.parse(lastStart) > STALL_MS),
+    watch: {
+      on: watch.on,
+      lastBeat: watch.lastBeat,
+      asks: watch.asks.slice(0, 12),
+      askAfterMin: WATCH.askAfterMs / MIN,
+      lateAfterMin: WATCH.lateAfterMs / MIN,
+      retryAfterMin: WATCH.retryMs / MIN,
+      retries: WATCH.retries,
+    },
+  };
+}
+
+/* ---------- the head's period: the runs, and what they brought in ------------------------------ */
+
+function period(jobs: SeoJob[], range: SeoRange, now: number): Reading<SeoJobsPeriod> {
+  if (!jobs.length) return off("desk", "No SEO job is registered on this desk yet.");
+  const days = daysOf(range);
+  const since = new Date(now - days * DAY).toISOString();
+  const begins = runsBegin();
+  if (!begins) return waiting("desk", "No run of an SEO job is kept yet: the first ones show here once the scheduler has started them.");
+  const titles = new Map(jobs.map((j) => [j.name, j.title]));
+
+  /* One bar per slice of the period, thirty at most, counted in UTC days as the runs are stored. */
+  const firstDay = Date.parse(`${since.slice(0, 10)}T00:00:00Z`);
+  const allDays = days + 1;
+  const sliceDays = Math.ceil(allDays / 30);
+  const series = Array.from({ length: Math.ceil(allDays / sliceDays) }, () => 0);
+  let good = 0;
+  let failed = 0;
+  let open = 0;
+  for (const r of runTally(since)) {
+    good += r.ok;
+    failed += r.failed;
+    open += r.open;
+    const i = Math.floor((Date.parse(`${r.day}T00:00:00Z`) - firstDay) / (sliceDays * DAY));
+    if (i >= 0 && i < series.length) series[i] = (series[i] ?? 0) + r.ok + r.failed + r.open;
+  }
+  const runningRows = jobs.filter((j) => j.running && j.lastStart !== null && j.lastStart >= since).length;
+
+  /* What the jobs brought in, each from the table its job writes. One that cannot be read is left out. */
+  const found: SeoJobsPeriod["found"] = [];
+  const add = (key: string, label: string, from: string, href: string | null, value: number | null): void => {
+    if (value !== null) found.push({ key, label, value, href, from });
+  };
+  add(
+    "phrases",
+    "New phrases from Google Autocomplete",
+    titles.get("seo-research") ?? "seo-research",
+    "/seo/keywords?source=autocomplete&sort=first-seen",
+    counted("SELECT COUNT(*) AS n FROM cc_seo_keywords WHERE first_seen >= ? AND sources LIKE '%autocomplete%' AND sources NOT LIKE '%audit%'", since),
+  );
+  add(
+    "queries",
+    "New searches seen in Search Console",
+    titles.get("seo-snapshot") ?? "seo-snapshot",
+    "/seo/keywords?source=gsc&sort=first-seen",
+    counted("SELECT COUNT(*) AS n FROM cc_seo_keywords WHERE first_seen >= ? AND sources LIKE '%gsc%' AND sources NOT LIKE '%audit%' AND sources NOT LIKE '%autocomplete%'", since),
+  );
+  add("opportunities", "Opportunities found", titles.get("seo-engine") ?? "seo-engine", "/seo/opportunities", counted("SELECT COUNT(*) AS n FROM cc_seo_opps WHERE first_seen >= ?", since));
+  add("cleared", "Opportunities the rules no longer find", titles.get("seo-engine") ?? "seo-engine", null, counted("SELECT COUNT(*) AS n FROM cc_seo_opps WHERE active = 0 AND cleared_at >= ?", since));
+  add("indexed", "Pages Google newly indexed", titles.get("gsc-inspect") ?? "gsc-inspect", "/seo/technical#indexing", counted("SELECT COUNT(*) AS n FROM cc_activity WHERE kind = 'gsc.indexed' AND at >= ?", since));
+  add("dropped", "Pages Google dropped from its index", titles.get("gsc-inspect") ?? "gsc-inspect", "/seo/technical#indexing", counted("SELECT COUNT(*) AS n FROM cc_activity WHERE kind = 'gsc.dropped' AND at >= ?", since));
+
+  const value: SeoJobsPeriod = {
+    range,
+    days,
+    begins,
+    ok: good,
+    failed,
+    cut: Math.max(0, open - runningRows),
+    series,
+    sliceDays,
+    failures: runsSince(since, 20, { failed: true }).map((r) => ({ job: r.job, title: titles.get(r.job) ?? r.job, start: r.start, note: r.note === null ? null : scrub(r.note) })),
+    found,
+  };
+  const short = begins > since ? ` The desk began keeping these runs on ${begins.slice(0, 10)}, so this period is not whole.` : "";
+  return ok(value, "desk", new Date(now).toISOString(), `Counted from the desk's own scheduler, which keeps a week of runs, and the SEO section's copy of them, kept 400 days.${short}`);
 }
 
 /* ---------- by itself, waiting for approval, only a person --------------------------------- */
@@ -293,20 +450,21 @@ function split(jobs: SeoJob[], runs: Record<string, SeoJobRuns> | null, now: num
 /** The log's kinds the page reads: the SEO engine's own, and the owner's switches of a job. */
 const LOG_KINDS = [...SEO_KINDS, "automation"];
 
-/** What the SEO jobs and the people acting on them wrote to the log lately, and the switches of these jobs. */
-function recent(jobs: SeoJob[]): ActivityItem[] {
+/** What the SEO jobs and the people acting on them wrote to the log in the period, newest first, and the switches of these jobs. */
+function recent(jobs: SeoJob[], since: string): ActivityItem[] {
   const titles = jobs.map((j) => `"${j.title}"`);
-  return activity(40, LOG_KINDS)
-    .filter((a) => a.kind !== "automation" || titles.some((t) => a.text.includes(t)))
+  return activity(60, LOG_KINDS)
+    .filter((a) => a.at >= since && (a.kind !== "automation" || titles.some((t) => a.text.includes(t))))
     .slice(0, 12)
     .map(scrubItem);
 }
 
 /* ---------- the page ------------------------------------------------------------------ */
 
-async function page(range: ReturnType<typeof rangeFrom>): Promise<SeoAutomationsPayload> {
+async function page(range: SeoRange): Promise<SeoAutomationsPayload> {
   const now = Date.now();
   const at = new Date(now).toISOString();
+  const since = new Date(now - daysOf(range) * DAY).toISOString();
   let jobs: SeoJob[] = [];
   let jobsWhy: string | null = null;
   try {
@@ -318,15 +476,18 @@ async function page(range: ReturnType<typeof rangeFrom>): Promise<SeoAutomations
 
   const paused = await speedPause();
   const runs = await reading<Record<string, SeoJobRuns>>("desk", () =>
-    jobs.length ? ok(jobRuns(jobs, now, paused), "desk", at, "The desk's own scheduler: it keeps a week of runs.") : waiting("desk", jobsWhy ?? "No SEO job is registered on this desk yet."),
+    jobs.length
+      ? ok(jobRuns(jobs, now, paused, since), "desk", at, "The desk's own scheduler, which keeps a week of runs, and the SEO section's own copy of them, kept 400 days.")
+      : waiting("desk", jobsWhy ?? "No SEO job is registered on this desk yet."),
   );
   const byName = runs.state === "ok" ? runs.value : null;
 
-  /* The soonest start among the jobs that are on and not running; a paused job's is when its pause is over. */
+  /* The soonest start among the jobs that are on and not running; a paused job's is when its pause is over.
+     Without the run table the job list's own next time still stands. */
   const upcoming = jobs
     .filter((j) => j.enabled && !j.running)
-    .map((j) => ({ name: j.name, title: j.title, at: byName?.[j.name]?.nextRun ?? j.nextRun }))
-    .filter((j): j is { name: string; title: string; at: string } => !!j.at)
+    .map((j) => ({ name: j.name, title: j.title, at: byName ? (byName[j.name]?.nextRun ?? null) : j.nextRun, late: !!byName?.[j.name]?.lateSince }))
+    .filter((j): j is { name: string; title: string; at: string; late: boolean } => !!j.at)
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
   const next = upcoming[0] ?? null;
 
@@ -339,7 +500,7 @@ async function page(range: ReturnType<typeof rangeFrom>): Promise<SeoAutomations
 
   let recentItems: ActivityItem[] = [];
   try {
-    recentItems = recent(jobs);
+    recentItems = recent(jobs, since);
   } catch {
     recentItems = [];
   }
@@ -357,7 +518,58 @@ async function page(range: ReturnType<typeof rangeFrom>): Promise<SeoAutomations
     runs,
     day: await reading<SeoJobsDay>("desk", () => (jobs.length ? lastDay(jobs, now) : off("desk", jobsWhy ?? "No SEO job is registered on this desk yet."))),
     split: await reading<SeoAutomationSplit>("desk", () => ok(split(jobs, byName, now), "desk", at)),
+    scheduler: scheduler(now),
+    period: await reading<SeoJobsPeriod>("desk", () => period(jobs, range, now)),
+    recentInPeriod: count(`SELECT COUNT(*) AS n FROM cc_activity WHERE at >= ? AND kind IN (${SEO_KINDS.map(() => "?").join(",")})`, since, ...SEO_KINDS),
   };
 }
 
 routes.get("/", async (c) => c.json<SeoAutomationsPayload>(await page(rangeFrom(c))));
+
+/* ---------- GET /export.csv ------------------------------------------------------------------- */
+
+const cell = (v: unknown): string => {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  /* A spreadsheet runs a cell that starts like a formula. */
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/**
+ * Every run of the SEO section's jobs that started in the period, newest
+ * first: the answer to "when did this start failing" as a file. Read from
+ * the same two tables as the page, so the file and the screen agree.
+ */
+routes.get("/export.csv", (c) => {
+  const range = rangeFrom(c);
+  const now = Date.now();
+  const since = new Date(now - daysOf(range) * DAY).toISOString();
+  const rows = runsSince(since, 50_000);
+  if (!rows.length) return c.json({ error: `There is nothing to export yet: no run of an SEO job started in the last ${daysOf(range)} days.` }, 409);
+  const listed = new Map(status().map((j) => [j.name, j]));
+  const lines = [["Job", "Name", "Started (UTC)", "Ended (UTC)", "Seconds", "Result", "What it said"].map(cell).join(",")];
+  for (const r of rows) {
+    const j = listed.get(r.job);
+    const running = r.ok === null && !!j?.running && j.lastStart === r.start;
+    const ms = span(r.start, r.end);
+    lines.push(
+      [
+        j?.title ?? r.job,
+        r.job,
+        r.start.slice(0, 19).replace("T", " "),
+        r.end ? r.end.slice(0, 19).replace("T", " ") : "",
+        ms === null ? "" : (ms / 1000).toFixed(1),
+        r.ok === null ? (running ? "running" : "cut off by a restart") : r.ok ? "ok" : "failed",
+        r.note === null ? "" : scrub(r.note),
+      ]
+        .map(cell)
+        .join(","),
+    );
+  }
+  c.header("content-type", "text/csv; charset=utf-8");
+  c.header("content-disposition", `attachment; filename="balkaris-seo-job-runs-${today()}-${range}.csv"`);
+  c.header("cache-control", "no-store");
+  /* The byte-order mark makes Excel on Windows read the file as UTF-8. */
+  return c.body(`﻿${lines.join("\r\n")}\r\n`);
+});

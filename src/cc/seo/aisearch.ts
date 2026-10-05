@@ -40,6 +40,23 @@ const KINDS = ["brand", "domain", "category", "price", "advice"] as const;
 
 /* ---------- checks ------------------------------------------------------------------------- */
 
+/** A question as one key, whatever its spacing or capitals: the page groups answers by it, and a record is found again by it. */
+export const qKey = (q: string): string => q.trim().replace(/\s+/g, " ").toLowerCase();
+
+/**
+ * The name an assistant goes by among the sightings. Competitors and the
+ * audit's import know Google's AI Overview as "google-aio"; a record filed
+ * under the check's own key would show there without a label.
+ */
+export const sightingEngine = (e: AiEngine): string => (e === "google-ai-overview" ? "google-aio" : e);
+
+/* Sightings filed under the check's own key before this rule: moved once, and a row that is already there under the right key is dropped. */
+try {
+  db.exec("UPDATE OR IGNORE cc_seo_sightings SET engine = 'google-aio' WHERE engine = 'google-ai-overview'; DELETE FROM cc_seo_sightings WHERE engine = 'google-ai-overview';");
+} catch {
+  /* no such table yet: nothing to move */
+}
+
 /** What makes a check valid, in words a person can act on; null when it is. */
 export function checkRefusal(c: Partial<NewAiCheck>): string | null {
   if (!c.engine || !ENGINES.includes(c.engine)) return `engine must be one of ${ENGINES.join(", ")}.`;
@@ -49,25 +66,118 @@ export function checkRefusal(c: Partial<NewAiCheck>): string | null {
   if (!c.kind || !(KINDS as readonly string[]).includes(c.kind)) return `kind must be one of ${KINDS.join(", ")}.`;
   if (!(c.mentioned === true || c.mentioned === false || c.mentioned === null)) return "mentioned must be true, false or null (the answer could not be read whole).";
   if (c.by !== "audit" && c.by !== "lead-chrome" && c.by !== "api") return 'by must be "audit", "lead-chrome" or "api".';
-  if (c.position != null && (!Number.isInteger(c.position) || c.position < 1 || c.position > 50)) return "position must be a whole number from 1, or null.";
+  if (c.position != null && (!Number.isInteger(c.position) || c.position < 1 || c.position > 50)) return "position must be a whole number from 1 to 50, or null.";
   for (const list of [c.competitors, c.sources]) if (list && (!Array.isArray(list) || list.length > 40 || list.some((s) => typeof s !== "string" || s.length > 120))) return "competitors and sources are lists of at most 40 short names.";
   if (c.excerpt != null && (typeof c.excerpt !== "string" || c.excerpt.length > 600)) return "excerpt is at most 600 characters.";
+  /* The form caps a note at 300; without the same rule here an API caller could store any size, and a note that is not text failed in the database instead of with a sentence. */
+  if (c.note != null && (typeof c.note !== "string" || c.note.length > 300)) return "note is at most 300 characters.";
   return null;
 }
 
-/** Record a check (idempotent per engine, question, day and recorder). Its named companies and cited sources become sightings. */
+interface CheckDb {
+  id: number;
+  engine: AiEngine;
+  question: string;
+  lang: "de" | "en";
+  day: string;
+  kind: AiCheckRow["kind"];
+  mentioned: number | null;
+  position: number | null;
+  competitors: string;
+  sources: string;
+  excerpt: string | null;
+  by: string;
+  note: string | null;
+}
+
+const toCheck = (r: CheckDb): AiCheckRow => ({
+  id: r.id,
+  engine: r.engine,
+  engineLabel: ENGINE_LABEL[r.engine] ?? r.engine,
+  question: r.question,
+  lang: r.lang,
+  day: r.day,
+  kind: r.kind,
+  mentioned: r.mentioned === null ? null : !!r.mentioned,
+  position: r.position,
+  competitors: json<string[]>(r.competitors, []),
+  sources: json<string[]>(r.sources, []),
+  excerpt: r.excerpt,
+  by: r.by,
+  note: r.note,
+});
+
+const tidy = (list: string[] | undefined): string[] => (list ?? []).map((s) => s.trim()).filter(Boolean);
+
+interface Seen {
+  domain: string;
+  name: string | null;
+  kind: "named" | "cited";
+}
+
+/** The sightings one record stands for: the companies it named and the sources it cited (never Balkaris itself, never a "Business profiles" card). */
+function sightingsOf(c: { competitors?: string[]; sources?: string[] }): Seen[] {
+  const out: Seen[] = [];
+  for (const name of tidy(c.competitors)) {
+    const domain = domainKey(null, name);
+    if (domain) out.push({ domain, name, kind: "named" });
+  }
+  for (const s of tidy(c.sources)) {
+    if (/balkaris/i.test(s) || /business profiles?$/i.test(s)) continue;
+    const domain = domainKey(s, s);
+    if (domain) out.push({ domain, name: domain.startsWith("name:") ? s : null, kind: "cited" });
+  }
+  return out;
+}
+
+type SightKey = { engine: AiEngine; question: string; lang: string; day: string; by: string };
+
+function putSightings(c: SightKey, list: Seen[]): void {
+  for (const s of list) addSighting({ domain: s.domain, name: s.name, engine: sightingEngine(c.engine), kind: s.kind, query: c.question, lang: c.lang, cluster: null, position: null, day: c.day, by: c.by });
+}
+
+/** Take away the sightings a record no longer stands for: a name or a source corrected out of it, or the record itself removed. */
+function dropSightings(c: SightKey, gone: Seen[]): void {
+  const del = db.prepare("DELETE FROM cc_seo_sightings WHERE domain = ? AND engine = ? AND kind = ? AND query = ? AND day = ? AND by = ?");
+  for (const g of gone) del.run(g.domain, sightingEngine(c.engine), g.kind, c.question, c.day, c.by);
+}
+
+/** The record of a recorder for one assistant, question and day, found by the question's key (its spacing and capitals do not matter). */
+function recordOf(engine: AiEngine, question: string, day: string, by: string, not?: number): CheckDb | undefined {
+  const k = qKey(question);
+  return (db.prepare("SELECT * FROM cc_seo_ai_checks WHERE engine = ? AND day = ? AND by = ?").all(engine, day, by) as unknown as CheckDb[]).find((r) => r.id !== not && qKey(r.question) === k);
+}
+
+/**
+ * Record a check (idempotent per engine, question, day and recorder; the
+ * question is matched by its key, so "Best agency?" and "best  agency?" are
+ * one). Its named companies and cited sources become sightings, and a name
+ * or source corrected out of the record takes its sighting with it.
+ *
+ * A record a person removed stays removed when the audit's files are
+ * imported again; a person or an API recording it again brings it back.
+ */
 export function addCheck(c: NewAiCheck, addedBy: string): "added" | "changed" | "unchanged" {
-  const competitors = JSON.stringify((c.competitors ?? []).map((s) => s.trim()).filter(Boolean));
-  const sources = JSON.stringify((c.sources ?? []).map((s) => s.trim()).filter(Boolean));
-  const had = db.prepare("SELECT id, mentioned, position, competitors, sources, excerpt, note, kind, lang FROM cc_seo_ai_checks WHERE engine = ? AND question = ? AND day = ? AND by = ?").get(c.engine, c.question.trim(), c.day, c.by) as
-    | { id: number; mentioned: number | null; position: number | null; competitors: string; sources: string; excerpt: string | null; note: string | null; kind: string; lang: string }
-    | undefined;
+  const asked = c.question.trim();
+  const k = qKey(asked);
+  if (db.prepare("SELECT 1 AS x FROM cc_seo_ai_removed WHERE engine = ? AND question = ? AND day = ? AND by = ?").get(c.engine, k, c.day, c.by)) {
+    if (c.by === "audit") return "unchanged";
+    db.prepare("DELETE FROM cc_seo_ai_removed WHERE engine = ? AND question = ? AND day = ? AND by = ?").run(c.engine, k, c.day, c.by);
+  }
+  const names = tidy(c.competitors);
+  const cited = tidy(c.sources);
+  const competitors = JSON.stringify(names);
+  const sources = JSON.stringify(cited);
+  const had = recordOf(c.engine, asked, c.day, c.by);
   const mentioned = c.mentioned === null ? null : c.mentioned ? 1 : 0;
+  /* An earlier record keeps the question as it was first written, so its sightings stay under one query. */
+  const key: SightKey = { engine: c.engine, question: had?.question ?? asked, lang: c.lang, day: c.day, by: c.by };
+  const seen = sightingsOf({ competitors: names, sources: cited });
   let result: "added" | "changed" | "unchanged";
   if (!had) {
     db.prepare(
       "INSERT INTO cc_seo_ai_checks (engine, question, lang, day, kind, mentioned, position, competitors, sources, excerpt, by, note, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    ).run(c.engine, c.question.trim(), c.lang, c.day, c.kind, mentioned, c.position ?? null, competitors, sources, c.excerpt ?? null, c.by, c.note ?? null, addedBy, now());
+    ).run(c.engine, asked, c.lang, c.day, c.kind, mentioned, c.position ?? null, competitors, sources, c.excerpt ?? null, c.by, c.note ?? null, addedBy, now());
     result = "added";
   } else if (
     had.mentioned === mentioned &&
@@ -92,53 +202,276 @@ export function addCheck(c: NewAiCheck, addedBy: string): "added" | "changed" | 
       c.note ?? null,
       had.id,
     );
+    const before = sightingsOf({ competitors: json<string[]>(had.competitors, []), sources: json<string[]>(had.sources, []) });
+    dropSightings(key, before.filter((b) => !seen.some((s) => s.domain === b.domain && s.kind === b.kind)));
     result = "changed";
   }
-  for (const name of c.competitors ?? []) {
-    const domain = domainKey(null, name);
-    if (domain) addSighting({ domain, name, engine: c.engine, kind: "named", query: c.question.trim(), lang: c.lang, cluster: null, position: null, day: c.day, by: c.by });
-  }
-  for (const s of c.sources ?? []) {
-    if (/balkaris/i.test(s) || /business profiles?$/i.test(s)) continue;
-    const domain = domainKey(s, s);
-    if (domain) addSighting({ domain, name: domain.startsWith("name:") ? s : null, engine: c.engine, kind: "cited", query: c.question.trim(), lang: c.lang, cluster: null, position: null, day: c.day, by: c.by });
-  }
+  putSightings(key, seen);
   return result;
 }
 
 export function checks(): AiCheckRow[] {
+  return (db.prepare("SELECT * FROM cc_seo_ai_checks ORDER BY day DESC, engine, id").all() as unknown as CheckDb[]).map(toCheck);
+}
+
+/** One record by its id, or null. */
+export function checkById(id: number): AiCheckRow | null {
+  const r = db.prepare("SELECT * FROM cc_seo_ai_checks WHERE id = ?").get(id) as unknown as CheckDb | undefined;
+  return r ? toCheck(r) : null;
+}
+
+const RECORDER: Record<string, string> = { audit: "the SEO audit", "lead-chrome": "a person in a browser", api: "an API" };
+const clip = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
+
+/**
+ * Remove one record: a wrong assistant, a wrong day, a mistyped question. Its
+ * sightings go with it, and a mark is kept so the audit's files imported
+ * again do not bring it back. Null when there is no such record.
+ */
+export function removeCheck(id: number, by: string): AiCheckRow | null {
+  const had = checkById(id);
+  if (!had) return null;
+  db.exec("BEGIN");
+  try {
+    db.prepare("DELETE FROM cc_seo_ai_checks WHERE id = ?").run(id);
+    db.prepare("INSERT OR REPLACE INTO cc_seo_ai_removed (engine, question, day, by, removed_by, removed_at) VALUES (?, ?, ?, ?, ?, ?)").run(had.engine, qKey(had.question), had.day, had.by, by, now());
+    dropSightings(had, sightingsOf(had));
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  note("seo-ai", `Removed a recorded answer: ${had.engineLabel}, “${clip(had.question, 80)}”`, {
+    tone: "quiet",
+    actor: by,
+    detail: `It was recorded for ${had.day} by ${RECORDER[had.by] ?? had.by}. It no longer counts.`,
+    href: "/seo/ai-search",
+    dedupe: `seo:ai-removed:${id}`,
+  });
+  return had;
+}
+
+/**
+ * Correct one record in place. The assistant, the day and the question may
+ * change too (a record filed under the wrong one). A record of the audit that
+ * a person corrects becomes the person's: the audit's files imported again
+ * would otherwise put the old answer back.
+ *
+ * Throws with a sentence when there is no such record, or when the same
+ * recorder already holds another record of that question, assistant and day.
+ */
+export function editCheck(id: number, c: NewAiCheck): "changed" | "unchanged" {
+  const had = checkById(id);
+  if (!had) throw new Error(`There is no recorded answer ${id}.`);
+  const by = had.by === "audit" ? "lead-chrome" : had.by;
+  const asked = c.question.trim();
+  if (recordOf(c.engine, asked, c.day, by, id)) throw new Error("There is already a record of that question, assistant and day. Change that one, or remove it first.");
+  const names = tidy(c.competitors);
+  const cited = tidy(c.sources);
+  const same =
+    had.engine === c.engine &&
+    had.question === asked &&
+    had.day === c.day &&
+    had.lang === c.lang &&
+    had.kind === c.kind &&
+    had.mentioned === c.mentioned &&
+    had.position === (c.position ?? null) &&
+    JSON.stringify(had.competitors) === JSON.stringify(names) &&
+    JSON.stringify(had.sources) === JSON.stringify(cited) &&
+    had.excerpt === (c.excerpt ?? null) &&
+    had.note === (c.note ?? null);
+  if (same) return "unchanged";
+  db.exec("BEGIN");
+  try {
+    db.prepare("UPDATE cc_seo_ai_checks SET engine = ?, question = ?, lang = ?, day = ?, kind = ?, mentioned = ?, position = ?, competitors = ?, sources = ?, excerpt = ?, note = ?, by = ? WHERE id = ?").run(
+      c.engine,
+      asked,
+      c.lang,
+      c.day,
+      c.kind,
+      c.mentioned === null ? null : c.mentioned ? 1 : 0,
+      c.position ?? null,
+      JSON.stringify(names),
+      JSON.stringify(cited),
+      c.excerpt ?? null,
+      c.note ?? null,
+      by,
+      id,
+    );
+    if (by !== had.by) db.prepare("INSERT OR REPLACE INTO cc_seo_ai_removed (engine, question, day, by, removed_by, removed_at) VALUES (?, ?, ?, ?, ?, ?)").run(had.engine, qKey(had.question), had.day, had.by, "a correction", now());
+    /* The record may have moved to another assistant, day or question: every sighting under the old one goes, and the new ones are written. */
+    dropSightings(had, sightingsOf(had));
+    putSightings({ engine: c.engine, question: asked, lang: c.lang, day: c.day, by }, sightingsOf({ competitors: names, sources: cited }));
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+  return "changed";
+}
+
+/* ---------- the questions tracked ------------------------------------------------------------ */
+
+export interface TrackedQuestion {
+  key: string;
+  question: string;
+  lang: "de" | "en";
+  kind: AiCheckRow["kind"];
+  /** False when a person retired it: its answers are kept, it is left out of the round. */
+  active: boolean;
+  addedBy: string | null;
+  addedAt: string;
+}
+
+/** What makes a question fit for the list, in words; null when it is. */
+export function questionRefusal(q: { question?: unknown; lang?: unknown; kind?: unknown }): string | null {
+  if (typeof q.question !== "string" || q.question.trim().length < 3 || q.question.length > 300) return "question must be 3 to 300 characters.";
+  if (q.lang !== "de" && q.lang !== "en") return 'lang must be "de" or "en".';
+  if (typeof q.kind !== "string" || !(KINDS as readonly string[]).includes(q.kind)) return `kind must be one of ${KINDS.join(", ")}.`;
+  return null;
+}
+
+/** The list as a person keeps it: the questions added by hand and the ones retired. A question that was only ever recorded has no row here. */
+export function trackedQuestions(): TrackedQuestion[] {
   return (
-    db.prepare("SELECT * FROM cc_seo_ai_checks ORDER BY day DESC, engine, id").all() as {
-      id: number;
-      engine: AiEngine;
+    db.prepare("SELECT key, question, lang, kind, active, added_by, added_at FROM cc_seo_ai_questions ORDER BY added_at, key").all() as {
+      key: string;
       question: string;
       lang: "de" | "en";
-      day: string;
       kind: AiCheckRow["kind"];
-      mentioned: number | null;
-      position: number | null;
-      competitors: string;
-      sources: string;
-      excerpt: string | null;
-      by: string;
-      note: string | null;
+      active: number;
+      added_by: string | null;
+      added_at: string;
     }[]
-  ).map((r) => ({
-    id: r.id,
-    engine: r.engine,
-    engineLabel: ENGINE_LABEL[r.engine] ?? r.engine,
-    question: r.question,
-    lang: r.lang,
-    day: r.day,
-    kind: r.kind,
-    mentioned: r.mentioned === null ? null : !!r.mentioned,
-    position: r.position,
-    competitors: json<string[]>(r.competitors, []),
-    sources: json<string[]>(r.sources, []),
-    excerpt: r.excerpt,
-    by: r.by,
-    note: r.note,
-  }));
+  ).map((r) => ({ key: r.key, question: r.question, lang: r.lang, kind: r.kind, active: !!r.active, addedBy: r.added_by, addedAt: r.added_at }));
+}
+
+/**
+ * Put a question on the list (active) or retire it (not active). Retiring
+ * removes nothing: the answers recorded for it stay and are shown apart.
+ */
+export function setQuestion(q: { question: string; lang: "de" | "en"; kind: AiCheckRow["kind"] }, active: boolean, by: string): "added" | "changed" | "unchanged" {
+  const question = q.question.trim().replace(/\s+/g, " ");
+  const k = qKey(question);
+  const had = db.prepare("SELECT question, lang, kind, active FROM cc_seo_ai_questions WHERE key = ?").get(k) as { question: string; lang: string; kind: string; active: number } | undefined;
+  if (!had) {
+    db.prepare("INSERT INTO cc_seo_ai_questions (key, question, lang, kind, active, added_by, added_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(k, question, q.lang, q.kind, active ? 1 : 0, by, now());
+    return "added";
+  }
+  if (!!had.active === active && had.lang === q.lang && had.kind === q.kind && had.question === question) return "unchanged";
+  db.prepare("UPDATE cc_seo_ai_questions SET question = ?, lang = ?, kind = ?, active = ?, changed_by = ?, changed_at = ? WHERE key = ?").run(question, q.lang, q.kind, active ? 1 : 0, by, now(), k);
+  return "changed";
+}
+
+/* ---------- a round pasted as text ----------------------------------------------------------- */
+
+const GERMAN = /[äöüß]|\b(wie|was|wer|wo|welche[rsn]?|warum|für|und|oder|kostet|kosten|eine[rnms]?|der|die|das|macht|gibt|beste[rn]?)\b/i;
+/** German or English, from the question's own words: only used when neither the file nor an earlier record says. */
+export const guessLang = (q: string): "de" | "en" => (GERMAN.test(q) ? "de" : "en");
+
+const ENGINE_BY_NAME = new Map<string, AiEngine>(ENGINES.flatMap((e) => [[e, e], [ENGINE_LABEL[e].toLowerCase(), e], [ENGINE_LABEL[e].toLowerCase().replace(/[^a-z]/g, ""), e]] as [string, AiEngine][]));
+const engineOf = (s: unknown): AiEngine | undefined => (typeof s === "string" ? (ENGINE_BY_NAME.get(s.trim().toLowerCase()) ?? ENGINE_BY_NAME.get(s.trim().toLowerCase().replace(/[^a-z]/g, ""))) : undefined);
+
+/** "yes", "no" and "unread" as people write them in a sheet. Undefined when the cell says none of them. */
+function namedOf(v: unknown): boolean | null | undefined {
+  if (v === true || v === false || v === null) return v;
+  const s = String(v ?? "").trim().toLowerCase();
+  if (["yes", "y", "true", "1", "ja", "named"].includes(s)) return true;
+  if (["no", "n", "false", "0", "nein", "not named"].includes(s)) return false;
+  if (["unread", "?", "null", "unknown", "could not be read"].includes(s)) return null;
+  return undefined;
+}
+
+const listOf = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : typeof v === "string" ? v.split(/[;|\n]/) : []).map((s) => s.trim()).filter(Boolean);
+
+/** The columns of a pasted sheet, by the names people give them. */
+const COLUMN: [RegExp, string][] = [
+  [/^(engine|assistant)$/, "engine"],
+  [/^(question|prompt|query)$/, "question"],
+  [/^(lang|language)$/, "lang"],
+  [/^(day|date)$/, "day"],
+  [/^kind$/, "kind"],
+  [/^(named|mentioned|balkaris)$/, "mentioned"],
+  [/^(position|place|rank)$/, "position"],
+  [/^(companies|competitors|named companies)$/, "competitors"],
+  [/^(sources|cited|citations)$/, "sources"],
+  [/^(excerpt|said|summary)$/, "excerpt"],
+  [/^notes?$/, "note"],
+];
+
+export interface RoundDefaults {
+  /** The assistant and the day chosen in the form, for lines that do not say. */
+  engine?: AiEngine;
+  day?: string;
+  /** The language and kind of questions asked before, by key. */
+  known?: Map<string, { lang: "de" | "en"; kind: AiCheckRow["kind"] }>;
+}
+
+/**
+ * A round of answers pasted as text: JSON (a list of checks, or { checks }),
+ * or a sheet as CSV with a header row (assistant, question, named, place,
+ * companies, sources, said, note …; lists split by ";" or "|"). What a line
+ * leaves out is taken from the form's assistant and day, then from the same
+ * question's earlier record (language, kind), then guessed from its words
+ * (language) or set to "category" (kind). Nothing is recorded here: the
+ * checks still go through checkRefusal. A line that cannot be read is said.
+ */
+export function parseRound(text: string, d: RoundDefaults = {}): { checks: Partial<NewAiCheck>[]; problems: string[] } {
+  const t = text.replace(/^﻿/, "").trim();
+  const problems: string[] = [];
+  let raw: Record<string, unknown>[] = [];
+  if (!t) return { checks: [], problems: ["Nothing was pasted."] };
+  if (t.startsWith("[") || t.startsWith("{")) {
+    try {
+      const j = JSON.parse(t) as unknown;
+      const list = Array.isArray(j) ? j : j && typeof j === "object" && Array.isArray((j as { checks?: unknown }).checks) ? (j as { checks: unknown[] }).checks : null;
+      if (!list) return { checks: [], problems: ["The JSON is neither a list of answers nor { checks: [...] }."] };
+      raw = list.filter((x): x is Record<string, unknown> => !!x && typeof x === "object" && !Array.isArray(x));
+      if (raw.length < list.length) problems.push(`${list.length - raw.length} entries are not objects and were left out.`);
+    } catch (e) {
+      return { checks: [], problems: [`The text starts like JSON and cannot be read as JSON: ${e instanceof Error ? e.message : String(e)}`] };
+    }
+  } else {
+    const cells = parseCsv(t);
+    const header = (cells[0] ?? []).map((c) => c.trim().toLowerCase());
+    const names = header.map((h) => COLUMN.find(([re]) => re.test(h))?.[1] ?? null);
+    if (!names.includes("question")) return { checks: [], problems: ['The first line must name the columns, and one of them must be "question". Others: assistant, day, lang, kind, named, place, companies, sources, said, note.'] };
+    raw = cells.slice(1).map((r) => Object.fromEntries(names.flatMap((n, i): [string, string][] => (n && (r[i] ?? "").trim() ? [[n, (r[i] ?? "").trim()]] : []))));
+  }
+  const out: Partial<NewAiCheck>[] = [];
+  for (const [i, r] of raw.entries()) {
+    const question = typeof r.question === "string" ? r.question.trim() : "";
+    if (!question) {
+      problems.push(`line ${i + 1}: no question.`);
+      continue;
+    }
+    const known = d.known?.get(qKey(question));
+    const named = namedOf(r.mentioned ?? r.named);
+    if (named === undefined) {
+      problems.push(`line ${i + 1}: whether the answer named Balkaris must be yes, no or unread.`);
+      continue;
+    }
+    const engine = r.engine === undefined || r.engine === "" ? d.engine : engineOf(r.engine);
+    if (!engine) {
+      problems.push(`line ${i + 1}: ${r.engine ? `“${String(r.engine).slice(0, 40)}” is not an assistant the desk knows` : "no assistant"}.`);
+      continue;
+    }
+    const position = r.position === undefined || r.position === null || r.position === "" ? null : Number(r.position);
+    out.push({
+      engine,
+      question,
+      lang: r.lang === "de" || r.lang === "en" ? r.lang : (known?.lang ?? guessLang(question)),
+      day: typeof r.day === "string" && r.day ? r.day : d.day,
+      kind: typeof r.kind === "string" && (KINDS as readonly string[]).includes(r.kind) ? (r.kind as AiCheckRow["kind"]) : (known?.kind ?? "category"),
+      mentioned: named,
+      position,
+      competitors: listOf(r.competitors),
+      sources: listOf(r.sources),
+      excerpt: typeof r.excerpt === "string" && r.excerpt.trim() ? r.excerpt.trim() : null,
+      note: typeof r.note === "string" && r.note.trim() ? r.note.trim() : null,
+    });
+  }
+  return { checks: out, problems };
 }
 
 /** Per engine, its newest day's round: asked and named, and the same for the questions that do not name Balkaris themselves. */

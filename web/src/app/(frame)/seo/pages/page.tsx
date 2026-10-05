@@ -3,6 +3,7 @@ import type { SeoPagesPayload } from "@/contract/seo/pages";
 import { SeoRefused } from "@/components/seo/nav/Refused";
 import { ContentCard, KeywordsCard, PerformanceCard, SerpCard } from "@/components/seo/pages/Below";
 import { Filters } from "@/components/seo/pages/Filters";
+import { LookupPanel } from "@/components/seo/pages/Lookup";
 import { PagesList } from "@/components/seo/pages/PagesList";
 import { SummaryPanel } from "@/components/seo/pages/Summary";
 import { PagesTileRow } from "@/components/seo/pages/Tiles";
@@ -17,7 +18,7 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 /** What the address may carry to the desk server; anything else in it is ignored. */
-const PASSED = ["range", "type", "status", "score", "traffic", "q", "sort", "dir", "offset", "limit", "open"] as const;
+const PASSED = ["range", "type", "status", "score", "traffic", "sitemap", "links", "finding", "proposal", "lang", "moved", "country", "device", "q", "sort", "dir", "offset", "limit", "cols", "open"] as const;
 
 /**
  * SEO › Pages (board 106): every page of balkaris.ch as search sees it. One
@@ -25,9 +26,12 @@ const PASSED = ["range", "type", "status", "score", "traffic", "q", "sort", "dir
  * filters, the list, the chosen page's summary and the four panels under the
  * list; the head and the tab strip come from the SEO layout.
  *
- * Everything chosen (filters, order, page of the list, the page open in the
- * summary) is in the address, so the server draws it and a view can be shared.
- * The buttons queue operator tasks; nothing here changes the website.
+ * Everything chosen (filters, order, columns, page of the list, the page open
+ * in the summary) is in the address, so the server draws it and a view can be
+ * shared. An address the crawl does not read (?open= naming one, or a full
+ * address typed into the search) is looked up on the live site and drawn in
+ * the summary's place. The buttons queue operator tasks or propose a redirect
+ * for approval; nothing here changes the website.
  */
 export default async function SeoPagesPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
@@ -48,19 +52,19 @@ export default async function SeoPagesPage({ searchParams }: { searchParams: Sea
   }
   const data = got.value;
   const place = { query: data.query, range: data.head.range };
-  const total = data.list.state === "ok" ? data.facets.types.reduce((n, t) => n + t.count, 0) : 0;
   const selected = data.selected?.state === "ok" ? data.selected.value.row.page.path : data.query.open;
 
   return (
     <div className="dk-seo-pages">
       <PagesTileRow tiles={data.tiles} search={data.search} />
       <div className="dk-seo-pages-grid">
-        <Filters facets={data.facets} total={total} place={place} search={data.search} />
+        <Filters facets={data.facets} place={place} search={data.search} />
         <PagesList data={data} place={place} selected={selected} />
-        <SummaryPanel reading={data.selected} place={place} />
+        {/* An address the crawl does not read is looked up live, in the summary's place. */}
+        {data.lookup ? <LookupPanel reading={data.lookup} place={place} /> : <SummaryPanel reading={data.selected} place={place} />}
         <div className="dk-seo-pages-below">
           <PerformanceCard selected={data.selected} />
-          <KeywordsCard selected={data.selected} />
+          <KeywordsCard selected={data.selected} range={place.range} />
           <ContentCard selected={data.selected} />
           <SerpCard selected={data.selected} />
         </div>

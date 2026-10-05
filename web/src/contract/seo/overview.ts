@@ -1,6 +1,9 @@
 /**
- * GET /api/v1/seo/overview?range=30d — the SEO section's Overview: every
- * feature of the SEO engine at a glance, what is running, and what it did.
+ * GET /api/v1/seo/overview?range=30d&country=all|che&device=all|desktop|mobile|tablet
+ * — the SEO section's Overview: every feature of the SEO engine at a glance,
+ * what is running, and what it did. `country` and `device` narrow the Search
+ * Console figures (the tiles, the Search Console panel, What moved, Top
+ * pages); `asked` echoes what was read.
  *
  * Types only. Each panel is its own `Reading`, so one source that fails costs
  * one panel.
@@ -14,6 +17,10 @@
  *                                                 to the SEO log so Running now and Recent SEO actions show it
  *
  * A refused /act answers 409 with `error`, the first refusal's sentence, beside the per-row `results`.
+ *
+ * WHO MAY (`can`). /task, and /act for a proposal or a brief, queue work for
+ * the AI Operator and take edit on that area too (403 with the sentence
+ * otherwise); /owner refuses anybody but the owner for the owner's own steps.
  */
 import type { ActivityItem, Reading, SourceId, Stat } from "../common";
 import type { NewTask, RunnerState } from "../operator";
@@ -21,6 +28,10 @@ import type { CtrCurve, OperatorPanel, OpportunityAction, OpportunityRow, Opport
 
 export interface SeoOverviewPayload {
   head: SeoHead;
+  /** Where the Search Console figures were read: the country and device the address asked for. */
+  asked: OverviewAsked;
+  /** What the person looking may do with this page's buttons, so none is drawn that the server would refuse. */
+  can: OverviewCan;
   tiles: OverviewTiles;
   /** The opportunities to do first: the highest priority, open, the rules still find them. */
   priority: Reading<PriorityPanel>;
@@ -34,6 +45,10 @@ export interface SeoOverviewPayload {
   /** Links and presence: Bing's links (off until connected), the sites that send visitors, the profiles and listings. */
   presence: Reading<PresencePanel>;
   searchConsole: Reading<ConsolePanel>;
+  /** What moved against the window before: new and lost queries, position changes, pages entering or leaving the index. */
+  movements: Reading<MovementsPanel>;
+  /** What the people search sent did, as GA4 counts it: sessions and people from Organic Search. */
+  organic: Reading<OrganicPanel>;
   /** AI search: what the assistants said when asked, AI assistant visits, AI crawler visits. */
   aiSearch: Reading<AiPanel>;
   /** "Needs you": the owner tasks, open first. */
@@ -50,10 +65,37 @@ export interface SeoOverviewPayload {
   curve: CtrCurve;
 }
 
+/** The country and device the Search Console figures are narrowed to. "che" is Switzerland, as Search Console names it. */
+export interface OverviewAsked {
+  country: "all" | "che";
+  device: "all" | "desktop" | "mobile" | "tablet";
+}
+
+export interface OverviewCan {
+  /** May queue work for the AI Operator (a question, a suggestion, a Fix, a proposal or a brief): edit on the AI Operator as well as on this page. */
+  operate: boolean;
+  /** May mark the owner's own steps done: the owner alone. */
+  ownerSteps: boolean;
+}
+
 export interface OverviewTiles {
+  /**
+   * The window's clicks Google names a query for, and how many of those were
+   * not searches for the studio's own name (`word`, the domain's first
+   * label). Google withholds rare queries, so `named` is usually far fewer
+   * than the clicks tile: the split is of the named clicks only. Null without
+   * a window.
+   */
+  brand: { word: string; named: number; nonBrand: number } | null;
   /** The desk crawl's site score out of 100 (`of` is 100), with its daily history. The desk's own rules, not Google's. */
   health: Reading<Stat>;
-  /** Sitemap addresses Google's URL Inspection reports as indexed at the last daily check; `of` is the sitemap's count. */
+  /**
+   * Sitemap addresses Google's URL Inspection reports as indexed on the last
+   * day the daily check covered the WHOLE sitemap; `of` is the sitemap's
+   * count that day. A newer check that was cut short is never counted (part
+   * of the site is not the whole): `sub` and the note then name both days.
+   * Waiting, with how far the check got, while no whole day exists.
+   */
   indexed: Reading<Stat>;
   /** From the desk's own Search Console history (all countries, web search). */
   clicks: Reading<Stat>;
@@ -151,15 +193,47 @@ export interface KeywordOpportunity {
 }
 
 export interface TopPagesPanel {
+  /**
+   * Where the rows come from. "google": Search Console's own per-page answer
+   * for the period, as the desk keeps it (whole, with the queries Google
+   * withholds). "history": the desk's day-by-day page history, used when no
+   * such answer is kept or a country or device is chosen.
+   */
+  basis: "google" | "history";
+  /** The days the rows cover. Google's own window ends on its newest finished day, which may be later than the history's last day. */
+  window: { start: string; end: string };
+  /**
+   * Only with "history": set when the page history's clicks add up to fewer
+   * than the property's own total for the same days, so the rows are part of
+   * each page's figure and the panel says so. Null when they add up.
+   */
+  short: { pageClicks: number; propertyClicks: number } | null;
   rows: {
     page: PageRef;
     clicks: number;
     impressions: number;
     ctr: { value: number | null; num: number; den: number; small: boolean };
     position: number | null;
-    /** Impressions per day over the window, oldest first: the trend line. */
-    trend: number[];
+    /**
+     * Impressions per day over the window, oldest first: the trend line. Null
+     * when the day-by-day history holds fewer impressions for the page than
+     * the row states: a line through part of its days would draw a fall that
+     * never happened.
+     */
+    trend: number[] | null;
   }[];
+}
+
+/** An opportunity's action as a row draws it (Priority Opportunities, keywords, content gaps): what it is, whether it can be taken now, and the opportunity's state. */
+export interface RowActionInfo {
+  opportunityId: string;
+  actionLabel: string;
+  actionKind: OpportunityAction["kind"];
+  step: string;
+  available: boolean;
+  why: string | null;
+  state: OpportunityState;
+  stateNote: string | null;
 }
 
 export interface GapsPanel {
@@ -175,13 +249,28 @@ export interface GapsPanel {
     /** Share of the cluster's relevant phrases that map to a page of the right language. */
     coverage: { mapped: number; of: number };
     page: string | null;
-    /** The open gap opportunity for the cluster whose brief can be asked for now, or null. */
+    /** The cluster's gap opportunity while it is open, queued or in progress, or null. */
     opportunityId: string | null;
+    /**
+     * That opportunity's action and state, so a brief already asked for shows
+     * "Queued" on its row instead of a second button or a bare link. Null
+     * without an opportunity.
+     */
+    action: RowActionInfo | null;
   }[];
 }
 
 export interface TechnicalPanel {
+  /**
+   * Google's index, every family of the crawl's rules (each rule belongs to
+   * exactly one, so no finding is without a row), and PageSpeed's lab: what
+   * needs a person first (red, then amber), then what is clean.
+   */
   rows: TechnicalRow[];
+  /** The crawl's findings by severity, as its own last run counts them. */
+  findings: { critical: number; warning: number; opportunity: number };
+  /** Findings of a rule no family lists yet (a rule added to the crawl after this panel): never silently dropped. 0 today. */
+  unfiled: number;
   /** When the crawl that counted them finished. */
   crawledAt: string | null;
 }
@@ -197,6 +286,8 @@ export interface TechnicalRow {
   source: SourceId;
   /** What the rule counts, in one sentence, for the row's (i). */
   rule: string;
+  /** The crawl's rules of this family that found something, worst first; empty for a clean row or one that is not the crawl's. */
+  found: { rule: string; title: string; severity: "critical" | "warning" | "opportunity"; count: number }[];
   /**
    * The operator task that fixes it, when one exists: titles and descriptions
    * (metadata) or redirects. What it writes waits for a person's approval in
@@ -227,12 +318,74 @@ export interface ConsolePanel {
 export interface AiPanel {
   /** The recorded AI checks, newest round per engine: how often Balkaris was named, in raw counts. */
   checks: { asked: number; mentioned: number; unprompted: { asked: number; mentioned: number }; lastDay: string | null };
-  /** Sessions GA4 attributes to AI assistants in the window. */
-  referrals: Reading<{ sessions: number }>;
-  /** Requests from named AI crawlers in the window, from Vercel's request records. */
+  /**
+   * Sessions GA4 attributes to AI assistants, with the days counted: a window
+   * that ends on the last day GA4 was read through (the read is daily at
+   * best), never on a day nobody asked about.
+   */
+  referrals: Reading<{ sessions: number; start: string; end: string }>;
+  /** Requests from named AI crawlers in `window`, from Vercel's request records. */
   crawlers: Reading<{ hits: number; days: number }>;
-  /** The window the visits cover (GA4 and the drain count whole days to yesterday). */
+  /** The window the crawlers are counted in (the drain delivers whole days to yesterday). */
   window: { start: string; end: string };
+}
+
+/** One query of "What moved". */
+export interface MovedQuery {
+  query: string;
+  clicks: number;
+  impressions: number;
+  /** Google's average position in its window; null without impressions. */
+  position: number | null;
+  /** The same in the window before, for a query listed as moved; null for a new or lost one. */
+  previousPosition: number | null;
+}
+
+/** How many reported queries stood where, by average position over a window. `top10` is positions 4 to 10, `top20` 11 to 20. */
+export interface SpreadCounts {
+  top3: number;
+  top10: number;
+  top20: number;
+  beyond: number;
+  queries: number;
+}
+
+export interface MovementsPanel {
+  window: { start: string; end: string; previousStart: string; previousEnd: string };
+  /**
+   * True when the two windows can be compared: the desk's history covers the
+   * window before from its first day, and Google reported at least one query
+   * for it (when it showed the site then and withheld every query as rare, a
+   * query "new" against it would be a guess). Otherwise nothing is called
+   * new, lost or moved (`added`, `lost` are null, `moved` empty,
+   * `spread.before` null) and `reason` says why in one sentence.
+   */
+  compared: boolean;
+  reason: string | null;
+  historyFrom: string | null;
+  /** Queries Google reports now and not in the window before, most impressions first: the first five, and how many in all. */
+  added: { total: number; rows: MovedQuery[] } | null;
+  /** Queries Google reported in the window before and not now. */
+  lost: { total: number; rows: MovedQuery[] } | null;
+  /** The largest changes of average position among queries shown at least `floor` times in both windows. */
+  moved: MovedQuery[];
+  floor: number;
+  spread: { now: SpreadCounts; before: SpreadCounts | null };
+  /** Pages the daily index check saw enter or leave Google's index since the window began, newest first. */
+  indexed: { total: number; rows: { path: string; at: string }[] };
+  dropped: { total: number; rows: { path: string; at: string }[] };
+}
+
+/** "From search", as GA4 counts it: the channel group Organic Search. Consenting visitors only. */
+export interface OrganicPanel {
+  /** GA4's own window: whole days to yesterday in the property's time zone. Not Search Console's, which runs two to three days behind. */
+  start: string;
+  end: string;
+  sessions: Stat;
+  /** People who came through search at least once. */
+  users: Stat;
+  /** Sessions from every channel in the same days, for "n of m". */
+  allSessions: number;
 }
 
 export interface RunningPanel {

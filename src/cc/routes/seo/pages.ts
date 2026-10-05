@@ -2,7 +2,8 @@ import { Hono, type Context } from "hono";
 import type { Vars } from "../../access.ts";
 import { status as jobStatus } from "../../scheduler.ts";
 import * as gsc from "../../search/gsc.ts";
-import { eachDay, pathOf, round, siteBase } from "../../search/shared.ts";
+import { addDays, eachDay, pathOf, round, siteBase } from "../../search/shared.ts";
+import { get as httpGet, pathOf as sitePathOf, sleep, type Got } from "../../site/http.ts";
 import { off, ok, reading, today, waiting } from "../../store.ts";
 import type { Reading, Stat } from "../../../../web/src/contract/common.ts";
 import type { NewTask } from "../../../../web/src/contract/operator.ts";
@@ -10,9 +11,14 @@ import type { RateStat, SeoRange } from "../../../../web/src/contract/seo/common
 import type {
   ContentCheck,
   CrawlSeverity,
+  IndexBasis,
+  LookupLive,
   PageFacets,
   PageKeyword,
   PageLinks,
+  PageLookup,
+  PagesColumn,
+  PageSpeed,
   PagesQuery,
   PagesSort,
   PagesTiles,
@@ -38,6 +44,11 @@ import { head, HISTORY_NOTE, historyAt, int, rangeFrom, recorded, view } from ".
  *   GET /             the whole screen (contract/seo/pages.ts, SeoPagesPayload)
  *   GET /export.csv   the list as CSV, with the same filters, every matching row
  *                     (?path=… repeated: only those rows, the table's ticked ones)
+ *   GET /lookup       one address of the website as it is now (?url= a path or a
+ *                     full address on the site's own host): what it answers on the
+ *                     live site, what Google holds for it, what it earned in search.
+ *                     For an address the crawl does not read: a new page, an old
+ *                     address Google still counts.
  *
  * WHERE EACH COLUMN COMES FROM, each read on its own so a missing source
  * costs its own column or panel and nothing else:
@@ -49,7 +60,11 @@ import { head, HISTORY_NOTE, historyAt, int, rangeFrom, recorded, view } from ".
  *                                      one, else Search Console's API asked
  *                                      for the window (kept six hours)
  *   index                              Google's URL Inspection of every sitemap
- *                                      address, once a day (cc_inspect)
+ *                                      address, once a day (cc_inspect): each
+ *                                      address's NEWEST answer of the last seven
+ *                                      daily checks, with its own day
+ *   organic sessions                   GA4, sessions from organic search by
+ *                                      landing page (consenting visitors only)
  *   opportunities                      the opportunity engine (src/cc/seo/engine.ts)
  *   AI readiness                       the readiness check (src/cc/seo/readiness.ts)
  *
@@ -61,7 +76,8 @@ import { head, HISTORY_NOTE, historyAt, int, rangeFrom, recorded, view } from ".
  * NO INVENTED FIGURE. The board's "traffic" is Search Console's clicks and
  * impressions, named as such; its "volume" column is impressions (no free
  * source gives search volume); "Optimize all pages" queues proposals, it
- * applies nothing.
+ * applies nothing. Where Search Console is not available a row carries no
+ * click and no impression at all (null), never a zero.
  */
 export const routes = new Hono<Vars>();
 
@@ -73,13 +89,31 @@ const engineMod = () => import("../../seo/engine.ts");
 const wordsMod = () => import("../../seo/words.ts");
 const siteMod = () => import("../../site/index.ts");
 const applyMod = () => import("../../operator/apply.ts");
+const ga4Mod = () => import("../../ga4.ts");
+
+/**
+ * The one request this file sends anywhere: the live GET of a looked-up
+ * address. Behind an object so the check script answers it itself and nothing
+ * leaves the machine.
+ */
+export const wire = {
+  get: (url: string): Promise<Got> => httpGet(url, { timeout: 12_000 }),
+};
 
 /* ---------- the question ------------------------------------------------------------------- */
 
-const SORTS: PagesSort[] = ["impressions", "clicks", "ctr", "position", "score", "issues", "opportunities", "path", "updated"];
-const STATUSES = ["all", "indexed", "not-indexed", "issues"] as const;
+const SORTS: PagesSort[] = ["impressions", "clicks", "ctr", "position", "score", "issues", "opportunities", "path", "updated", "words", "links", "change", "sessions"];
+const STATUSES = ["all", "indexed", "not-indexed", "not-inspected", "issues"] as const;
 const SCORES = ["all", "90-100", "70-89", "50-69", "0-49"] as const;
 const TRAFFIC = ["all", "high", "medium", "low", "none"] as const;
+const SITEMAP = ["all", "in", "out"] as const;
+const LINKS = ["all", "none", "menus"] as const;
+const PROPOSAL = ["all", "waiting"] as const;
+const MOVED = ["all", "up", "down"] as const;
+const COUNTRIES = ["all", "che"] as const;
+const DEVICES = ["all", "mobile", "desktop", "tablet"] as const;
+/** The optional columns, in the order the table draws them. */
+const COLUMNS: PagesColumn[] = ["title", "status", "change", "sessions", "opportunities", "readiness", "words", "links", "updated"];
 
 const pick = <T extends string>(list: readonly T[], raw: string | undefined, fallback: T): T => (list.includes(raw as T) ? (raw as T) : fallback);
 
@@ -95,21 +129,73 @@ function pathParam(raw: string | undefined): string | null {
   }
 }
 
+/** The site's host without "www.", for matching both spellings Google may report. */
+const bareHost = (): string => new URL(siteBase()).host.replace(/^www\./, "");
+const reEscape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * What a search box's words are when they are ONE pasted address:
+ *   { path }     an address of the website ("https://www.balkaris.ch/about?x=1", "balkaris.ch/about", "/about")
+ *   { foreign }  a full address on another host (named, so the screen can say it is not looked up here)
+ *   null         plain words
+ */
+function addressIn(q: string): { path: string } | { foreign: string } | null {
+  const s = q.trim();
+  if (!s || /\s/.test(s)) return null;
+  const host = bareHost();
+  if (/^https?:\/\//i.test(s)) {
+    try {
+      const u = new URL(s);
+      if (u.host.replace(/^www\./, "").toLowerCase() !== host) return { foreign: u.host };
+      const p = pathParam(s);
+      return p ? { path: p } : null;
+    } catch {
+      return null;
+    }
+  }
+  if (new RegExp(`^(www\\.)?${reEscape(host)}(/|$)`, "i").test(s)) {
+    const p = pathParam(`https://${s}`);
+    return p ? { path: p } : null;
+  }
+  if (s.startsWith("/")) {
+    const p = pathParam(s);
+    return p ? { path: p } : null;
+  }
+  return null;
+}
+
 function queryOf(c: Context<Vars>, paged: boolean): PagesQuery {
   const r = (k: string) => c.req.query(k);
   const sort = pick(SORTS, r("sort"), "impressions");
+  const asked = new Set((r("cols") ?? "").split(",").map((s) => s.trim()));
   return {
+    /* type, finding and lang name things only the crawl knows: `screen` replaces one it does not know by "all". */
     type: (r("type") ?? "all").trim().slice(0, 40) || "all",
     status: pick(STATUSES, r("status"), "all"),
     score: pick(SCORES, r("score"), "all"),
     traffic: pick(TRAFFIC, r("traffic"), "all"),
-    q: (r("q") ?? "").trim().slice(0, 80),
+    sitemap: pick(SITEMAP, r("sitemap"), "all"),
+    links: pick(LINKS, r("links"), "all"),
+    finding: (r("finding") ?? "all").trim().slice(0, 60) || "all",
+    proposal: pick(PROPOSAL, r("proposal"), "all"),
+    lang: (r("lang") ?? "all").trim().toLowerCase().slice(0, 12) || "all",
+    moved: pick(MOVED, r("moved"), "all"),
+    country: pick(COUNTRIES, r("country"), "all"),
+    device: pick(DEVICES, r("device"), "all"),
+    q: (r("q") ?? "").trim().slice(0, 200),
     sort,
     dir: r("dir") === "asc" ? "asc" : r("dir") === "desc" ? "desc" : sort === "path" || sort === "position" ? "asc" : "desc",
     offset: paged ? int(r("offset"), 0, 0, 100_000) : 0,
     limit: paged ? int(r("limit"), 10, 1, 200) : 100_000,
+    cols: COLUMNS.filter((k) => asked.has(k)),
     open: pathParam(r("open")),
   };
+}
+
+/** Where a list of `total` rows is read from when `asked` lies past its end: the start of its last page, not its last row. */
+function lastPageOffset(asked: number, total: number, limit: number): number {
+  if (total <= 0) return 0;
+  return asked < total ? asked : Math.floor((total - 1) / limit) * limit;
 }
 
 /* ---------- the website ---------------------------------------------------------------------- */
@@ -127,10 +213,6 @@ function pictureOf(src: string | null | undefined): string | null {
   }
 }
 
-/** The site's host without "www.", for matching both spellings Google may report. */
-const bareHost = (): string => new URL(siteBase()).host.replace(/^www\./, "");
-const reEscape = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
 /** Search Console's filter for one page under either host spelling, with or without a trailing slash. */
 function pageFilter(path: string): gsc.Filter {
   const tail = path === "/" ? "/?" : `${reEscape(path)}/?`;
@@ -145,6 +227,12 @@ interface Fig {
   position: number | null;
 }
 
+/** The part of search asked for: every country or Switzerland, every device or one. */
+interface Segment {
+  country: PagesQuery["country"];
+  device: PagesQuery["device"];
+}
+
 interface SearchRead {
   basis: SearchBasis;
   /** The first day of the window Google has any figure on (live), or the window's start. */
@@ -152,6 +240,8 @@ interface SearchRead {
   now: Map<string, Fig>;
   before: Map<string, Fig> | null;
   tiles: { clicks: Stat; position: Stat | null; ctr: RateStat };
+  /** The position per day of the window, null on a day without impressions. */
+  positionDays: (number | null)[];
 }
 
 /** Rows of one page under two spellings are one row: summed, the position weighted by impressions. */
@@ -212,13 +302,23 @@ function clicksSub(t: Stat, unnamed: SearchBasis["unnamed"]): Stat {
   return { ...t, sub: `${unnamed.clicks.toLocaleString("en-GB")} of them without a page named` };
 }
 
-async function searchRead(range: SeoRange): Promise<Reading<SearchRead>> {
+const SEGMENT_WORDS: Record<string, string> = { che: "Switzerland only", mobile: "phones only", desktop: "desktop computers only", tablet: "tablets only" };
+
+/** " Switzerland only, phones only." for a note, or nothing for every country and device. */
+const segmentNote = (s: Segment): string => {
+  const parts = [s.country !== "all" ? SEGMENT_WORDS[s.country] : null, s.device !== "all" ? SEGMENT_WORDS[s.device] : null].filter(Boolean);
+  return parts.length ? ` ${parts.join(", ")}.` : "";
+};
+
+async function searchRead(range: SeoRange, seg: Segment): Promise<Reading<SearchRead>> {
   const r = await rankMod();
   const span = r.spanOf(range);
   if (span) {
-    const now = merge(r.pageFigures(span.start, span.end));
-    const before = span.compared ? merge(r.pageFigures(span.previousStart, span.previousEnd)) : null;
-    const t = r.tiles(span);
+    /* The history keeps Switzerland apart from every country, and every row by device. */
+    const o = { country: seg.country, device: seg.device === "all" ? null : seg.device };
+    const now = merge(r.pageFigures(span.start, span.end, o));
+    const before = span.compared ? merge(r.pageFigures(span.previousStart, span.previousEnd, o)) : null;
+    const t = r.tiles(span, o);
     const pagesFrom = await firstPageDay();
     /* The tiles are compared only with a window before that lies wholly after Google's first page figure. */
     const uncompared: SearchBasis["uncompared"] = !span.compared
@@ -233,17 +333,32 @@ async function searchRead(range: SeoRange): Promise<Reading<SearchRead>> {
     const unnamed = unnamedOf(t.clicks.value, t.impressions.value, now);
     const tiles = { clicks: t.clicks, position: t.position, ctr: t.ctr };
     const shown = uncompared ? uncomparedTiles(tiles) : tiles;
+    const compared = span.compared && !uncompared;
     return ok(
       {
-        basis: { by: "history", start: span.start, end: span.end, days: span.days, compared: span.compared && !uncompared, pagesFrom, uncompared, unnamed },
+        basis: {
+          by: "history",
+          start: span.start,
+          end: span.end,
+          days: span.days,
+          compared,
+          pagesFrom,
+          uncompared,
+          previous: compared ? { start: span.previousStart, end: span.previousEnd } : null,
+          unnamed,
+          country: seg.country,
+          device: seg.device,
+        },
         from: span.historyFrom && span.historyFrom > span.start ? span.historyFrom : span.start,
         now,
-        before,
+        before: compared ? before : null,
         tiles: { ...shown, clicks: clicksSub(shown.clicks, unnamed) },
+        /* One point per day the history covers; a day without impressions has no position, which is not a zero. */
+        positionDays: r.daySeries(span.start, span.end, o).map((d) => d.position),
       },
       "gsc",
       historyAt(),
-      HISTORY_NOTE,
+      `${HISTORY_NOTE}${segmentNote(seg)}`,
     );
   }
   const a = gsc.access();
@@ -272,11 +387,13 @@ async function searchRead(range: SeoRange): Promise<Reading<SearchRead>> {
   const shown = uncompared ? uncomparedTiles(tiles) : tiles;
   return ok(
     {
-      basis: { by: "live", start: w.start, end: w.end, days: w.days, compared, pagesFrom: null, uncompared, unnamed },
+      /* Asked live, the figures are of every country and device: the splits exist in the desk's own history only. */
+      basis: { by: "live", start: w.start, end: w.end, days: w.days, compared, pagesFrom: null, uncompared, previous: compared ? { start: w.previousStart, end: w.previousEnd } : null, unnamed, country: "all", device: "all" },
       from: t.from,
       now,
-      before,
+      before: compared ? before : null,
       tiles: { ...shown, clicks: clicksSub(shown.clicks, unnamed) },
+      positionDays: t.days.map((d) => d.position),
     },
     "gsc",
     totals.asOf,
@@ -284,20 +401,106 @@ async function searchRead(range: SeoRange): Promise<Reading<SearchRead>> {
   );
 }
 
-/* ---------- Google's index, the engine's counts ---------------------------------------------- */
-
-interface IndexRead {
-  day: string;
-  complete: boolean;
-  of: number | null;
-  by: Map<string, gsc.Inspection>;
+/**
+ * The searches each page is shown for, as one lower-case line per page, so
+ * the search box finds a page by a search it ranks for. Read only when a
+ * search was typed; null when Search Console cannot say.
+ */
+async function queriesByPage(range: SeoRange, search: Reading<SearchRead>): Promise<Map<string, string> | null> {
+  if (search.state !== "ok") return null;
+  const b = search.value.basis;
+  const by = new Map<string, string[]>();
+  const add = (path: string, query: string) => {
+    const l = by.get(path);
+    if (l) l.push(query);
+    else by.set(path, [query]);
+  };
+  try {
+    if (b.by === "history") {
+      const r = await rankMod();
+      for (const x of r.queryPageFigures(b.start, b.end, { country: b.country, device: b.device === "all" ? null : b.device })) add(x.path, x.query);
+    } else {
+      const got = await gsc.queryPages(range);
+      if (got.state !== "ok") return null;
+      for (const x of got.value.rows) add(x.path, x.query);
+    }
+  } catch {
+    return null;
+  }
+  return new Map([...by].map(([p, l]) => [p, l.join(" \u0000 ").toLowerCase()]));
 }
 
+/* ---------- Google's index, the engine's counts ---------------------------------------------- */
+
+/** How many daily index checks back an address's answer may come from. */
+const INDEX_DAYS = 7;
+
+/** One address's answer from a daily URL Inspection, with the day it is from. */
+interface Inspected extends gsc.Inspection {
+  day: string;
+  checkedAt: string;
+}
+
+interface IndexRead {
+  basis: IndexBasis;
+  by: Map<string, Inspected>;
+}
+
+const inspectedOf = (r: Record<string, unknown>): Inspected => ({
+  day: String(r.day),
+  checkedAt: String(r.checked_at ?? r.day),
+  url: String(r.url),
+  path: pathOf(String(r.url)),
+  verdict: (r.verdict as string | null) ?? null,
+  coverage: (r.coverage as string | null) ?? null,
+  lastCrawl: (r.last_crawl as string | null) ?? null,
+  googleCanonical: (r.google_canonical as string | null) ?? null,
+  userCanonical: (r.user_canonical as string | null) ?? null,
+  robots: (r.robots_state as string | null) ?? null,
+  fetchState: (r.fetch_state as string | null) ?? null,
+  indexing: (r.indexing_state as string | null) ?? null,
+  indexed: !!r.is_indexed,
+  canonicalOk: r.canonical_ok === null || r.canonical_ok === undefined ? null : !!r.canonical_ok,
+  link: (r.link as string | null) ?? null,
+});
+
+/** Of several days' answers, each address's newest. */
+function newestPerAddress(rows: Inspected[]): Map<string, Inspected> {
+  const by = new Map<string, Inspected>();
+  for (const x of rows) {
+    const had = by.get(x.path);
+    if (!had || x.day > had.day) by.set(x.path, x);
+  }
+  return by;
+}
+
+/**
+ * Google's stored state per address. The daily check keeps every day it ran;
+ * one that is cut short (Google failing, the allowance used up) holds a part
+ * of the sitemap only. So each address shows its NEWEST answer of the last
+ * `INDEX_DAYS` checks with its own day: a short day adds what it learned and
+ * blanks nothing.
+ */
 async function indexRead(): Promise<Reading<IndexRead>> {
   const r = await gsc.indexing();
   if (r.state !== "ok") return r;
-  const by = new Map(r.value.rows.map((x) => [x.path, x]));
-  return { ...r, value: { day: r.value.day, complete: r.value.complete !== false, of: r.value.of ?? null, by } };
+  const newest = r.value.day;
+  const { db } = await import("../../../db.ts");
+  const rows = (db.prepare("SELECT * FROM cc_inspect WHERE day >= ? AND day <= ?").all(addDays(newest, -(INDEX_DAYS - 1)), newest) as Record<string, unknown>[]).map(inspectedOf);
+  const by = newestPerAddress(rows);
+  const all = [...by.values()];
+  const carried = all.filter((x) => x.day < newest).length;
+  const oldest = all.reduce((d, x) => (x.day < d ? x.day : d), newest);
+  const complete = r.value.complete !== false;
+  const basis: IndexBasis = { newest, oldest, days: INDEX_DAYS, complete, onNewest: all.length - carried, of: r.value.of ?? null, carried };
+  const note = [
+    "Google's stored state for each address in the sitemap, from the daily URL Inspection: what Google last saw, not a live test.",
+    complete ? "" : `The check of ${newest} was cut short at ${basis.onNewest} of ${basis.of ?? "the"} sitemap addresses.`,
+    carried ? `${carried} address${carried === 1 ? " shows" : "es show"} the answer of an earlier check (back to ${oldest}); each row says its day.` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return ok({ basis, by }, "gsc", r.asOf, note);
 }
 
 /** Open opportunities per page; null when the engine's table cannot be read. */
@@ -322,87 +525,276 @@ async function readinessCounts(): Promise<Map<string, { pass: number; of: number
   }
 }
 
+/** The crawl's rules that fired on each page, once each; empty when the table cannot be read. */
+async function rulesByPage(): Promise<Map<string, string[]>> {
+  try {
+    const { db } = await import("../../../db.ts");
+    const rows = db.prepare("SELECT DISTINCT path, rule FROM cc_issues WHERE path IS NOT NULL ORDER BY rule").all() as { path: string; rule: string }[];
+    const by = new Map<string, string[]>();
+    for (const x of rows) by.set(x.path, [...(by.get(x.path) ?? []), x.rule]);
+    return by;
+  } catch {
+    return new Map();
+  }
+}
+
+/** What each rule is called and how heavy it is, for the Finding filter. */
+async function ruleInfo(): Promise<Map<string, { title: string; severity: CrawlSeverity }>> {
+  try {
+    const s = await siteMod();
+    return new Map(Object.entries(s.RULES).map(([id, r]) => [id, { title: r.title, severity: r.severity }]));
+  } catch {
+    return new Map();
+  }
+}
+
+/** Proposals waiting for approval per address. */
+async function waitingByPage(): Promise<Map<string, number>> {
+  try {
+    const a = await applyMod();
+    const by = new Map<string, number>();
+    for (const p of a.proposals(["waiting"], 500)) by.set(p.address, (by.get(p.address) ?? 0) + 1);
+    return by;
+  } catch {
+    return new Map();
+  }
+}
+
+interface OrganicRead {
+  start: string;
+  end: string;
+  by: Map<string, { sessions: number; engaged: number }>;
+}
+
+/**
+ * GA4's sessions from organic search by the page they began on. Asked only
+ * when the column, its order or the export wants it: a GA4 report costs
+ * tokens, and the default table does not show it.
+ */
+async function organicRead(range: SeoRange, wanted: boolean): Promise<Reading<OrganicRead>> {
+  if (!wanted) return off("ga4", "Not read: the Organic sessions column is not shown.", "Tick Organic sessions under Columns.");
+  const g = await ga4Mod();
+  const read = await g.landingPages(range, "organic-search", { screen: true });
+  return g.asReading(read, (d) => ({
+    start: d.span.start,
+    end: d.span.end,
+    by: new Map(d.rows.filter((x) => x.path !== "(not set)").map((x) => [pathParam(x.path) ?? x.path, { sessions: x.sessions, engaged: x.engagedSessions }])),
+  }));
+}
+
 /* ---------- the rows -------------------------------------------------------------------------- */
 
 const updatedOf = (p: { lastChanged: string | null; firstSeen: string; lastmod: string | null }): string | null =>
   p.lastChanged && p.lastChanged !== p.firstSeen ? p.lastChanged : p.lastmod;
 
-function rowsOf(v: SiteView, search: SearchRead | null, index: IndexRead | null, opps: Map<string, number> | null, ready: Map<string, { pass: number; of: number }>): SeoPageRow[] {
+/** What the rows are joined with, each already read (or absent). */
+interface Joined {
+  search: SearchRead | null;
+  index: IndexRead | null;
+  opps: Map<string, number> | null;
+  ready: Map<string, { pass: number; of: number }>;
+  rules: Map<string, string[]>;
+  waiting: Map<string, number>;
+  organic: OrganicRead | null;
+}
+
+function rowsOf(v: SiteView, j: Joined): SeoPageRow[] {
   return v.pages.map((p) => {
-    const f = search?.now.get(p.path) ?? { clicks: 0, impressions: 0, position: null };
-    const ins = index?.by.get(p.path);
+    /* With Search Console read, a page it does not name had no impression: a real zero. Without it, nothing is known. */
+    const f = j.search ? (j.search.now.get(p.path) ?? { clicks: 0, impressions: 0, position: null }) : null;
+    const was = j.search?.before ? (j.search.before.get(p.path) ?? { clicks: 0, impressions: 0, position: null }) : null;
+    const ins = j.index?.by.get(p.path);
     const ref = pageRef(p.path, v);
     return {
       page: { ...ref, picture: pictureOf(ref.picture) },
       url: p.url,
       status: p.status,
       inSitemap: p.inSitemap,
-      index: ins ? { indexed: ins.indexed, coverage: ins.coverage, day: index!.day } : null,
-      clicks: f.clicks,
-      impressions: f.impressions,
-      ctr: rate(f.clicks, f.impressions),
-      position: f.position,
+      title: p.title,
+      description: p.description,
+      heading: p.h1,
+      index: ins ? { indexed: ins.indexed, coverage: ins.coverage, day: ins.day } : null,
+      clicks: f ? f.clicks : null,
+      impressions: f ? f.impressions : null,
+      ctr: rate(f?.clicks ?? 0, f?.impressions ?? 0),
+      position: f ? f.position : null,
+      previous: was,
+      /* GA4 lists only the pages a session began on: a page it does not name began none. */
+      organic: j.organic ? (j.organic.by.get(p.path) ?? { sessions: 0, engaged: 0 }) : null,
       score: p.score,
       issues: { critical: p.issues.critical, warning: p.issues.warning, opportunity: p.issues.opportunity },
-      opportunities: opps?.get(p.path) ?? 0,
-      readiness: ready.get(p.path) ?? null,
+      rules: j.rules.get(p.path) ?? [],
+      opportunities: j.opps?.get(p.path) ?? 0,
+      proposalsWaiting: j.waiting.get(p.path) ?? 0,
+      readiness: j.ready.get(p.path) ?? null,
       words: p.words,
+      inlinks: p.inlinks,
+      inlinksFromContent: p.inlinksFromContent,
       updated: updatedOf(p),
     };
   });
 }
 
 const hasIssues = (r: SeoPageRow): boolean => r.issues.critical + r.issues.warning > 0;
+const kindOf = (r: SeoPageRow): string => r.page.kind ?? "other";
+const langOf = (r: SeoPageRow): string => r.page.lang ?? "unknown";
 const scoreBucket = (s: number | null): string | null => (s === null ? null : s >= 90 ? "90-100" : s >= 70 ? "70-89" : s >= 50 ? "50-69" : "0-49");
 const trafficBucket = (i: number): "high" | "medium" | "low" | "none" => (i >= 100 ? "high" : i >= 10 ? "medium" : i >= 1 ? "low" : "none");
-
-const KIND_ORDER = ["home", "service", "landing", "segment", "article", "case", "insights", "standard", "legal"];
-
-function facetsOf(rows: SeoPageRow[], searchOk: boolean): PageFacets {
-  const types = new Map<string, { label: string; count: number }>();
-  for (const r of rows) {
-    const k = r.page.kind ?? "other";
-    const t = types.get(k) ?? { label: r.page.kindLabel ?? "Other", count: 0 };
-    t.count++;
-    types.set(k, t);
-  }
-  const n = (f: (r: SeoPageRow) => boolean) => rows.filter(f).length;
-  return {
-    types: [...types]
-      .map(([key, t]) => ({ key, label: t.label, count: t.count }))
-      .sort((a, b) => (KIND_ORDER.indexOf(a.key) + 1 || 99) - (KIND_ORDER.indexOf(b.key) + 1 || 99)),
-    status: [
-      { key: "indexed", label: "Indexed", count: n((r) => r.index?.indexed === true) },
-      { key: "not-indexed", label: "Not indexed", count: n((r) => r.index?.indexed === false) },
-      { key: "issues", label: "Has issues", count: n(hasIssues) },
-    ],
-    score: (["90-100", "70-89", "50-69", "0-49"] as const).map((k) => ({ key: k, label: k.replace("-", "–"), count: n((r) => scoreBucket(r.score) === k) })),
-    traffic: searchOk
-      ? [
-          { key: "high", label: "High (100+)", count: n((r) => trafficBucket(r.impressions) === "high") },
-          { key: "medium", label: "Medium (10–99)", count: n((r) => trafficBucket(r.impressions) === "medium") },
-          { key: "low", label: "Low (1–9)", count: n((r) => trafficBucket(r.impressions) === "low") },
-          { key: "none", label: "None", count: n((r) => r.impressions === 0) },
-        ]
-      : [],
-  };
+/** Who links to the page: nobody, menus and footers only, or some page's own content. */
+const linkBucket = (r: SeoPageRow): "none" | "menus" | "content" => (r.inlinks === 0 ? "none" : r.inlinksFromContent === 0 ? "menus" : "content");
+/** Impressions gained on the window before; null when the two are not compared. */
+const changeOf = (r: SeoPageRow): number | null => (r.previous === null || r.impressions === null ? null : r.impressions - r.previous.impressions);
+/** "up" with more impressions than the window before (clicks decide a tie), "down" with fewer; null when equal or not compared. */
+function movedOf(r: SeoPageRow): "up" | "down" | null {
+  const d = changeOf(r);
+  if (d === null || r.previous === null) return null;
+  const by = d !== 0 ? d : (r.clicks ?? 0) - r.previous.clicks;
+  return by > 0 ? "up" : by < 0 ? "down" : null;
 }
 
-function filtered(rows: SeoPageRow[], q: PagesQuery, searchOk: boolean): SeoPageRow[] {
-  const words = q.q.toLowerCase().split(/\s+/).filter(Boolean);
+const KIND_ORDER = ["home", "service", "landing", "segment", "article", "case", "insights", "standard", "legal"];
+const SEVERITY_RANK: Record<CrawlSeverity, number> = { critical: 0, warning: 1, opportunity: 2 };
+
+/** What the filters need to know beside the rows. */
+interface FilterBasis {
+  /** Search Console's figures are in the rows. */
+  searchOk: boolean;
+  /** The rows carry the window before. */
+  compared: boolean;
+  /** Each page's searches as one line; null when not read. */
+  queries: Map<string, string> | null;
+}
+
+type Group = keyof PageFacets["all"];
+
+/** Words as the search compares them: lower case, and a typographic quote is the plain one ("Let’s" is found by "let's"). */
+const fold = (s: string): string => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"');
+
+function filtered(rows: SeoPageRow[], q: PagesQuery, b: FilterBasis, skip?: Group): SeoPageRow[] {
+  const pasted = addressIn(q.q);
+  /* A word with a query string or fragment is matched without it: "about?x=1" finds /about. */
+  const words = pasted
+    ? []
+    : fold(q.q)
+        .split(/\s+/)
+        .map((w) => w.split(/[?#]/)[0]!)
+        .filter(Boolean);
+  const on = (g: Group): boolean => g !== skip;
   return rows.filter((r) => {
-    if (q.type !== "all" && (r.page.kind ?? "other") !== q.type) return false;
-    if (q.status === "indexed" && r.index?.indexed !== true) return false;
-    if (q.status === "not-indexed" && r.index?.indexed !== false) return false;
-    if (q.status === "issues" && !hasIssues(r)) return false;
-    if (q.score !== "all" && scoreBucket(r.score) !== q.score) return false;
-    if (searchOk && q.traffic !== "all" && trafficBucket(r.impressions) !== q.traffic) return false;
-    if (words.length) {
-      const hay = `${r.page.path} ${r.page.title ?? ""}`.toLowerCase();
+    if (on("type") && q.type !== "all" && kindOf(r) !== q.type) return false;
+    if (on("status")) {
+      if (q.status === "indexed" && r.index?.indexed !== true) return false;
+      if (q.status === "not-indexed" && r.index?.indexed !== false) return false;
+      if (q.status === "not-inspected" && r.index !== null) return false;
+      if (q.status === "issues" && !hasIssues(r)) return false;
+    }
+    if (on("score") && q.score !== "all" && scoreBucket(r.score) !== q.score) return false;
+    if (on("traffic") && b.searchOk && q.traffic !== "all" && trafficBucket(r.impressions ?? 0) !== q.traffic) return false;
+    if (on("sitemap") && q.sitemap !== "all" && r.inSitemap !== (q.sitemap === "in")) return false;
+    if (on("links") && q.links !== "all" && linkBucket(r) !== q.links) return false;
+    if (on("finding") && q.finding !== "all" && !r.rules.includes(q.finding)) return false;
+    if (on("proposal") && q.proposal === "waiting" && r.proposalsWaiting === 0) return false;
+    if (on("lang") && q.lang !== "all" && langOf(r) !== q.lang) return false;
+    if (on("moved") && b.compared && q.moved !== "all" && movedOf(r) !== q.moved) return false;
+    if (pasted) {
+      /* A pasted address finds its page, and the pages under it; another website's address finds nothing. */
+      if (!("path" in pasted)) return false;
+      const p = pasted.path;
+      if (!(r.page.path === p || (p !== "/" && r.page.path.startsWith(`${p}/`)))) return false;
+    } else if (words.length) {
+      const hay = fold(`${r.page.path} ${r.title ?? ""} ${r.description ?? ""} ${r.heading ?? ""} ${b.queries?.get(r.page.path) ?? ""}`);
       if (!words.every((w) => hay.includes(w))) return false;
     }
     return true;
   });
+}
+
+/** Where ?q= was looked for, as the empty list says it. */
+function searchedIn(q: PagesQuery, b: FilterBasis): string | null {
+  if (!q.q) return null;
+  const pasted = addressIn(q.q);
+  if (pasted) return "path" in pasted ? `the crawl's pages at ${pasted.path} and under it` : `the crawl's pages; ${pasted.foreign} is another website`;
+  return `the address, title, description and main heading of each page${b.queries ? ", and the searches Google showed it for in the window" : ""}`;
+}
+
+/**
+ * The filter groups with their counts. Each group is counted over the rows
+ * the OTHER groups' choices (and the search) leave, so a number beside an
+ * option is the list that option would give.
+ */
+function facetsOf(rows: SeoPageRow[], q: PagesQuery, b: FilterBasis, rules: Map<string, { title: string; severity: CrawlSeverity }>): PageFacets {
+  const base = (g: Group): SeoPageRow[] => filtered(rows, q, b, g);
+  const count = (list: SeoPageRow[], f: (r: SeoPageRow) => boolean): number => list.filter(f).length;
+
+  const byType = base("type");
+  /* Every kind the site has is offered, with a zero when the other filters leave none of it. */
+  const types = new Map<string, { label: string; count: number }>();
+  for (const r of rows) if (!types.has(kindOf(r))) types.set(kindOf(r), { label: r.page.kindLabel ?? "Other", count: 0 });
+  for (const r of byType) types.get(kindOf(r))!.count++;
+
+  const byStatus = base("status");
+  const byScore = base("score");
+  const byTraffic = base("traffic");
+  const bySitemap = base("sitemap");
+  const byLinks = base("links");
+  const byFinding = base("finding");
+  const byProposal = base("proposal");
+  const byLang = base("lang");
+  const byMoved = base("moved");
+
+  const fired = new Set(rows.flatMap((r) => r.rules));
+  const langs = new Set(rows.map(langOf));
+  return {
+    all: {
+      type: byType.length,
+      status: byStatus.length,
+      score: byScore.length,
+      traffic: byTraffic.length,
+      sitemap: bySitemap.length,
+      links: byLinks.length,
+      finding: byFinding.length,
+      proposal: byProposal.length,
+      lang: byLang.length,
+      moved: byMoved.length,
+    },
+    types: [...types]
+      .map(([key, t]) => ({ key, label: t.label, count: t.count }))
+      .sort((x, y) => (KIND_ORDER.indexOf(x.key) + 1 || 99) - (KIND_ORDER.indexOf(y.key) + 1 || 99)),
+    status: [
+      { key: "indexed", label: "Indexed", count: count(byStatus, (r) => r.index?.indexed === true) },
+      { key: "not-indexed", label: "Not indexed", count: count(byStatus, (r) => r.index?.indexed === false) },
+      { key: "not-inspected", label: "Not inspected", count: count(byStatus, (r) => r.index === null) },
+      { key: "issues", label: "Has issues", count: count(byStatus, hasIssues) },
+    ],
+    score: (["90-100", "70-89", "50-69", "0-49"] as const).map((k) => ({ key: k, label: k.replace("-", "–"), count: count(byScore, (r) => scoreBucket(r.score) === k) })),
+    traffic: b.searchOk
+      ? [
+          { key: "high", label: "High (100+)", count: count(byTraffic, (r) => trafficBucket(r.impressions ?? 0) === "high") },
+          { key: "medium", label: "Medium (10–99)", count: count(byTraffic, (r) => trafficBucket(r.impressions ?? 0) === "medium") },
+          { key: "low", label: "Low (1–9)", count: count(byTraffic, (r) => trafficBucket(r.impressions ?? 0) === "low") },
+          { key: "none", label: "None", count: count(byTraffic, (r) => (r.impressions ?? 0) === 0) },
+        ]
+      : [],
+    sitemap: [
+      { key: "in", label: "In the sitemap", count: count(bySitemap, (r) => r.inSitemap) },
+      { key: "out", label: "Kept out of it", count: count(bySitemap, (r) => !r.inSitemap) },
+    ],
+    links: [
+      { key: "none", label: "No page links here", count: count(byLinks, (r) => linkBucket(r) === "none") },
+      { key: "menus", label: "Menus and footer only", count: count(byLinks, (r) => linkBucket(r) === "menus") },
+    ],
+    findings: [...fired]
+      .map((key) => ({ key, label: rules.get(key)?.title ?? key, severity: rules.get(key)?.severity ?? ("opportunity" as CrawlSeverity), count: count(byFinding, (r) => r.rules.includes(key)) }))
+      .sort((x, y) => SEVERITY_RANK[x.severity] - SEVERITY_RANK[y.severity] || y.count - x.count || x.label.localeCompare(y.label)),
+    proposal: [{ key: "waiting", label: "Proposal waiting", count: count(byProposal, (r) => r.proposalsWaiting > 0) }],
+    langs: langs.size > 1 ? [...langs].sort().map((key) => ({ key, label: key === "unknown" ? "Not declared" : key.toUpperCase(), count: count(byLang, (r) => langOf(r) === key) })) : [],
+    moved: b.compared
+      ? [
+          { key: "up", label: "More impressions", count: count(byMoved, (r) => movedOf(r) === "up") },
+          { key: "down", label: "Fewer impressions", count: count(byMoved, (r) => movedOf(r) === "down") },
+        ]
+      : [],
+  };
 }
 
 function sorted(rows: SeoPageRow[], q: PagesQuery): SeoPageRow[] {
@@ -426,6 +818,14 @@ function sorted(rows: SeoPageRow[], q: PagesQuery): SeoPageRow[] {
         return r.page.path;
       case "updated":
         return r.updated;
+      case "words":
+        return r.words;
+      case "links":
+        return r.inlinksFromContent * 10_000 + r.inlinks;
+      case "change":
+        return changeOf(r);
+      case "sessions":
+        return r.organic ? r.organic.sessions : null;
     }
   };
   const flip = q.dir === "asc" ? 1 : -1;
@@ -438,7 +838,7 @@ function sorted(rows: SeoPageRow[], q: PagesQuery): SeoPageRow[] {
     } else if (x !== y) {
       return (typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), "en", { numeric: true })) * flip;
     }
-    return b.impressions - a.impressions || b.clicks - a.clicks || a.page.path.localeCompare(b.page.path);
+    return (b.impressions ?? 0) - (a.impressions ?? 0) || (b.clicks ?? 0) - (a.clicks ?? 0) || a.page.path.localeCompare(b.page.path);
   });
 }
 
@@ -472,14 +872,20 @@ function tilesOf(range: SeoRange, v: SiteView, rows: SeoPageRow[], search: Readi
   let indexed: Reading<Stat>;
   if (index.state !== "ok") indexed = index as Reading<never>;
   else {
-    const iv = index.value;
-    const n = [...iv.by.values()].filter((x) => x.indexed).length;
-    const rec = iv.complete ? recorded("gsc.indexed", days) : null;
+    const b = index.value.basis;
+    /* Of the sitemap's pages as the crawl lists them; before the first crawl, of every address a check asked about. */
+    const listed = rows.filter((r) => r.inSitemap);
+    const n = listed.length ? listed.filter((r) => r.index?.indexed).length : [...index.value.by.values()].filter((x) => x.indexed).length;
+    const of = listed.length ? listed.length : b.of;
+    const unasked = listed.filter((r) => !r.index).length;
+    const rec = recorded("gsc.indexed", days);
+    /* Said under the figure, not only in the (i): a count that leans on an earlier day, or that leaves pages out, must show it. */
+    const sub = [b.carried ? `${b.carried} from an earlier check` : "", unasked ? `${unasked} not inspected yet` : ""].filter(Boolean).join(", ");
     indexed = ok(
-      { value: n, previous: rec?.previous ?? null, unit: "count", series: rec?.series ?? [], ...(iv.of !== null ? { of: iv.of } : {}) },
+      { value: n, previous: rec?.previous ?? null, unit: "count", series: rec?.series ?? [], ...(of !== null ? { of } : {}), ...(sub ? { sub } : {}) },
       "gsc",
       index.asOf,
-      `Sitemap addresses Google had in its index at the daily URL Inspection of ${iv.day}.${iv.complete ? "" : " That check was cut short, so the count is part of the sitemap, not all of it."}`,
+      `Sitemap pages whose newest answer from Google's daily URL Inspection says indexed. ${index.note ?? ""} The bars count the days whose check covered the whole sitemap.`.trim(),
     );
   }
 
@@ -494,6 +900,7 @@ function tilesOf(range: SeoRange, v: SiteView, rows: SeoPageRow[], search: Readi
     withIssues,
     clicks: fromSearch((s) => s.tiles.clicks, "Search Console reports no clicks for the window yet."),
     position: fromSearch((s) => s.tiles.position, "No impressions in the window, so there is no position to average."),
+    positionDays: search.state === "ok" ? search.value.positionDays : [],
     ctr: fromSearch((s) => s.tiles.ctr, "No impressions in the window, so there is no rate."),
   };
 }
@@ -512,7 +919,9 @@ async function keywordsOf(path: string, range: SeoRange, search: Reading<SearchR
   let note = search.note;
   if (s.basis.by === "history") {
     const r = await rankMod();
-    rows = r.queryPageFigures(s.basis.start, s.basis.end, { path }).map((x) => ({ query: x.query, clicks: x.clicks, impressions: x.impressions, ctr: rate(x.clicks, x.impressions), position: x.position ?? 0 }));
+    rows = r
+      .queryPageFigures(s.basis.start, s.basis.end, { path, country: s.basis.country, device: s.basis.device === "all" ? null : s.basis.device })
+      .map((x) => ({ query: x.query, clicks: x.clicks, impressions: x.impressions, ctr: rate(x.clicks, x.impressions), position: x.position ?? 0 }));
   } else {
     const got = await gsc.query({ range, dimensions: ["query"], filters: [pageFilter(path)], rowLimit: 250 });
     if (got.state !== "ok") return got as Reading<never>;
@@ -538,7 +947,7 @@ async function performanceOf(path: string, range: SeoRange, search: Reading<Sear
   const s = search.value;
   if (s.basis.by === "history") {
     const r = await rankMod();
-    const days = r.pageSeries(path, s.basis.start, s.basis.end);
+    const days = r.pageSeries(path, s.basis.start, s.basis.end, { country: s.basis.country, device: s.basis.device === "all" ? null : s.basis.device });
     return ok({ start: s.basis.start, end: s.basis.end, days }, "gsc", search.asOf, search.note);
   }
   const got = await gsc.query({ range, dimensions: ["date"], filters: [pageFilter(path)], rowLimit: 500 });
@@ -560,17 +969,45 @@ async function performanceOf(path: string, range: SeoRange, search: Reading<Sear
   return ok({ start: s.from, end: got.value.endDate, days }, "gsc", got.asOf, `${got.note ?? ""}${s.from > got.value.startDate ? ` Google's figures for the site begin on ${s.from}.` : ""}`.trim());
 }
 
-async function indexOf(path: string, index: Reading<IndexRead>, live: boolean | null): Promise<Reading<SummaryIndex>> {
+/**
+ * Google's stored state of one address. Without an answer it says which of
+ * the two reasons holds: the address is kept out of the sitemap (the check
+ * never asks about it), or it is listed and no recent check has reached it.
+ */
+async function indexOf(path: string, inSitemap: boolean | null, index: Reading<IndexRead>, live: boolean | null): Promise<Reading<SummaryIndex>> {
   if (index.state !== "ok") return index as Reading<never>;
+  const b = index.value.basis;
   const ins = index.value.by.get(path);
-  if (!ins) return off("gsc", `Not inspected: the daily index check of ${index.value.day} asks Google about the addresses in the sitemap only, and this one is not listed there.`);
+  if (!ins) {
+    if (inSitemap === false) return off("gsc", "Not inspected: the daily index check asks Google about the addresses in the sitemap only, and this one is not listed there.", "Open the address in Search Console's URL Inspection to see what Google holds for it.");
+    return waiting(
+      "gsc",
+      `Not inspected yet: none of the last ${b.days} daily index checks has an answer for this address${b.complete ? ` (the newest ran on ${b.newest})` : ` (the newest, on ${b.newest}, was cut short at ${b.onNewest} of ${b.of ?? "the"} sitemap addresses)`}. The next daily check asks again.`,
+    );
+  }
   const m = await indexationMod();
   const said = m.meaningOf(ins.coverage, ins.indexed);
   return ok(
-    { day: index.value.day, indexed: ins.indexed, coverage: ins.coverage, lastCrawl: ins.lastCrawl, meaning: said.meaning, fix: said.fix, link: ins.link, liveSaysIndex: live },
+    {
+      day: ins.day,
+      newest: b.newest,
+      indexed: ins.indexed,
+      coverage: ins.coverage,
+      lastCrawl: ins.lastCrawl,
+      meaning: said.meaning,
+      fix: said.fix,
+      link: ins.link,
+      liveSaysIndex: live,
+      googleCanonical: ins.googleCanonical,
+      userCanonical: ins.userCanonical,
+      canonicalOk: ins.canonicalOk,
+      robots: ins.robots,
+      fetchState: ins.fetchState,
+      indexing: ins.indexing,
+    },
     "gsc",
-    index.asOf,
-    "Google's stored state of the address, from the daily URL Inspection: what Google last saw, not a live test.",
+    ins.checkedAt,
+    `Google's stored state of the address, from the daily URL Inspection of ${ins.day}: what Google last saw, not a live test.${ins.day < b.newest ? ` The check of ${b.newest} did not reach this address.` : ""}`,
   );
 }
 
@@ -604,10 +1041,55 @@ function issuesOf(path: string, d: PageDetail, idx: Reading<SummaryIndex>): Summ
   return out;
 }
 
-function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>): QuickAction[] {
+/** The longest question the operator's queue takes (src/cc/operator/queue.ts). */
+const PROMPT_MOST = 1000;
+
+/**
+ * A question with the facts it needs written into it, as many as fit the
+ * operator's limit: each fact is a lead and a list, and a list that does not
+ * fit whole is cut from its end, never mid-item.
+ */
+function promptWith(question: string, facts: { lead: string; items: string[] }[]): string {
+  let out = question.replace(/\s+/g, " ").trim();
+  for (const f of facts) {
+    /* An item that ends its own sentence would leave two full stops at the end of the list. */
+    let items = f.items.map((s) => s.replace(/\s+/g, " ").replace(/[.\s]+$/, "")).filter(Boolean);
+    while (items.length) {
+      const line = ` ${f.lead} ${items.join("; ")}.`;
+      if (out.length + line.length <= PROMPT_MOST) {
+        out += line;
+        break;
+      }
+      items = items.slice(0, -1);
+    }
+  }
+  return out;
+}
+
+/**
+ * The summary's quick actions. An "ask" task is given the page's tags, counts
+ * and findings by the operator's own pack (src/cc/operator/packs.ts), not its
+ * text and not its searches. So what each question depends on is written into
+ * the question here, from what the desk already holds: the searches Google
+ * showed the page for, its section headings, the pages that link to it, its
+ * structured-data types. Each step says what the operator is and is not given.
+ */
+function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>, keywords: Reading<{ rows: PageKeyword[]; total: number }>, basis: SearchBasis | null): QuickAction[] {
   const answers = d.status === 200;
   const why = answers ? null : `The page answers ${d.status || "nothing"}, so there is nothing on it to change.`;
   const ask = (prompt: string): NewTask => ({ kind: "ask", prompt, path, context: "pages", depth: "deep" });
+  const f = d.facts;
+  const short = (s: string, n: number): string => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
+  const searches = keywords.state === "ok" ? keywords.value.rows.slice(0, 8).map((k) => `"${short(k.query, 60)}" (${k.impressions} impressions, position ${k.position})`) : [];
+  const window = basis ? `${basis.start} to ${basis.end}` : "the window";
+  const searchFact = searches.length
+    ? { lead: `Searches Google showed it for, ${window} (Search Console):`, items: searches }
+    : { lead: keywords.state === "ok" ? `Google showed it for no search, ${window}:` : "Its searches are not available:", items: ["judge it by its topic"] };
+  const headings = (f?.h2s ?? []).slice(0, 14).map((h) => short(h, 70));
+  const headingFact = { lead: "Its section headings, in order:", items: headings };
+  const fromContent = [...new Set(d.linksIn.filter((l) => l.place === "main").map((l) => l.source))].slice(0, 15);
+  const types = f?.schemaTypes ?? [];
+  const given = "this page's title, description, main heading, section headings, word count and the crawl's findings";
   const list: QuickAction[] = [
     {
       key: "metadata",
@@ -621,8 +1103,13 @@ function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>): 
     {
       key: "content",
       label: "Improve content with AI",
-      step: "The operator reads the page and its figures and answers, in plain text, what to add, cut or reword. A person edits the page.",
-      task: ask(`How should the content of ${path} change so it answers the searches it is shown for better? Be specific: what to add, cut or reword, section by section. Use only the page and the figures given.`),
+      step: `The operator (the studio workstation's model) is given ${given}, and the searches Google shows the page for. It is not given the page's full text. It answers, in plain text, what to add, cut or reword. A person edits the page.`,
+      task: ask(
+        promptWith(
+          `How should the content of ${path} change so it answers the searches it is shown for better? Be specific, section by section: what to add, cut or reword. You have its tags, headings and findings, not its full text: say so where you would need to read it.`,
+          [searchFact, headingFact],
+        ),
+      ),
       href: null,
       available: answers,
       why,
@@ -630,8 +1117,13 @@ function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>): 
     {
       key: "links",
       label: "Find internal links",
-      step: "The operator names the pages that should link here from their content, with the words of each link. A person adds the links.",
-      task: ask(`Which pages of the website should link to ${path} from their own content, and with what words? Name each page and the sentence the link would sit in. Use only the pages given.`),
+      step: "The operator is given the list of the website's pages and the pages that already link here, and names the pages that should link here from their content, with the words of each link. A person adds the links.",
+      task: ask(
+        promptWith(`Which pages of the website should link to ${path} from their own content, and with what words? Name each page and the sentence the link would sit in. Use only the pages given, and leave out the ones that already link to it.`, [
+          fromContent.length ? { lead: "Already linking to it from their content:", items: fromContent } : { lead: "No page links to it from its own content yet:", items: [d.inlinks ? "only menus and footers do" : "nothing links to it at all"] },
+          searchFact,
+        ]),
+      ),
       href: null,
       available: answers,
       why,
@@ -639,8 +1131,13 @@ function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>): 
     {
       key: "schema",
       label: "Draft structured data",
-      step: "The operator drafts the schema.org markup this page should carry. It goes into the website's code by hand; nothing is applied.",
-      task: ask(`Which structured data (schema.org JSON-LD) should ${path} carry, given what the page says? Draft it, and name each field you could not fill from the page.`),
+      step: `The operator drafts the schema.org markup this page should carry, from ${given} (not its full text). It goes into the website's code by hand; nothing is applied.`,
+      task: ask(
+        promptWith(
+          `Which structured data (schema.org JSON-LD) should ${path} carry? It is a ${d.kindLabel} page. Draft the markup from the title, description and headings you are given, and name each field you could not fill from them.`,
+          [types.length ? { lead: "It carries these types now:", items: types.slice(0, 12) } : { lead: "It carries no structured data now:", items: ["start from none"] }, headingFact],
+        ),
+      ),
       href: null,
       available: answers,
       why,
@@ -734,8 +1231,13 @@ async function contentOf(path: string, d: PageDetail, keywords: Reading<{ rows: 
       label: "Questions answered",
       value: "—",
       state: faqRead?.state === "n/a" ? "good" : "unknown",
-      verdict: faqRead?.state === "n/a" ? "Not needed" : "Not read yet",
-      rule: faqRead?.state === "n/a" ? faqRead.detail : "Whether the page answers questions is read by the AI-readiness check, which has not read this page yet; no FAQPage markup is on it.",
+      verdict: faqRead?.state === "n/a" ? "Not needed" : readiness.state === "off" ? "Not read" : "Not read yet",
+      rule:
+        faqRead?.state === "n/a"
+          ? faqRead.detail
+          : readiness.state === "off"
+            ? `Whether the page answers questions is read by the AI-readiness check, which does not read this page: ${readiness.reason} No FAQPage markup is on it.`
+            : "Whether the page answers questions is read by the AI-readiness check, which has not read this page yet; no FAQPage markup is on it.",
     });
   }
 
@@ -797,16 +1299,18 @@ function linksOf(d: PageDetail): PageLinks {
   return { in: d.inlinks, inFromContent: d.inlinksFromContent, out: d.outlinks, from: [...once.values()].slice(0, 12) };
 }
 
+/** True when a canonical names this very address on the site's own host; null without one. */
+function canonicalSelfOf(canonical: string | null | undefined, path: string): boolean | null {
+  if (!canonical) return null;
+  try {
+    return pathOf(canonical) === path && new URL(canonical, `${siteBase()}/`).host.replace(/^www\./, "") === bareHost();
+  } catch {
+    return false;
+  }
+}
+
 function technicalOf(path: string, d: PageDetail, crawledAt: string): PageTechnical {
   const f = d.facts;
-  let canonicalSelf: boolean | null = null;
-  if (f?.canonical) {
-    try {
-      canonicalSelf = pathOf(f.canonical) === path && new URL(f.canonical, `${siteBase()}/`).host.replace(/^www\./, "") === bareHost();
-    } catch {
-      canonicalSelf = false;
-    }
-  }
   return {
     crawledAt,
     status: d.status,
@@ -817,7 +1321,7 @@ function technicalOf(path: string, d: PageDetail, crawledAt: string): PageTechni
     robots: f?.robots ?? null,
     robotsHeader: d.fetched?.robotsTag ?? null,
     canonical: f?.canonical ?? null,
-    canonicalSelf,
+    canonicalSelf: canonicalSelfOf(f?.canonical, path),
     lang: f?.lang ?? null,
     h1: f?.h1 ?? [],
     h2: f?.h2 ?? 0,
@@ -826,10 +1330,39 @@ function technicalOf(path: string, d: PageDetail, crawledAt: string): PageTechni
   };
 }
 
-async function readinessOf(path: string): Promise<SeoPageSummary["readiness"]> {
+/** The newest PageSpeed lab run of this address per kind of device, when it is one of the pages the daily test measures. */
+async function speedOf(path: string): Promise<Reading<PageSpeed>> {
+  const s = await siteMod();
+  const runs: PageSpeed["runs"] = [];
+  let absent: Reading<never> | null = null;
+  let any = false;
+  for (const strategy of ["mobile", "desktop"] as const) {
+    const r = s.labRuns(strategy);
+    if (r.state !== "ok") {
+      absent = r as Reading<never>;
+      continue;
+    }
+    any = true;
+    const run = r.value.find((x) => x.path === path);
+    if (run) runs.push({ strategy, at: run.at, performance: run.scores.performance, lcpMs: run.lcpMs, cls: run.cls, tbtMs: run.tbtMs, failure: run.failure });
+  }
+  if (!runs.length) {
+    if (!any && absent) return absent;
+    return off("psi", "PageSpeed measures a fixed list of pages each day, and this address is not on it.", "Site Health shows the pages it measures; CC_PSI_PAGES on the desk's server replaces the list.");
+  }
+  return ok({ runs }, "psi", runs.reduce((t, x) => (x.at > t ? x.at : t), ""), "A lab run: Lighthouse on Google's machines, not real visitors.");
+}
+
+/**
+ * The AI-readiness check reads the sitemap's pages that answer 200, once a
+ * day. A page it will never read says so (off); one it has not reached yet waits.
+ */
+async function readinessOf(path: string, d: PageDetail): Promise<SeoPageSummary["readiness"]> {
   const m = await readinessMod();
   const r = m.readinessOf(path);
   if (!r) {
+    if (!d.inSitemap) return off("desk", "The AI-readiness check reads the sitemap's pages only, and this one is kept out of the sitemap.");
+    if (d.status !== 200) return off("desk", `The AI-readiness check reads pages that answer 200, and this one answered ${d.status || "nothing"} at the last crawl.`);
     const job = jobStatus().find((j) => j.name === "seo-readiness");
     return waiting(
       "desk",
@@ -879,13 +1412,14 @@ async function summaryOf(path: string, row: SeoPageRow | null, range: SeoRange, 
   if (!row) return off("crawl", `The crawl reads ${path}, but it is not in the list: reload in a moment.`);
   /* `indexable`: the page answers 200 and says no noindex, by tag or header, as the crawl read it. */
   const live = d.status === 200 && d.facts ? d.indexable : null;
-  const idx = await reading("gsc", () => indexOf(path, index, live));
-  const [keywords, performance, readiness, opportunities, proposals] = await Promise.all([
+  const idx = await reading("gsc", () => indexOf(path, d.inSitemap, index, live));
+  const [keywords, performance, readiness, opportunities, proposals, speed] = await Promise.all([
     reading("gsc", () => keywordsOf(path, range, search)),
     reading("gsc", () => performanceOf(path, range, search)),
-    reading("desk", () => readinessOf(path)),
+    reading("desk", () => readinessOf(path, d)),
     reading("desk", () => opportunitiesOf(path, v)),
     proposalsOf(path),
+    reading("psi", () => speedOf(path)),
   ]);
   const content = await reading("crawl", () => contentOf(path, d, keywords, readiness));
   const crawledAt = one.asOf;
@@ -912,13 +1446,14 @@ async function summaryOf(path: string, row: SeoPageRow | null, range: SeoRange, 
       },
       index: idx,
       issues: ok(issuesOf(path, d, idx), "crawl", crawledAt, "Google's index state from the daily URL Inspection, then the crawl's findings by its stated rules (src/cc/site/rules.ts)."),
-      actions: quickActions(path, d, idx),
+      actions: quickActions(path, d, idx, keywords, search.state === "ok" ? search.value.basis : null),
       performance,
       keywords,
       content,
       serp: serpOf(d),
       links: ok(linksOf(d), "crawl", crawledAt),
       technical: ok(technicalOf(path, d, crawledAt), "crawl", crawledAt, "One fetch by the desk's crawl, from the desk's server: a hint about speed, not a measurement."),
+      speed,
       readiness,
       opportunities,
       proposals,
@@ -926,6 +1461,137 @@ async function summaryOf(path: string, row: SeoPageRow | null, range: SeoRange, 
     "crawl",
     crawledAt,
   );
+}
+
+/* ---------- one address looked up on the live site -------------------------------------------- */
+
+/** A live answer is kept this long, so reloading the screen or changing a filter does not ask the website again. */
+const LOOKUP_KEEP_MS = 120_000;
+const lookedUp = new Map<string, { at: number; got: Got }>();
+/** When the next live request may leave: never more than one a second to the website. */
+let nextLive = 0;
+
+async function liveGet(url: string): Promise<{ at: number; got: Got }> {
+  const had = lookedUp.get(url);
+  if (had && Date.now() - had.at < LOOKUP_KEEP_MS) return had;
+  const wait = Math.max(0, nextLive - Date.now());
+  nextLive = Date.now() + wait + 1000;
+  if (wait) await sleep(wait);
+  const kept = { at: Date.now(), got: await wire.get(url) };
+  lookedUp.set(url, kept);
+  /* A handful of addresses at most: the oldest goes first. */
+  if (lookedUp.size > 100) lookedUp.delete(lookedUp.keys().next().value as string);
+  return kept;
+}
+
+/** The address a lookup is asked for, or the sentence that says why it cannot be looked up here. */
+function lookupTarget(raw: string | undefined): { path: string } | { refused: string } {
+  const s = (raw ?? "").trim();
+  if (!s) return { refused: "Give an address of the website to look up: a path such as /about, or a full address." };
+  if (s.length > 400) return { refused: "That address is too long to be one of the website's." };
+  const pasted = addressIn(s);
+  if (pasted && "foreign" in pasted) return { refused: `${pasted.foreign} is another website. Only addresses of ${bareHost()} are looked up here; other websites are looked up on SEO › Competitors.` };
+  const path = pasted ? pasted.path : /\s/.test(s) ? null : pathParam(s);
+  if (!path) return { refused: `“${s.slice(0, 80)}” is not an address of the website.` };
+  return { path };
+}
+
+/** True when a robots tag or header keeps the page out of search: "noindex", or "none" as a whole directive (not "max-image-preview:none"). */
+const saysNoindex = (robots: string | null | undefined): boolean =>
+  (robots ?? "")
+    .toLowerCase()
+    .split(",")
+    .map((d) => d.trim())
+    .some((d) => d === "none" || /(^|[\s:])noindex$/.test(d));
+
+async function liveOf(path: string, url: string): Promise<Reading<LookupLive>> {
+  const { at, got } = await liveGet(url);
+  let page: LookupLive["page"] = null;
+  const robotsHeader = got.headers["x-robots-tag"] ?? null;
+  if (got.status === 200 && got.body && /html/i.test(got.headers["content-type"] ?? "text/html")) {
+    try {
+      const { parsePage } = await import("../../site/parse.ts");
+      const f = parsePage(got.body, got.url).facts;
+      const lands = sitePathOf(got.url) ?? path;
+      page = {
+        title: f.title,
+        description: f.description,
+        canonical: f.canonical,
+        canonicalSelf: canonicalSelfOf(f.canonical, lands),
+        robots: f.robots,
+        robotsHeader,
+        indexable: !saysNoindex(f.robots) && !saysNoindex(robotsHeader),
+        lang: f.lang,
+        h1: f.h1,
+        words: f.words,
+        schemaTypes: f.schemaTypes,
+        hreflang: f.hreflang ?? [],
+      };
+    } catch {
+      page = null;
+    }
+  }
+  const landed = sitePathOf(got.url);
+  /* What the host itself says about a refusal ("DEPLOYMENT_DISABLED"), when it says anything. */
+  const hostWord = got.status >= 400 ? (got.headers["x-vercel-error"] ?? null) : null;
+  return ok(
+    {
+      status: got.status,
+      finalUrl: got.url,
+      landsOn: landed && landed !== path ? landed : null,
+      hops: got.hops,
+      ttfbMs: got.ttfb,
+      bytes: got.bytes,
+      error: got.error ?? hostWord,
+      page,
+    },
+    "probe",
+    at,
+    "One request from the desk's server just now (kept two minutes), named BalkarisDesk, following redirects by hand. Scripts are not run.",
+  );
+}
+
+async function lookupOf(path: string, range: SeoRange, v: SiteView, search: Reading<SearchRead>, index: Reading<IndexRead>): Promise<Reading<PageLookup>> {
+  const url = absUrl(path);
+  const s = await siteMod();
+  let inSitemap: boolean | null = null;
+  try {
+    const map = s.lastSitemap();
+    inSitemap = map ? map.entries.some((e) => e.path === path) : null;
+  } catch {
+    inSitemap = null;
+  }
+  const live = await reading("probe", () => liveOf(path, url));
+  const says = live.state === "ok" && live.value.page ? live.value.page.indexable : null;
+  const [idx, figures] = await Promise.all([
+    reading("gsc", () => indexOf(path, inSitemap, index, says)),
+    reading("gsc", async (): Promise<PageLookup["search"]> => {
+      if (search.state !== "ok") return search as Reading<never>;
+      const b = search.value.basis;
+      /* Google names every address it showed: one it does not name was not shown, a real zero. */
+      const f = search.value.now.get(path) ?? { clicks: 0, impressions: 0, position: null };
+      const kw = await reading("gsc", () => keywordsOf(path, range, search));
+      return ok(
+        { start: b.start, end: b.end, clicks: f.clicks, impressions: f.impressions, ctr: rate(f.clicks, f.impressions), position: f.position, keywords: kw.state === "ok" ? kw.value.rows.slice(0, 20) : [], total: kw.state === "ok" ? kw.value.total : 0 },
+        "gsc",
+        search.asOf,
+        search.note,
+      );
+    }),
+  ]);
+  let redirect: PageLookup["redirect"] = null;
+  let mayRedirect: PageLookup["mayRedirect"] = { ok: false, why: "The desk's proposals could not be read." };
+  try {
+    const a = await applyMod();
+    const had = a.proposals(["waiting", "approved", "applied"], 300).find((p) => p.kind === "redirect" && p.address === path);
+    if (had) redirect = { id: had.id, to: had.after.to ?? null, state: had.state, href: `/operator?ap=${had.state === "waiting" ? "waiting" : "approved"}#approvals` };
+    /* Asked with the home page as the target, so only what is wrong with the address it leaves from is said. */
+    const why = path === "/" ? "The home page is a live page: a redirect from it would hide it." : a.redirectRefusal(path, "/");
+    mayRedirect = { ok: !why, why };
+  } catch {
+    /* said above */
+  }
+  return ok({ path, url, known: v.byPath.has(path), inSitemap, live, index: idx, search: figures, redirect, mayRedirect }, "probe", live.state === "ok" ? live.asOf : new Date().toISOString());
 }
 
 /* ---------- the screen ------------------------------------------------------------------------ */
@@ -941,19 +1607,45 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
   const range = rangeFrom(c);
   const q = queryOf(c, paged);
   const v = view();
-  const [search, index, opps, ready] = await Promise.all([reading("gsc", () => searchRead(range)), reading("gsc", indexRead), oppCounts(), readinessCounts()]);
+  const wantOrganic = !paged || q.cols.includes("sessions") || q.sort === "sessions";
+  const [search, index, opps, ready, rules, waitingNow, organic, info] = await Promise.all([
+    reading("gsc", () => searchRead(range, { country: q.country, device: q.device })),
+    reading("gsc", indexRead),
+    oppCounts(),
+    readinessCounts(),
+    rulesByPage(),
+    waitingByPage(),
+    reading("ga4", () => organicRead(range, wantOrganic)),
+    ruleInfo(),
+  ]);
   const searchOk = search.state === "ok";
-  const all = v.at ? rowsOf(v, searchOk ? search.value : null, index.state === "ok" ? index.value : null, opps, ready) : [];
-  const matched = sorted(filtered(all, q, searchOk), q);
-  const offset = Math.min(q.offset, Math.max(0, matched.length - 1));
+  const all = v.at
+    ? rowsOf(v, { search: searchOk ? search.value : null, index: index.state === "ok" ? index.value : null, opps, ready, rules, waiting: waitingNow, organic: organic.state === "ok" ? organic.value : null })
+    : [];
+
+  /* A value the server does not know is replaced by its default, so the echo is what the list really answers. */
+  if (q.type !== "all" && !all.some((r) => kindOf(r) === q.type)) q.type = "all";
+  if (q.finding !== "all" && !all.some((r) => r.rules.includes(q.finding))) q.finding = "all";
+  if (q.lang !== "all" && !all.some((r) => langOf(r) === q.lang)) q.lang = "all";
+  const compared = searchOk && search.value.basis.previous !== null;
+  if (!compared) q.moved = "all";
+  /* The splits by country and device exist in the desk's own history only. */
+  if (!searchOk || search.value.basis.by !== "history") {
+    q.country = "all";
+    q.device = "all";
+  }
+
+  const basis: FilterBasis = { searchOk, compared, queries: q.q && !addressIn(q.q) ? await queriesByPage(range, search) : null };
+  const matched = sorted(filtered(all, q, basis), q);
+  const offset = lastPageOffset(q.offset, matched.length, q.limit);
   const page = matched.slice(offset, offset + q.limit);
 
   const list: SeoPagesPayload["list"] = v.at
     ? ok(
-        { total: matched.length, offset, limit: q.limit, rows: page },
+        { total: matched.length, offset, limit: q.limit, rows: page, searchedIn: searchedIn(q, basis) },
         "crawl",
         v.at,
-        `The desk's crawl, with Search Console's figures${search.state === "ok" ? ` for ${search.value.basis.start} to ${search.value.basis.end}` : " (not available: see the tiles)"} and Google's index state at the last daily URL Inspection.`,
+        `The desk's crawl, with Search Console's figures${search.state === "ok" ? ` for ${search.value.basis.start} to ${search.value.basis.end}` : " (not available: see the tiles)"} and each address's newest answer from Google's daily URL Inspection.`,
       )
     : waiting("crawl", "The first crawl has not finished yet. It starts about a minute after the desk does and takes under a minute.");
 
@@ -966,7 +1658,7 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
             const out = [...search.value.now].filter(([p]) => !v.byPath.has(p)).map(([path, f]) => ({ path, clicks: f.clicks, impressions: f.impressions }));
             out.sort((a, b) => b.impressions - a.impressions || b.clicks - a.clicks);
             return ok(
-              { addresses: out.length, clicks: out.reduce((n, x) => n + x.clicks, 0), impressions: out.reduce((n, x) => n + x.impressions, 0), top: out.slice(0, 8) },
+              { addresses: out.length, clicks: out.reduce((n, x) => n + x.clicks, 0), impressions: out.reduce((n, x) => n + x.impressions, 0), top: out.slice(0, 50) },
               "gsc",
               search.asOf,
               "Addresses Search Console counted that the crawl does not read: addresses of an earlier site, or another host's spelling.",
@@ -974,11 +1666,19 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
           })();
 
   let selected: SeoPagesPayload["selected"] = null;
-  if (withSummary && v.at) {
-    const path = q.open ?? page[0]?.page.path ?? null;
-    if (path) {
-      const row = all.find((r) => r.page.path === path) ?? null;
-      selected = await reading("crawl", () => summaryOf(path, row, range, v, search, index));
+  let lookup: SeoPagesPayload["lookup"] = null;
+  if (withSummary) {
+    const typed = q.q ? addressIn(q.q) : null;
+    /* An address the crawl does not read is looked up on the live site: asked for by ?open=, or typed whole into the search. */
+    const unknown = q.open && !v.byPath.has(q.open) ? q.open : !q.open && typed && "path" in typed && !matched.length ? typed.path : null;
+    if (unknown) lookup = await reading("probe", () => lookupOf(unknown, range, v, search, index));
+    else if (!q.open && typed && "foreign" in typed) lookup = off("probe", `${typed.foreign} is another website. Only addresses of ${bareHost()} are looked up here.`, "Other websites are looked up on SEO › Competitors.");
+    else if (v.at) {
+      const path = q.open ?? page[0]?.page.path ?? null;
+      if (path) {
+        const row = all.find((r) => r.page.path === path) ?? null;
+        selected = await reading("crawl", () => summaryOf(path, row, range, v, search, index));
+      }
     }
   }
 
@@ -986,12 +1686,18 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
     payload: {
       head: head(range),
       tiles: tilesOf(range, v, all, search, index),
-      facets: facetsOf(all, searchOk),
+      facets: facetsOf(all, q, basis, info),
       list,
       query: { ...q, offset },
       search: search.state === "ok" ? { ...search, value: search.value.basis } : (search as Reading<never>),
+      index: index.state === "ok" ? { ...index, value: index.value.basis } : (index as Reading<never>),
+      organic:
+        organic.state === "ok"
+          ? { ...organic, value: { start: organic.value.start, end: organic.value.end, pages: organic.value.by.size, sessions: [...organic.value.by.values()].reduce((n, x) => n + x.sessions, 0) } }
+          : (organic as Reading<never>),
       elsewhere,
       selected,
+      lookup,
     },
     matched,
     basis: search.state === "ok" ? search.value.basis : null,
@@ -999,6 +1705,16 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
 }
 
 routes.get("/", async (c) => c.json<SeoPagesPayload>((await screen(c, true, true)).payload));
+
+/* ---------- GET /lookup ----------------------------------------------------------------------- */
+
+routes.get("/lookup", async (c) => {
+  const asked = lookupTarget(c.req.query("url"));
+  if ("refused" in asked) return c.json<Reading<PageLookup>>(off("probe", asked.refused));
+  const range = rangeFrom(c);
+  const [search, index] = await Promise.all([reading("gsc", () => searchRead(range, { country: "all", device: "all" })), reading("gsc", indexRead)]);
+  return c.json<Reading<PageLookup>>(await reading("probe", () => lookupOf(asked.path, range, view(), search, index)));
+});
 
 /* ---------- GET /export.csv ------------------------------------------------------------------- */
 
@@ -1014,7 +1730,10 @@ routes.get("/export.csv", async (c) => {
   const s = await screen(c, false, false);
   const list = s.payload.list;
   if (list.state !== "ok") return c.json({ error: `There is nothing to export yet: ${list.reason}` }, 409);
-  const w = s.basis ? `${s.basis.start} to ${s.basis.end}` : "not available";
+  const part = s.basis ? [s.basis.country !== "all" ? "Switzerland" : null, s.basis.device !== "all" ? s.basis.device : null].filter(Boolean).join(", ") : "";
+  const w = s.basis ? `${s.basis.start} to ${s.basis.end}${part ? `, ${part}` : ""}` : "not available";
+  const was = s.basis?.previous ? `${s.basis.previous.start} to ${s.basis.previous.end}` : "not compared";
+  const organic = s.payload.organic;
   const headRow = [
     "Address",
     "URL",
@@ -1037,6 +1756,15 @@ routes.get("/export.csv", async (c) => {
     "AI readiness (pass of)",
     "Words",
     "Updated",
+    /* Added after the first twenty-one, so a sheet built on those keeps its columns. */
+    `Clicks before (${was})`,
+    "Impressions before",
+    `Organic sessions (GA4, consenting visitors, ${organic.state === "ok" ? `${organic.value.start} to ${organic.value.end}` : "not available"})`,
+    "Pages linking here",
+    "Linking from their content",
+    "Proposals waiting",
+    "Findings (rules)",
+    "Description",
   ];
   const lines = [headRow.map(cell).join(",")];
   /* ?path= (repeatable): only the rows ticked in the table. */
@@ -1054,10 +1782,10 @@ routes.get("/export.csv", async (c) => {
         r.index ? (r.index.indexed ? "yes" : "no") : "",
         r.index?.coverage ?? "",
         r.index?.day ?? "",
-        s.basis ? r.clicks : "",
-        s.basis ? r.impressions : "",
-        s.basis && r.ctr.value !== null ? r.ctr.value : "",
-        s.basis ? (r.position ?? "") : "",
+        r.clicks ?? "",
+        r.impressions ?? "",
+        r.impressions !== null && r.ctr.value !== null ? r.ctr.value : "",
+        r.position ?? "",
         r.score,
         r.issues.critical,
         r.issues.warning,
@@ -1066,6 +1794,14 @@ routes.get("/export.csv", async (c) => {
         r.readiness ? `${r.readiness.pass} of ${r.readiness.of}` : "",
         r.words,
         r.updated ? r.updated.slice(0, 10) : "",
+        r.previous ? r.previous.clicks : "",
+        r.previous ? r.previous.impressions : "",
+        r.organic ? r.organic.sessions : "",
+        r.inlinks,
+        r.inlinksFromContent,
+        r.proposalsWaiting,
+        r.rules.join(" "),
+        r.description,
       ]
         .map(cell)
         .join(","),
@@ -1077,5 +1813,31 @@ routes.get("/export.csv", async (c) => {
   return c.body(`﻿${lines.join("\r\n")}\r\n`);
 });
 
-/* Exported for the check script: the pure parts, fed artificial rows. */
-export const _test = { filtered, sorted, facetsOf, merge, pathParam, scoreBucket, trafficBucket };
+/* Exported for the check script (scripts/check-cc-seo-pages.ts): the pure parts, fed artificial rows. */
+export const _test = {
+  filtered,
+  sorted,
+  facetsOf,
+  merge,
+  pathParam,
+  addressIn,
+  lastPageOffset,
+  scoreBucket,
+  trafficBucket,
+  linkBucket,
+  movedOf,
+  newestPerAddress,
+  promptWith,
+  lookupTarget,
+  searchedIn,
+  fold,
+  saysNoindex,
+  cell,
+  /** Forget the kept live answers, so a check can ask twice. */
+  forgetLookups: (): void => {
+    lookedUp.clear();
+    nextLive = 0;
+  },
+  PROMPT_MOST,
+  INDEX_DAYS,
+};

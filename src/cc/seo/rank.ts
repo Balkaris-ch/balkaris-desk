@@ -211,6 +211,22 @@ export function spanBetween(start: string, end: string): SeoSpan {
   return { start, end, days, previousStart, previousEnd, compared: !!from && from <= previousStart, historyFrom: from };
 }
 
+/**
+ * A window given by its dates, cut to the days that can be known. `spanBetween`
+ * takes any end, and a window that runs past the last day anybody has counted
+ * was then read as if its missing days were zeros, and compared with a whole
+ * window before it ("100% down" for four days Google had not finished). So
+ * here the window ends on `last` at the latest (the last snapshot day; for a
+ * live read, the newest day Google has finished), the window before is as
+ * long as what is left, and `askedEnd` keeps the end that was asked for so
+ * the screen can say the window was cut. Null when no day of it can be known
+ * yet, or before the first snapshot.
+ */
+export function spanWithin(start: string, end: string, last: string | null = lastSnapDay()): (SeoSpan & { askedEnd: string }) | null {
+  if (!last || start > last) return null;
+  return { ...spanBetween(start, end < last ? end : last), askedEnd: end };
+}
+
 export interface Fig {
   clicks: number;
   impressions: number;

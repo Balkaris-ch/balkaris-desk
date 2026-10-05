@@ -4,6 +4,7 @@ import { LinkButton, type ButtonVariant } from "@/components/ui/Button";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { DASH } from "@/lib/format";
 import { ActButton } from "./Act";
+import { DEFAULT_RANGE, opportunityHref } from "./href";
 
 /**
  * What an opportunity's row offers in its Action cell, the same on Priority
@@ -16,6 +17,10 @@ import { ActButton } from "./Act";
  *   owner             "Needs you", down to the owner's steps
  *   code              "Steps": the change is made in the website's code, which no desk task
  *                     receives, so the row says what to change and dispatches nothing
+ *
+ * A proposal or a brief is work for the AI Operator, which takes edit on that
+ * area too (`operate`, from the payload's `can`): without it the row says so
+ * instead of offering a button the server would refuse.
  */
 
 export type RowActionKind = OpportunityAction["kind"];
@@ -33,6 +38,10 @@ export interface RowActionProps {
   stateNote: string | null;
   /** The button's look when the action can be taken: green on Priority Opportunities, quiet in a long list. */
   variant?: ButtonVariant;
+  /** The period chosen in the head, kept on the links to SEO › Opportunities. */
+  range?: string;
+  /** False when the person may not queue work for the AI Operator. Default: may. */
+  operate?: boolean;
 }
 
 /** The words on a row's button, one per kind of action: short, the same wherever the row is drawn. */
@@ -51,10 +60,10 @@ export function actionWord(kind: RowActionKind, label: string): string {
   }
 }
 
-/** The opportunity's page on SEO › Opportunities, where its step is written out whole. */
-export const opportunityHref = (id: string): string => `/seo/opportunities?open=${encodeURIComponent(id)}`;
+/** Said where a row's button is left out because the person may not queue operator work. */
+export const NEEDS_OPERATOR = "Queueing this for the AI Operator takes edit on the AI Operator as well as on SEO. The owner gives it on Team › Access & Roles.";
 
-export function RowAction({ id, kind, label, step, href, available, why, state, stateNote, variant = "good" }: RowActionProps) {
+export function RowAction({ id, kind, label, step, href, available, why, state, stateNote, variant = "good", range = DEFAULT_RANGE, operate = true }: RowActionProps) {
   if (state === "queued" || state === "in-progress") {
     /* A code change marked as handed over sits in no queue the desk can see: say what it is, not "Queued". */
     const handed = kind === "code";
@@ -77,7 +86,7 @@ export function RowAction({ id, kind, label, step, href, available, why, state, 
   }
   if (kind === "code") {
     return (
-      <LinkButton href={opportunityHref(id)} size="xs" variant="quiet" title={`${step} A change in the website's code: no desk task receives it.`}>
+      <LinkButton href={opportunityHref(id, range)} size="xs" variant="quiet" title={`${step} A change in the website's code: no desk task receives it.`}>
         Steps
       </LinkButton>
     );
@@ -88,9 +97,19 @@ export function RowAction({ id, kind, label, step, href, available, why, state, 
         {label === "Request indexing" ? "Inspect" : "Open"}
       </LinkButton>
     ) : (
-      <LinkButton href={opportunityHref(id)} size="xs" variant="quiet" title={step}>
+      <LinkButton href={opportunityHref(id, range)} size="xs" variant="quiet" title={step}>
         Steps
       </LinkButton>
+    );
+  }
+  if (available && !operate) {
+    return (
+      <Tooltip text={NEEDS_OPERATOR}>
+        <span className="dk-seo-overview-wait" tabIndex={0}>
+          {DASH}
+          <span className="dk-sr">{NEEDS_OPERATOR}</span>
+        </span>
+      </Tooltip>
     );
   }
   if (!available) {

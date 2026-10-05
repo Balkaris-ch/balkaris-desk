@@ -251,6 +251,73 @@ export function ownerTask(id: string): OwnerTask | null {
   return ownerTasks(["owner", "lead-chrome", "code", "content"]).find((t) => t.id === id) ?? null;
 }
 
+/**
+ * WHOSE A TASK IS TO CLOSE. The owner's own steps (his accounts, his keys,
+ * his decisions) are his: nobody else marks them done or open. Every other
+ * task (the lead's steps in the owner's browser, the website's code, content)
+ * is closed by whoever did it. One rule, asked by every door that marks a
+ * task (src/cc/seo/api.ts, and the pages' own doors).
+ */
+export const mayMark = (task: Pick<OwnerTask, "whoAll">, person: { owner?: boolean }): boolean => task.whoAll !== "owner" || !!person.owner;
+
+/** The sentence a door answers with when `mayMark` says no. */
+export const NOT_YOURS = "Only the owner can mark his own steps.";
+
+/** A person writes, changes or clears (an empty text) a task's note. The done mark is not touched. */
+export function noteOwnerTask(id: string, noteText: string, by: string): OwnerTask | null {
+  const had = ownerTask(id);
+  if (!had) return null;
+  const text = noteText.trim().slice(0, 500);
+  db.prepare("UPDATE cc_seo_owner_tasks SET note = ?, updated_at = ? WHERE id = ?").run(text || null, now(), id);
+  if ((had.note ?? "") !== text) {
+    note("seo-state", text ? `Noted on a task: ${had.title}` : `Cleared the note on a task: ${had.title}`, {
+      tone: "info",
+      actor: by,
+      detail: text || undefined,
+      href: taskHref(id),
+      dedupe: `seo:owner:${id}:note:${now()}`,
+    });
+  }
+  return ownerTask(id);
+}
+
+/** Where a task is in the interface: the list of every task, opened on it. */
+export const taskHref = (id: string): string => `/seo/list/tasks?open=${encodeURIComponent(id)}`;
+
+/** Where a task written on the desk says it came from: never "SEO audit…", so no import removes it (import.ts, importAudit). */
+const BY_HAND = "By hand";
+export const byHand = (origin: string): boolean => origin.startsWith(BY_HAND);
+
+const WHO: readonly Who[] = ["owner", "lead-chrome", "code", "content"];
+export const isWho = (v: unknown): v is Who => WHO.includes(v as Who);
+
+/**
+ * A task a person writes on the desk. The same words twice are one task: its
+ * id is made from the text, and the second time the first is answered.
+ */
+export function addOwnerTask(t: { step: string; why?: string | null; impact?: Priority; who?: Who }, by: string): { task: OwnerTask; added: boolean } {
+  const step = t.step.replace(/\s+/g, " ").trim();
+  const id = `hand-${createHash("sha1").update(step.toLowerCase()).digest("hex").slice(0, 10)}`;
+  const had = ownerTask(id);
+  if (had) return { task: had, added: false };
+  const day = new Date().toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Zurich" });
+  upsertOwnerTask({ id, step, why: t.why?.trim() || null, impact: t.impact ?? "medium", effort: null, who: t.who ?? "owner", origin: `${BY_HAND}, ${by}, ${day}`, sort: 10_000 });
+  const task = ownerTask(id)!;
+  note("seo-state", `Added a task: ${task.title}`, { tone: "info", actor: by, detail: WHO_SAYS[task.whoAll], href: taskHref(id), dedupe: `seo:owner:${id}:added` });
+  return { task, added: true };
+}
+
+/** Who does a task, in the words a list prints. */
+export const WHO_SAYS: Record<Who, string> = {
+  owner: "The owner's own step",
+  "lead-chrome": "A step in the owner's browser",
+  code: "A change to the website's code",
+  content: "Content to write",
+};
+
+/** Every task, whoever does it: open first, then by impact. */
+export const allOwnerTasks = (): OwnerTask[] => ownerTasks([...WHO]);
+
 /** A person marks a task done or open again. */
 export function markOwnerTask(id: string, done: boolean, by: string, noteText?: string | null): OwnerTask | null {
   const had = ownerTask(id);

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { db } from "../../db.ts";
 import type { EarlySignals, Range, Reading, SourceStatus, Stat } from "../../../web/src/contract/common.ts";
 import { accountEmail, hasKey, SCOPES, token } from "../gauth.ts";
-import type { Job } from "../scheduler.ts";
+import { runNow, type Job } from "../scheduler.ts";
 import { cached, forget, kept, note, off, ok, record, series, setState, state, today, waiting } from "../store.ts";
 import { countryName } from "./countries.ts";
 import {
@@ -1409,8 +1409,63 @@ export async function sitemapAddresses(): Promise<string[]> {
   return [...out];
 }
 
+/** The address of the website's own sitemap, the one whose addresses the daily check inspects. */
+export const sitemapUrl = (): string => SITEMAP();
+
 /** Google allows 2,000 inspections a day per property; the desk stops well short, however often the job is started. */
 const INSPECT_DAILY = 1800;
+
+/** How much of the day's inspection allowance is used (Google counts its day in Pacific Time). No request. */
+export function inspectAllowance(): { used: number; of: number } {
+  return { used: countOn("gsc.inspect.used", dayIn(PACIFIC)), of: INSPECT_DAILY };
+}
+
+/**
+ * The addresses the sitemap listed when it was last read for a check, with
+ * the day. Kept because a count alone ("98") cannot say WHICH addresses a
+ * cut-short day still owes, nor which ones left the sitemap since. Before the
+ * list was kept, the addresses of the newest whole day stand in for it.
+ */
+function lastListed(): { day: string; urls: string[] } | null {
+  try {
+    const had = JSON.parse(state("gsc.inspect.listed") ?? "null") as { day?: string; urls?: string[] } | null;
+    if (had?.day && Array.isArray(had.urls) && had.urls.length) return { day: had.day, urls: had.urls.map(String) };
+  } catch {
+    /* fall through to the table */
+  }
+  const whole = db
+    .prepare(
+      `SELECT i.day AS day FROM cc_inspect i JOIN cc_series s ON s.metric = 'gsc.sitemap_addresses' AND s.day = i.day
+       GROUP BY i.day HAVING COUNT(*) >= MAX(s.value) ORDER BY i.day DESC LIMIT 1`,
+    )
+    .get() as { day: string } | undefined;
+  if (!whole) return null;
+  return { day: whole.day, urls: (db.prepare("SELECT url FROM cc_inspect WHERE day = ? ORDER BY url").all(whole.day) as { url: string }[]).map((r) => r.url) };
+}
+
+const PUT_INSPECTION = `INSERT INTO cc_inspect (day, url, verdict, coverage, last_crawl, google_canonical, user_canonical, robots_state, fetch_state, indexing_state, is_indexed, canonical_ok, link, checked_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(day, url) DO UPDATE SET verdict = excluded.verdict, coverage = excluded.coverage, last_crawl = excluded.last_crawl,
+       google_canonical = excluded.google_canonical, user_canonical = excluded.user_canonical, robots_state = excluded.robots_state,
+       fetch_state = excluded.fetch_state, indexing_state = excluded.indexing_state, is_indexed = excluded.is_indexed,
+       canonical_ok = excluded.canonical_ok, link = excluded.link, checked_at = excluded.checked_at`;
+
+const inspectionArgs = (day: string, r: Inspection): (string | number | null)[] => [
+  day,
+  r.url,
+  r.verdict,
+  r.coverage,
+  r.lastCrawl,
+  r.googleCanonical,
+  r.userCanonical,
+  r.robots,
+  r.fetchState,
+  r.indexing,
+  r.indexed ? 1 : 0,
+  r.canonicalOk === null ? null : r.canonicalOk ? 1 : 0,
+  r.link,
+  new Date().toISOString(),
+];
 
 interface Stored {
   day: string;
@@ -1457,22 +1512,29 @@ export async function inspectAll(day: string = today(), o: { progress?: (done: n
   /* Google's day for the quota is the Pacific one. */
   const quotaDay = dayIn(PACIFIC);
   const used = countOn("gsc.inspect.used", quotaDay);
-  const all = await sitemapAddresses();
+  /* The website not answering does not stop Google being asked about it: URL
+     Inspection reads Google's own record. So when the sitemap cannot be read,
+     the addresses of the last check stand in, and the run's line says so. */
+  let all: string[];
+  let stoodIn = "";
+  try {
+    all = await sitemapAddresses();
+  } catch (e) {
+    const had = lastListed();
+    if (!had) throw e;
+    all = had.urls;
+    stoodIn = `; the website's sitemap could not be read (${(e instanceof Error ? e.message : String(e)).slice(0, 60)}), so the addresses of the check on ${had.day} were asked`;
+  }
   const hadResult = new Set((db.prepare("SELECT url FROM cc_inspect WHERE day = ?").all(day) as { url: string }[]).map((r) => r.url));
   const order = [...all.filter((u) => !hadResult.has(u)), ...all.filter((u) => hadResult.has(u))];
   const list = order.slice(0, Math.max(0, INSPECT_DAILY - used));
   if (!list.length) return all.length ? "Today's inspection allowance is used; nothing was asked." : "The sitemap lists no address.";
   /* The size of the whole the day is measured against: kept per day so a report can say "of how many". */
   record("gsc.sitemap_addresses", all.length, day);
+  /* And which addresses they were, for the newest check only (see `lastListed`). */
+  setState("gsc.inspect.listed", JSON.stringify({ day, urls: all }));
 
-  const put = db.prepare(
-    `INSERT INTO cc_inspect (day, url, verdict, coverage, last_crawl, google_canonical, user_canonical, robots_state, fetch_state, indexing_state, is_indexed, canonical_ok, link, checked_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(day, url) DO UPDATE SET verdict = excluded.verdict, coverage = excluded.coverage, last_crawl = excluded.last_crawl,
-       google_canonical = excluded.google_canonical, user_canonical = excluded.user_canonical, robots_state = excluded.robots_state,
-       fetch_state = excluded.fetch_state, indexing_state = excluded.indexing_state, is_indexed = excluded.is_indexed,
-       canonical_ok = excluded.canonical_ok, link = excluded.link, checked_at = excluded.checked_at`,
-  );
+  const put = db.prepare(PUT_INSPECTION);
   const before = db.prepare("SELECT is_indexed FROM cc_inspect WHERE url = ? AND day < ? ORDER BY day DESC LIMIT 1");
 
   let done = 0;
@@ -1486,7 +1548,7 @@ export async function inspectAll(day: string = today(), o: { progress?: (done: n
     setCount("gsc.inspect.used", quotaDay, countOn("gsc.inspect.used", quotaDay) + 1);
     try {
       const r = await inspect(site, url);
-      put.run(day, url, r.verdict, r.coverage, r.lastCrawl, r.googleCanonical, r.userCanonical, r.robots, r.fetchState, r.indexing, r.indexed ? 1 : 0, r.canonicalOk === null ? null : r.canonicalOk ? 1 : 0, r.link, new Date().toISOString());
+      put.run(...inspectionArgs(day, r));
       seen.push(r);
     } catch (e) {
       /* One address Google will not inspect is a gap; a refusal of the key or
@@ -1547,7 +1609,7 @@ export async function inspectAll(day: string = today(), o: { progress?: (done: n
     : seen.length === all.length
       ? `: ${counts}`
       : `; with the day's earlier results: ${counts}`;
-  const line = `${seen.length} of ${all.length} addresses inspected${outcome}${gained ? `; ${gained} newly indexed` : ""}${lost ? `; ${lost} dropped` : ""}`;
+  const line = `${seen.length} of ${all.length} addresses inspected${outcome}${gained ? `; ${gained} newly indexed` : ""}${lost ? `; ${lost} dropped` : ""}${stoodIn}`;
   if (stop) throw new Error(`${line}. Stopped early: ${stop instanceof Error ? stop.message : String(stop)}`);
   return line;
 }
@@ -1603,9 +1665,11 @@ const inspectionOf = (r: Stored): Inspection => ({
  */
 export async function indexing(): Promise<Reading<IndexReport>> {
   return guarded(async () => {
-    const last = db.prepare("SELECT MAX(day) AS d FROM cc_inspect").get() as { d: string | null };
+    const last = { d: newestCheckDay() };
     if (!last.d) return waiting("gsc", "The first daily index check has not run yet.");
-    const list = db.prepare("SELECT * FROM cc_inspect WHERE day = ? ORDER BY is_indexed, url").all(last.d) as unknown as Stored[];
+    /* The day's results for the sitemap's addresses: one address a person asked about by hand (Inspect now, src/cc/seo/google-actions.ts, kept in this table under the day it was asked) that the sitemap does not list is not part of the check. */
+    const listed = listedOn(last.d);
+    const list = (db.prepare("SELECT * FROM cc_inspect WHERE day = ? ORDER BY is_indexed, url").all(last.d) as unknown as Stored[]).filter((r) => !listed || listed.has(r.url));
     const indexed = list.filter((r) => r.is_indexed).length;
     const size = db.prepare("SELECT value FROM cc_series WHERE metric = 'gsc.sitemap_addresses' AND day = ?").get(last.d) as { value: number } | undefined;
     const of = size ? size.value : null;
@@ -1626,6 +1690,130 @@ export async function indexing(): Promise<Reading<IndexReport>> {
       [
         "Google's stored state for each address in the sitemap, checked once a day. Not the total of Search Console's Page indexing report, which no API gives.",
         complete ? "" : `The check on ${last.d} was cut short: ${list.length} of ${of ?? "the"} sitemap addresses have a result, so these counts are part of the site, not its total.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+    );
+  });
+}
+
+/**
+ * The day of the newest daily check: the newest day `inspectAll` wrote the
+ * sitemap's size for. One address asked by hand on a later day (Inspect now, google-actions.ts)
+ * is a result, not a check of the site, and must not be taken for one. For
+ * results kept before sizes were, the newest day with any result.
+ */
+function newestCheckDay(): string | null {
+  const sized = db.prepare("SELECT MAX(s.day) AS d FROM cc_series s WHERE s.metric = 'gsc.sitemap_addresses' AND EXISTS (SELECT 1 FROM cc_inspect i WHERE i.day = s.day)").get() as { d: string | null };
+  if (sized.d) return sized.d;
+  return (db.prepare("SELECT MAX(day) AS d FROM cc_inspect").get() as { d: string | null }).d;
+}
+
+/** The addresses the sitemap listed at the check of `day`, when that is the list kept; else null (not known). */
+function listedOn(day: string): Set<string> | null {
+  try {
+    const had = JSON.parse(state("gsc.inspect.listed") ?? "null") as { day?: string; urls?: string[] } | null;
+    return had?.day === day && Array.isArray(had.urls) ? new Set(had.urls.map(String)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** One address as the desk last heard of it from Google, with the day it was asked. */
+export interface StoodInspection extends Inspection {
+  /** The day (Zurich) this result was asked for: the newest check's, or an earlier one's when that check did not reach the address. */
+  day: string;
+  checkedAt: string;
+  /** False for an address the sitemap did not list at the newest check (one a person asked about by hand). */
+  listed: boolean;
+}
+
+export interface IndexStand {
+  /** The day of the newest daily check. */
+  day: string;
+  /** Addresses the sitemap listed at that check; null for a day checked before this was kept. */
+  of: number | null;
+  /** Results that check wrote itself. */
+  checked: number;
+  /** False when that check was cut short: fewer results than the sitemap listed. */
+  dayComplete: boolean;
+  /** Sitemap addresses shown as last checked on an earlier day, because the newest check did not reach them. */
+  carried: number;
+  /** The oldest day a carried result is from; null when none is carried. */
+  carriedFrom: string | null;
+  /** True when every address the sitemap listed has a result here, the newest check's or a carried one. */
+  complete: boolean;
+  /** Over `rows`. */
+  indexed: number;
+  notIndexed: number;
+  canonicalDiffers: number;
+  rows: StoodInspection[];
+}
+
+/** How far back an earlier result may stand in for an address the newest check did not reach. Older than this it says too little about today. */
+const STAND_DAYS = 7;
+
+/**
+ * WHERE EVERY ADDRESS STANDS: the newest result the desk holds for each
+ * sitemap address. `indexing()` above answers for one day and says when that
+ * day is a part; a person working through "not indexed" needs the whole list
+ * even when Google failed halfway through last night's check. So here an
+ * address the newest check did not reach keeps its result from the last day
+ * it was asked (at most a week back), each row carries its own day, and the
+ * note says how many are carried. An address that left the sitemap is not
+ * carried, when the desk knows which the sitemap listed. No request.
+ */
+export async function indexStand(): Promise<Reading<IndexStand>> {
+  return guarded(async () => {
+    const day = newestCheckDay();
+    if (!day) return waiting("gsc", "The first daily index check has not run yet.");
+    const newest = db
+      .prepare(
+        `SELECT i.* FROM cc_inspect i JOIN (SELECT url, MAX(day) AS d FROM cc_inspect WHERE day >= ? GROUP BY url) n ON n.url = i.url AND n.d = i.day ORDER BY i.is_indexed, i.url`,
+      )
+      .all(addDays(day, -STAND_DAYS)) as unknown as Stored[];
+    const size = db.prepare("SELECT value FROM cc_series WHERE metric = 'gsc.sitemap_addresses' AND day = ?").get(day) as { value: number } | undefined;
+    const of = size ? size.value : null;
+    const dayUrls = (db.prepare("SELECT url FROM cc_inspect WHERE day = ?").all(day) as { url: string }[]).map((r) => r.url);
+    const exact = listedOn(day);
+    const checked = dayUrls.filter((u) => !exact || exact.has(u)).length;
+    const dayComplete = of !== null && checked >= of;
+    /* Which addresses are the sitemap's: the list kept at this check; without one, what a whole check asked
+       about, or (cut short) that and the addresses of the last whole check. Null: not known, every row counts. */
+    let sitemap: Set<string> | null = exact;
+    if (!sitemap) {
+      const last = dayComplete ? null : lastListed();
+      sitemap = dayComplete ? new Set(dayUrls) : last ? new Set([...dayUrls, ...last.urls]) : null;
+    }
+    const inSitemap = (url: string): boolean => !sitemap || sitemap.has(url);
+    /* The check's own results and anything asked since stay; an earlier result stands in only for an address the sitemap still lists. */
+    const kept = newest.filter((r) => r.day >= day || inSitemap(r.url));
+    const old = kept.filter((r) => r.day < day);
+    const rows: StoodInspection[] = kept.map((r) => ({ ...inspectionOf(r), day: r.day, checkedAt: r.checked_at, listed: inSitemap(r.url) }));
+    const inList = rows.filter((r) => r.listed).length;
+    const complete = of !== null && inList >= of;
+    const indexed = rows.filter((r) => r.indexed).length;
+    return ok(
+      {
+        day,
+        of,
+        checked,
+        dayComplete,
+        carried: old.length,
+        carriedFrom: old.length ? old.reduce((d, r) => (r.day < d ? r.day : d), old[0]!.day) : null,
+        complete,
+        indexed,
+        notIndexed: rows.length - indexed,
+        canonicalDiffers: rows.filter((r) => r.canonicalOk === false).length,
+        rows,
+      },
+      "gsc",
+      kept.reduce((t, r) => (r.checked_at > t ? r.checked_at : t), ""),
+      [
+        "Google's stored state for each address in the sitemap, checked once a day. Not the total of Search Console's Page indexing report, which no API gives.",
+        dayComplete ? "" : `The check on ${day} was cut short: ${checked} of ${of ?? "the"} sitemap addresses have a result for that day.`,
+        old.length ? `${old.length} ${old.length === 1 ? "address is" : "addresses are"} shown as last checked on an earlier day (back to ${old.reduce((d, r) => (r.day < d ? r.day : d), old[0]!.day)}); each row says which.` : "",
+        !complete && of !== null ? `${Math.max(0, of - inList)} of the sitemap's ${of} addresses have no result from the last ${STAND_DAYS} days.` : "",
       ]
         .filter(Boolean)
         .join(" "),
@@ -1716,6 +1904,68 @@ async function warm(): Promise<string> {
   return through ? `Search figures refreshed for 7, 30 and 90 days, final up to ${through}` : "Search Console is connected and has no figures yet";
 }
 
+/* How many of today's index checks failed (Google answering 500 halfway, the sitemap not readable). In the
+   database, like every count here: the desk restarts on each deploy and must not forget it owes a retry. */
+const INSPECT_FAILS = "gsc.inspect.fails";
+const INSPECT_RETRIES = 3;
+
+const INSPECT_RETRY_MS = HOUR;
+
+/**
+ * How a retry is asked for: after a wait, through the scheduler's own queue,
+ * so it runs like any other run (one job at a time, the owner's off switch
+ * respected). A check replaces `later` and `ask` to see what would be asked.
+ */
+export const inspectRetry = {
+  later: (ms: number, run: () => void): void => void setTimeout(run, ms).unref(),
+  ask: (): boolean => runNow("gsc-inspect"),
+};
+
+/** True while today's index check has failed and has tries left. */
+const retryOwed = (day: string = today()): boolean => {
+  const fails = countOn(INSPECT_FAILS, day);
+  return fails > 0 && fails <= INSPECT_RETRIES;
+};
+
+function planRetry(ms: number): void {
+  setState("gsc.inspect.retry", new Date(Date.now() + ms).toISOString());
+  inspectRetry.later(ms, () => {
+    /* A person may have run it by hand in the meantime, and it worked: then nothing is owed. */
+    if (retryOwed()) inspectRetry.ask();
+  });
+}
+
+/** When the next retry of a failed index check is planned, ISO; null when none is owed. */
+export function inspectRetryAt(): string | null {
+  return retryOwed() ? state("gsc.inspect.retry") : null;
+}
+
+/**
+ * The daily index check as the scheduler runs it. A run that FAILED is asked
+ * for again an hour later, at most three times that day. `inspectAll` is
+ * written so that "a second run finishes what the first could not" (it asks
+ * first for the addresses the day has no result for), and until this existed
+ * nothing ever started that second run: one 500 from Google on 3 October 2026
+ * left the day at 17 of 98 addresses until the next evening. A run the daily
+ * allowance stopped is not a failure and is not retried: asking again would be
+ * refused the same way.
+ */
+export async function inspectJob(progress?: (done: number, of: number, what?: string) => void): Promise<string> {
+  const day = today();
+  try {
+    const line = await inspectAll(day, { progress });
+    setCount(INSPECT_FAILS, day, 0);
+    return line;
+  } catch (e) {
+    const fails = setCount(INSPECT_FAILS, day, countOn(INSPECT_FAILS, day) + 1);
+    if (fails <= INSPECT_RETRIES) {
+      planRetry(INSPECT_RETRY_MS);
+      throw new Error(`${e instanceof Error ? e.message : String(e)}. Trying again in an hour (${fails} of ${INSPECT_RETRIES})`.slice(0, 300));
+    }
+    throw e;
+  }
+}
+
 export const jobs: Job[] = [
   {
     /* The only job here that runs before Search Console is connected, and the
@@ -1750,6 +2000,9 @@ export const jobs: Job[] = [
     every: 24 * 3600,
     delay: 300,
     ready: configured,
-    run: ({ progress }) => inspectAll(today(), { progress }),
+    run: ({ progress }) => inspectJob(progress),
   },
 ];
+
+/* A retry owed from before the desk restarted (it restarts on every deploy) is asked for again soon after it is up. */
+if (retryOwed()) planRetry(10 * 60_000);

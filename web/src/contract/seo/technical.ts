@@ -2,6 +2,19 @@
  * GET /api/v1/seo/technical — the crawl's findings, the indexation driver,
  * and the site-wide checks search engines and AI crawlers depend on.
  *
+ *   ?range=7d|30d|90d|1y   the period of the three figures that carry a history
+ *   ?q=                    narrows Issues by rule and Pages by score: text a rule's title, a finding's
+ *                          words, or a page's address or title contains
+ *   ?sev=critical|warning|opportunity    Issues by rule: one severity
+ *   ?index=indexed|not|unknown           Pages by score: by Google's newest answer for the address
+ *   ?device=mobile|desktop               Page speed: which of the daily lab runs to list
+ *
+ * GET /api/v1/seo/technical/export.csv?what=issues|pages|redirects|index (&q=&sev=&index=)
+ *   the same lists as a file: every finding, every page, every redirect, every address's index state.
+ *
+ * The Google panel (`google`) and its buttons are /api/v1/seo/google (contract/seo/google.ts): submit a
+ * sitemap, inspect one address now, the Request indexing queue, IndexNow.
+ *
  * Changes (a signed-in person):
  *   POST /api/v1/seo/indexing/requested   { path, submitted: boolean }   mark a page as submitted
  *        in Search Console's URL Inspection (by hand, in the owner's browser) → OpportunityAnswer
@@ -22,14 +35,15 @@ import type { JobListed, Reading, Share, Stat } from "../common";
 import type { NewTask } from "../operator";
 import type { ReadinessCheck } from "./ai-search";
 import type { OpportunityRow, SeoHead } from "./common";
+import type { GooglePanel } from "./google";
 
 export interface SeoTechnicalPayload {
   head: SeoHead;
   /** The crawl's site score out of 100, with its daily history. */
   score: Reading<Stat>;
   crawl: Reading<{ finished: string; pages: number; inSitemap: number; critical: number; warning: number; opportunity: number }>;
-  /** The crawl's findings by rule, worst first. */
-  issues: Reading<{ rows: IssueGroup[] }>;
+  /** The crawl's findings by rule, worst first. `total`: how many rules have findings before ?q and ?sev narrowed them. */
+  issues: Reading<{ rows: IssueGroup[]; total?: number }>;
   indexation: Reading<Indexation>;
   /** Every sitemap address with a real lastmod, or the code task when it has none. */
   sitemap: Reading<SitemapCheck>;
@@ -48,7 +62,7 @@ export interface SeoTechnicalPayload {
   checks: TechLine[];
   /** Core Web Vitals: Google's field data when it has any, else the lab, every figure labelled which. */
   vitals: TechVitals;
-  /** Every page the crawl read, by its score, lowest first. */
+  /** Every page the crawl read, by its score, lowest first. `read` counts all of them; `rows` only those ?q and ?index left. */
   pages: Reading<{ rows: TechPage[]; read: number; scored: number }>;
   /** Structured data: the types on the site and the findings of the schema rules. */
   schema: Reading<SchemaCheck>;
@@ -64,6 +78,20 @@ export interface SeoTechnicalPayload {
   jobs: { crawl: JobListed | null; sitemap: JobListed | null; speed: JobListed | null; inspect: JobListed | null; readiness: JobListed | null };
   /** Who is looking: the owner's own steps ("Needs you") are marked done by the owner only. */
   viewer: { owner: boolean };
+  /** What the desk can do at Google and the other engines: sitemaps, the indexing queue, inspect now, IndexNow. */
+  google: GooglePanel;
+  /** The filters as the server read them (an unknown value is read as "all"). */
+  asked: TechAsked;
+  /** Search Console's Sitemaps report for the property, where Google says what a sitemap's errors are; null when not connected. */
+  sitemapsHref: string | null;
+}
+
+/** The lists' filters, held in the address. */
+export interface TechAsked {
+  q: string;
+  sev: "all" | "critical" | "warning" | "opportunity";
+  index: "all" | "indexed" | "not" | "unknown";
+  device: "mobile" | "desktop";
 }
 
 /** One line of the board's checklist. */
@@ -182,6 +210,8 @@ export interface TechPage {
   /** Google's newest URL Inspection of the address: in the index or not, and its words; null when it was not inspected. */
   inIndex: boolean | null;
   coverage: string | null;
+  /** The day that answer is from (the newest check's, or an earlier one's when that check did not reach the address). */
+  inIndexDay?: string | null;
 }
 
 export interface SchemaCheck {
@@ -237,6 +267,8 @@ export interface BrokenCheck {
   outside: LinkRow[];
   /** Other sites' pages that refused or failed the check: not counted as broken. */
   unchecked: number;
+  /** Which they are, with what each answered, so a person can open them. */
+  uncheckedRows?: LinkRow[];
   /** Pages the crawl read that do not answer 200 (and do not redirect). */
   pagesDown: { path: string; status: number }[];
 }
@@ -253,18 +285,42 @@ export interface IssueGroup {
   area?: string;
   /** "page" or "site": what the rule is about. */
   scope?: "page" | "site";
-  /** Each finding in the crawl's words, the page first (null for the site). At most 60. */
-  lines?: { path: string | null; text: string }[];
-  /** An operator task that proposes the fix (it waits for approval), where one exists. */
+  /** Each finding in the crawl's words, the page first (null for the site), with the day a crawl first found it. At most 60. */
+  lines?: { path: string | null; text: string; firstSeen?: string }[];
+  /** How many of the group's findings the newest crawl found for the first time. */
+  fresh?: number;
+  /**
+   * An operator task that proposes the fix (it waits for approval), where one exists. For titles and
+   * descriptions it names the group's own pages (five at most) that have no proposal waiting and no task open.
+   */
   fix?: { label: string; task: NewTask } | null;
+  /** Why there is no button although the rule has a fix: every page already has a proposal waiting, or a task is open. */
+  fixNote?: string | null;
 }
 
-/** The indexation driver: Google's stored state for every sitemap address, by state. */
+/**
+ * The indexation driver: Google's stored state for every sitemap address, by state.
+ *
+ * EACH ADDRESS'S NEWEST ANSWER. When the newest daily check was cut short (Google answering an error after
+ * a part of the sitemap), the addresses it did not reach keep their last earlier answer, so the figures
+ * stay the site's; `complete`, `checked` and `carried` say how the picture was put together.
+ */
 export interface Indexation {
+  /** The day of the newest daily check. */
   day: string;
+  /** Addresses with an answer (the newest check's, a carried one, or one a person asked for since). */
   inspected: number;
   of: number | null;
   indexed: number;
+  /** False when the check on `day` did not reach every sitemap address. */
+  complete?: boolean;
+  /** Answers from `day` or newer, and answers carried from an earlier day. */
+  checked?: number;
+  carried?: number;
+  /** The newest day whose check reached every address; null when none has. */
+  wholeDay?: string | null;
+  /** Sitemap addresses with no answer in the last week: not known, counted neither way. */
+  missing?: number;
   /** One group per coverage state Google reports, with Google's meaning and the fix. */
   groups: CoverageGroup[];
   /** Indexed and not indexed per day, from the desk's daily checks. */
@@ -283,7 +339,7 @@ export interface CoverageGroup {
   meaning: string;
   /** What fixes it. */
   fix: string;
-  pages: { path: string; lastCrawl: string | null; robots: string | null; indexing: string | null; livePageSaysIndex: boolean | null; link: string | null }[];
+  pages: { path: string; lastCrawl: string | null; robots: string | null; indexing: string | null; livePageSaysIndex: boolean | null; link: string | null; /** The day this answer is from. */ day?: string }[];
 }
 
 export interface IndexRequest {
@@ -317,4 +373,6 @@ export interface SitemapCheck {
   named?: boolean;
   /** Addresses by the kind of page, with how many of them carry a lastmod. */
   byKind?: { kind: string; label: string; addresses: number; withLastmod: number }[];
+  /** Every entry as the file lists it, newest lastmod first: the address, its date and its priority. */
+  entries?: { path: string; lastmod: string | null; priority: number | null }[];
 }

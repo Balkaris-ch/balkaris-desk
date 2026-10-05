@@ -1,16 +1,28 @@
 import { db } from "../../db.ts";
-import { pathOf } from "../search/shared.ts";
+import { addDays, pathOf } from "../search/shared.ts";
+import { lastSitemap } from "../site/sitemap.ts";
 import type { CoverageGroup } from "../../../web/src/contract/seo/technical.ts";
 
 /**
  * THE INDEXATION DRIVER, read from what the desk already keeps: Google's URL
  * Inspection of every sitemap address, once a day (src/cc/search/gsc.ts
- * `inspectAll`, table cc_inspect). Nothing here asks Google anything.
+ * `inspectAll`, table cc_inspect), and of one address when a person asks
+ * ("Inspect now": kept in the same table under the day it was asked). Nothing
+ * here asks Google anything.
  *
  * Each coverage state Google reports is grouped with what Google means by it
  * and what fixes it, in plain words (MEANING). The "Request indexing" queue is
  * the not-indexed opportunities (engine.ts), which the lead submits by hand in
  * Search Console: no API offers it.
+ *
+ * A DAY'S CHECK MAY BE CUT SHORT (Google answering 500, the allowance used
+ * up). The 17 addresses it reached are then not the site: on 3 October 2026
+ * that fragment was shown as "11 of 98 indexed" on four screens. So
+ * `latestInspection` answers with EACH ADDRESS'S NEWEST RESULT: the newest
+ * check's where it reached the address, the last earlier day's where it did
+ * not, and says which (`complete`, `checked`, `carried`, and the day on each
+ * row). Every screen that reads it (Technical, the SEO Overview, AI Search,
+ * Page Optimization) is corrected by that one change.
  */
 
 /** Google's coverage states, matched by their words, with the meaning and the fix. The first that matches. */
@@ -70,6 +82,8 @@ export interface InspectRow {
   robots: string | null;
   indexing: string | null;
   link: string | null;
+  /** When Google gave this answer, ISO; absent on a row built elsewhere. */
+  at?: string | null;
 }
 
 const toRow = (r: Record<string, unknown>): InspectRow => ({
@@ -84,23 +98,99 @@ const toRow = (r: Record<string, unknown>): InspectRow => ({
   robots: (r.robots_state as string | null) ?? null,
   indexing: (r.indexing_state as string | null) ?? null,
   link: (r.link as string | null) ?? null,
+  at: (r.checked_at as string | null) ?? null,
 });
 
-/** The newest day's inspection of every address, or null before the first. */
-export function latestInspection(): { day: string; rows: InspectRow[]; of: number | null } | null {
-  let last: { d: string | null };
+/**
+ * How far back an address's last result is still carried when the newest check did not reach it. A week,
+ * as Search Console's own screen carries them (gsc.ts `indexStand`), so the two pages count alike.
+ */
+const CARRY_DAYS = 7;
+
+export interface LatestInspection {
+  /** The day of the newest daily check. */
+  day: string;
+  /** Each sitemap address's newest result, not indexed first. A row's own `day` says which day it is from. */
+  rows: InspectRow[];
+  /** How many addresses the sitemap listed at that check; null for a day checked before that was kept. */
+  of: number | null;
+  /** True when the check on `day` reached every sitemap address. */
+  complete: boolean;
+  /** Rows from `day` itself, or newer (one address asked by a person since). */
+  checked: number;
+  /** Rows carried from an earlier day because the check on `day` did not reach the address. */
+  carried: number;
+  /** The newest day whose check reached every address, or null when none has yet. */
+  wholeDay: string | null;
+  /** Sitemap addresses with no result at all in the last week: unknown, never counted as not indexed. */
+  missing: number;
+}
+
+const rowsWhere = (where: string, ...args: string[]): InspectRow[] => (db.prepare(`SELECT * FROM cc_inspect WHERE ${where}`).all(...args) as Record<string, unknown>[]).map(toRow);
+
+/**
+ * The day of the newest DAILY CHECK: the newest day the check wrote the
+ * sitemap's size for. One address a person asked about on a later day
+ * ("Inspect now") is a result, not a check of the site, and must not make
+ * that day look like a check that reached one address of ninety-eight. For
+ * results kept before sizes were, the newest day with any result.
+ */
+function checkDay(): string | null {
+  const sized = db.prepare("SELECT MAX(s.day) AS d FROM cc_series s WHERE s.metric = 'gsc.sitemap_addresses' AND EXISTS (SELECT 1 FROM cc_inspect i WHERE i.day = s.day)").get() as { d: string | null };
+  if (sized.d) return sized.d;
+  return (db.prepare("SELECT MAX(day) AS d FROM cc_inspect").get() as { d: string | null }).d;
+}
+
+/**
+ * Each sitemap address's newest inspection, or null before the first check.
+ *
+ * The newest check's rows as they are; where that check was cut short, the
+ * addresses it did not reach keep their last earlier result (at most a week
+ * old, and only while the sitemap still lists them); and an address a person
+ * asked Google about since ("Inspect now", kept in the same table under the
+ * day it was asked) shows that newer answer.
+ */
+export function latestInspection(): LatestInspection | null {
+  let day: string | null;
   try {
-    last = db.prepare("SELECT MAX(day) AS d FROM cc_inspect").get() as { d: string | null };
+    day = checkDay();
   } catch {
     return null;
   }
-  if (!last.d) return null;
-  const rows = (db.prepare("SELECT * FROM cc_inspect WHERE day = ? ORDER BY is_indexed, url").all(last.d) as Record<string, unknown>[]).map(toRow);
-  const size = db.prepare("SELECT value FROM cc_series WHERE metric = 'gsc.sitemap_addresses' AND day = ?").get(last.d) as { value: number } | undefined;
-  return { day: last.d, rows, of: size ? size.value : null };
+  if (!day) return null;
+  /* What the sitemap lists now. The whole these figures are a part of is the sitemap: an address that has
+     left it is not carried, and one a person inspected that was never in it is not counted. Not known
+     (the sitemap not read yet): every row counts. */
+  let listed: Set<string> | null = null;
+  try {
+    const m = lastSitemap();
+    listed = m?.entries.length ? new Set(m.entries.map((e) => e.path)) : null;
+  } catch {
+    listed = null;
+  }
+  const inList = (r: InspectRow): boolean => !listed || listed.has(r.path);
+
+  const own = rowsWhere("day = ?", day).filter(inList);
+  const size = db.prepare("SELECT value FROM cc_series WHERE metric = 'gsc.sitemap_addresses' AND day = ?").get(day) as { value: number } | undefined;
+  const of = size ? size.value : null;
+  const complete = of !== null && own.length >= of;
+  const whole = db.prepare("SELECT MAX(day) AS d FROM cc_series WHERE metric = 'gsc.inspected' AND day <= ?").get(day) as { d: string | null } | undefined;
+
+  const by = new Map(own.map((r) => [r.path, r]));
+  if (!complete) {
+    for (const r of rowsWhere("day < ? AND day >= ? ORDER BY day DESC", day, addDays(day, -CARRY_DAYS))) {
+      if (!by.has(r.path) && inList(r)) by.set(r.path, r);
+    }
+  }
+  /* Asked by a person since the check: Google's newest word on that address. Oldest first, so the newest stays. */
+  for (const r of rowsWhere("day > ? ORDER BY day", day)) if (inList(r)) by.set(r.path, r);
+
+  const rows = [...by.values()].sort((a, b) => Number(a.indexed) - Number(b.indexed) || a.url.localeCompare(b.url));
+  const carried = rows.filter((r) => r.day < day).length;
+  return { day, rows, of, complete, checked: rows.length - carried, carried, wholeDay: whole?.d ?? null, missing: of === null ? 0 : Math.max(0, of - rows.length) };
 }
 
-/** Coverage groups of the newest day, not indexed first, then by size. */
+/** Coverage groups of the rows given (each address's newest result), not indexed first, then by size. */
 export function coverageGroups(rows: InspectRow[], liveSaysIndex: (path: string) => boolean | null): CoverageGroup[] {
   const by = new Map<string, InspectRow[]>();
   for (const r of rows) {
@@ -116,7 +206,7 @@ export function coverageGroups(rows: InspectRow[], liveSaysIndex: (path: string)
         indexed,
         meaning: m.meaning,
         fix: m.fix,
-        pages: list.map((r) => ({ path: r.path, lastCrawl: r.lastCrawl, robots: r.robots, indexing: r.indexing, livePageSaysIndex: liveSaysIndex(r.path), link: r.link })),
+        pages: list.map((r) => ({ path: r.path, lastCrawl: r.lastCrawl, robots: r.robots, indexing: r.indexing, livePageSaysIndex: liveSaysIndex(r.path), link: r.link, day: r.day })),
       };
     })
     .sort((a, b) => Number(a.indexed) - Number(b.indexed) || b.pages.length - a.pages.length);

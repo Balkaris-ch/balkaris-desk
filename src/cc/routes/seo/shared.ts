@@ -1,4 +1,4 @@
-import type { Context } from "hono";
+import type { Context, MiddlewareHandler } from "hono";
 import { db } from "../../../db.ts";
 import type { Vars } from "../../access.ts";
 import { runnerState } from "../../operator/queue.ts";
@@ -8,14 +8,24 @@ import type { Reading, Stat } from "../../../../web/src/contract/common.ts";
 import type { NewTask } from "../../../../web/src/contract/operator.ts";
 import type { OperatorPanel, SeoHead, SeoNav, SeoRange, SeoTab } from "../../../../web/src/contract/seo/common.ts";
 import { auditRun } from "../../seo/audit.ts";
+import { figures, indexFigures, keywordFigures, openOpportunities } from "../../seo/figures.ts";
 import { lastSnapDay, rangeOf, spanOf } from "../../seo/rank.ts";
 import { siteView, type SiteView } from "../../seo/site.ts";
 
 /**
  * What every route of the SEO section shares: the head (range, span, the
- * audit, the tab strip's counts), the honest absences of the search history,
- * and the operator panel's truthful line.
+ * audit, the tab strip's counts and the figures several pages show), the
+ * honest absences of the search history, the operator panel's truthful line,
+ * and the one way a CSV file is written.
  */
+
+/*
+ * THE FIGURES TWO PAGES BOTH SHOW are counted in src/cc/seo/figures.ts and
+ * handed on from here, so a page's route needs one import: open
+ * opportunities, tracked keywords, what Google has indexed.
+ * `head().nav.figures` carries the same numbers to the interface.
+ */
+export { figures, indexFigures, keywordFigures, openOpportunities };
 
 export const TABS: Omit<SeoTab, "count">[] = [
   { key: "overview", label: "Overview", href: "/seo" },
@@ -31,7 +41,15 @@ export const TABS: Omit<SeoTab, "count">[] = [
   { key: "automations", label: "Automations", href: "/seo/automations" },
 ];
 
-/** The tab strip's and the sidebar's counts. Cheap: three counts in the desk's own tables. */
+/**
+ * The tab strip's counts, and the figures several pages show. Cheap: counts
+ * in the desk's own tables, and the index check's newest rows.
+ *
+ * A TAB'S COUNT is either a total (Opportunities: how many are open) or work
+ * that waits on a person (`todo`): the owner's own steps on the Overview,
+ * pages nobody has yet sent to Google on Technical, phrases nobody has judged
+ * on Keywords. A count of nothing is not drawn: no chip, never a 0.
+ */
 export function nav(): SeoNav {
   const n = (sql: string): number => {
     try {
@@ -40,10 +58,19 @@ export function nav(): SeoNav {
       return 0;
     }
   };
-  const opportunities = n("SELECT COUNT(*) AS n FROM cc_seo_opps WHERE active = 1 AND state IN ('open', 'queued', 'in-progress')");
+  const f = figures();
+  const opportunities = f.opportunities;
   const needsYou = n("SELECT COUNT(*) AS n FROM cc_seo_owner_tasks WHERE who = 'owner' AND done = 0");
   const indexRequests = n("SELECT COUNT(*) AS n FROM cc_seo_opps WHERE type = 'not-indexed' AND active = 1 AND state = 'open'");
-  return { opportunities, needsYou, indexRequests, tabs: TABS.map((t) => ({ ...t, count: t.key === "opportunities" ? opportunities : null })) };
+  type Chip = Pick<SeoTab, "count" | "countSays" | "todo">;
+  const todo = (count: number, one: string, many: string): Chip => (count > 0 ? { count, countSays: count === 1 ? one : many, todo: true } : { count: null });
+  const chips: Partial<Record<SeoTab["key"], Chip>> = {
+    overview: todo(needsYou, "step needs you", "steps need you"),
+    opportunities: { count: opportunities, countSays: "open" },
+    keywords: todo(f.keywords.unjudged, "phrase to judge", "phrases to judge"),
+    technical: todo(indexRequests, "page waits for Request indexing", "pages wait for Request indexing"),
+  };
+  return { opportunities, needsYou, indexRequests, tabs: TABS.map((t) => ({ ...t, ...(chips[t.key] ?? { count: null }) })), figures: f };
 }
 
 export function head(range: SeoRange): SeoHead {
@@ -133,3 +160,56 @@ export const view = (): SiteView => siteView();
 
 /** Activity kinds the SEO engine writes, and the index events it watches. */
 export const SEO_KINDS = ["seo", "seo-action", "seo-state", "seo-import", "seo-research", "seo-ai", "seo-competitors", "seo-presence", "gsc.indexed", "gsc.dropped"];
+
+/* ---------- a CSV file ----------------------------------------------------------------------- */
+
+/** The byte-order mark Excel needs to read a CSV as UTF-8: without it "für" opens as "fÃ¼r". */
+const BOM = "﻿";
+
+/**
+ * One cell: empty for nothing, a leading quote on what a spreadsheet would
+ * run as a formula, quoted when it holds a comma, a semicolon, a quote or a
+ * line break.
+ */
+export const csvCell = (v: unknown): string => {
+  if (v === null || v === undefined) return "";
+  let s = String(v);
+  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
+  return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/** A CSV file's text: the mark, a head row, CRLF between the rows and after the last. */
+export const csvText = (headRow: readonly unknown[], rows: readonly (readonly unknown[])[]): string => `${BOM}${[headRow, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n")}\r\n`;
+
+/**
+ * Answer with a CSV file to download: "balkaris-seo-<name>-<today>.csv".
+ * Every export of the section should end in this, so none can leave the mark
+ * out again (the keyword export did, and Excel showed "fÃ¼r").
+ */
+export function csvFile(c: Context<Vars>, name: string, headRow: readonly unknown[], rows: readonly (readonly unknown[])[]): Response {
+  return c.body(csvText(headRow, rows), 200, {
+    "content-type": "text/csv; charset=utf-8",
+    "content-disposition": `attachment; filename="balkaris-seo-${name.replace(/[^a-z0-9-]+/gi, "-")}-${today()}.csv"`,
+    "cache-control": "no-store",
+  });
+}
+
+/**
+ * The net under every export: a text/csv answer that does not begin with the
+ * mark is given one. Mounted once over the whole section (src/cc/routes/seo.ts),
+ * so an export written by hand in a page's own file is right as well.
+ */
+export const csvMark: MiddlewareHandler<Vars> = async (c, next) => {
+  await next();
+  const res = c.res;
+  if (!res || !(res.headers.get("content-type") ?? "").toLowerCase().startsWith("text/csv")) return;
+  const bytes = new Uint8Array(await res.arrayBuffer());
+  const marked = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+  const out = new Uint8Array(bytes.length + (marked ? 0 : 3));
+  if (!marked) out.set([0xef, 0xbb, 0xbf], 0);
+  out.set(bytes, marked ? 0 : 3);
+  const headers = new Headers(res.headers);
+  headers.delete("content-length");
+  c.res = undefined;
+  c.res = new Response(out, { status: res.status, headers });
+};
