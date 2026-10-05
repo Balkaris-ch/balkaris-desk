@@ -1131,8 +1131,8 @@ a.dk-seo-pages-pg:hover {
   margin-bottom: var(--x10);
   padding: var(--x14);
   border-radius: var(--r-field);
-  background: var(--ink);
-  color: var(--track);
+  background: var(--serp-paper);
+  color: var(--serp-text-2);
 }
 
 .dk-seo-pages-serp-card--mobile {
@@ -1156,20 +1156,20 @@ a.dk-seo-pages-pg:hover {
 
 .dk-seo-pages-serp-url {
   overflow: hidden;
-  color: var(--chart-axis);
+  color: var(--serp-url-2);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .dk-seo-pages-serp-title {
   margin-bottom: var(--x4);
-  color: var(--blue-edge);
+  color: var(--serp-title);
   font-size: var(--t-title);
   line-height: var(--lh-snug);
 }
 
 .dk-seo-pages-serp-desc {
-  color: var(--track);
+  color: var(--serp-text-2);
   font-size: var(--t-small);
   line-height: var(--lh-body);
 }

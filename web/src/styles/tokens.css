@@ -328,6 +328,22 @@
 }
 
 /*
+ * Google's result page as the desk draws it (the SEO page view and the Pages
+ * screen): white paper in both themes, as Google's own page is. In the dark
+ * theme these are exactly the tokens the previews used before, so nothing
+ * moves; the light theme gives them Google's own greys and blue.
+ */
+:root {
+  --serp-paper: var(--ink);       /* the result card */
+  --serp-ink: var(--bg);          /* its text, and the site's round mark */
+  --serp-title: var(--blue-edge); /* the blue title */
+  --serp-text: var(--card-3);     /* the description, on the page view */
+  --serp-text-2: var(--track);    /* the description, on the Pages screen */
+  --serp-url: var(--ink-4);       /* the address line, on the page view */
+  --serp-url-2: var(--chart-axis); /* the address line, on the Pages screen */
+}
+
+/*
  * The light theme (Fini, 5 October 2026: "a white or dark theme on the
  * platform"). Dark is what the boards show and what every :root block above
  * declares; this block gives each COLOUR among them its light value and
@@ -361,13 +377,13 @@
   --ink: #0c1110;
   --ink-2: #333c39;
   --ink-3: #5f6966;
-  --ink-4: #78817e;
+  --ink-4: #6b7471;
 
   /* the one accent, and what it is mixed into */
-  --green: #0a7d35;
+  --green: #08702f;
   --green-2: #0b8539;
   --green-3: #e1f4e8;
-  --green-4: #a6dcb9;
+  --green-4: #bfe6cc;
   --green-glow: rgba(11, 133, 57, 0.16);
 
   /* the other tones a figure can take */
@@ -410,4 +426,13 @@
 
   /* the map */
   --map-land: #c7cfcc;
+
+  /* Google's result page, as Google draws it */
+  --serp-paper: #ffffff;
+  --serp-ink: #202124;
+  --serp-title: #1a0dab;
+  --serp-text: #4d5156;
+  --serp-text-2: #4d5156;
+  --serp-url: #4d5156;
+  --serp-url-2: #4d5156;
 }

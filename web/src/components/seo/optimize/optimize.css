@@ -790,8 +790,8 @@
   max-width: var(--dk-seo-optimize-result-w);
   padding: var(--x14) var(--x16);
   border-radius: var(--r-field);
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--serp-paper);
+  color: var(--serp-ink);
 }
 
 .dk-seo-optimize-result-site {
@@ -815,8 +815,8 @@
   width: var(--dk-seo-optimize-mark);
   height: var(--dk-seo-optimize-mark);
   border-radius: var(--r-pill);
-  background: var(--bg);
-  color: var(--ink);
+  background: var(--serp-ink);
+  color: var(--serp-paper);
   font-size: var(--t-small);
   font-weight: var(--w-bold);
 }
@@ -828,7 +828,7 @@
 
 .dk-seo-optimize-result-url {
   overflow: hidden;
-  color: var(--ink-4);
+  color: var(--serp-url);
   font-size: var(--t-label);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -838,7 +838,7 @@
 .dk-seo-optimize-result-title {
   margin-top: var(--x4);
   overflow: hidden;
-  color: var(--blue-edge);
+  color: var(--serp-title);
   font-size: var(--t-figure-3);
   line-height: var(--lh-snug);
   text-overflow: ellipsis;
@@ -848,7 +848,7 @@
 .dk-seo-optimize-result-desc {
   display: -webkit-box;
   overflow: hidden;
-  color: var(--card-3);
+  color: var(--serp-text);
   font-size: var(--t-small);
   line-height: var(--lh-body);
   -webkit-box-orient: vertical;
