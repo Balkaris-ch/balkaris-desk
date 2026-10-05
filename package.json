@@ -17,6 +17,7 @@
     "check:team": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-cc-team.ts",
     "check:seo-engine": "node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-cc-seo-engine.ts",
     "seo:import": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/seo-import.ts",
+    "check:theme": "node scripts/check-theme.mjs",
     "typecheck": "tsc --noEmit",
     "server": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",
     "start": "node --env-file-if-exists=.env --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx src/server.ts",

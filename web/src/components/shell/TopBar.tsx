@@ -13,6 +13,7 @@ import { CommandPalette } from "./CommandPalette";
 import { mayOpen, type PageAccess } from "./nav";
 import { MenuButton } from "./NavDrawer";
 import { Popover } from "./Popover";
+import { ThemeToggle } from "./ThemeToggle";
 import "./topbar.css";
 
 /* How often the light asks the server how things are. */
@@ -69,6 +70,7 @@ export function TopBar({ me, system }: TopBarProps) {
         <StatusLight status={live.data} problem={live.error} pages={me.access?.pages} />
         <span className="dk-top-sep" aria-hidden />
         <Notices status={live.data} pages={me.access?.pages} />
+        <ThemeToggle />
         <span className="dk-top-sep" aria-hidden />
         <PersonMenu me={me} />
       </div>

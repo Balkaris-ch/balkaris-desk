@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Figtree, Geist, Geist_Mono } from "next/font/google";
+import { cookies } from "next/headers";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
 import "@/styles/tokens.css";
 import "@/styles/base.css";
+import { THEME_COOKIE, THEME_GROUND, themeOf } from "@/lib/theme";
 
 /**
  * The desk's type is the website's own system and nothing else: Geist for
@@ -29,14 +31,25 @@ export const metadata: Metadata = {
   referrer: "same-origin",
 };
 
-export const viewport: Viewport = {
-  width: "device-width",
-  initialScale: 1,
-  colorScheme: "dark",
-  /* The browser's own bar takes this before any stylesheet loads, so it cannot
-     read a token: it is --bg in styles/tokens.css, and changes with it. */
-  themeColor: "#060909",
-};
+/**
+ * The theme the person chose, or dark. Read from the cookie on every request,
+ * so the first byte is already in the right theme (lib/theme.ts).
+ */
+async function theme() {
+  return themeOf((await cookies()).get(THEME_COOKIE)?.value);
+}
+
+export async function generateViewport(): Promise<Viewport> {
+  const chosen = await theme();
+  return {
+    width: "device-width",
+    initialScale: 1,
+    colorScheme: chosen,
+    /* The browser's own bar takes this before any stylesheet loads, so it cannot
+       read a token: it is --bg in styles/tokens.css, and changes with it. */
+    themeColor: THEME_GROUND[chosen],
+  };
+}
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
   /* Every page is drawn per request. The proxy gives each request its own
@@ -45,7 +58,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   await connection();
 
   return (
-    <html lang="en" className={`${geist.variable} ${figtree.variable} ${geistMono.variable}`}>
+    <html lang="en" data-theme={await theme()} className={`${geist.variable} ${figtree.variable} ${geistMono.variable}`}>
       <body>{children}</body>
     </html>
   );

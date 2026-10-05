@@ -326,3 +326,88 @@
   --leads-cell-narrow: 120px;   /* "Asked for" and the page, when the list is too narrow for all its columns */
   --leads-cell-call: 110px;     /* who holds a call, under its time */
 }
+
+/*
+ * The light theme (Fini, 5 October 2026: "a white or dark theme on the
+ * platform"). Dark is what the boards show and what every :root block above
+ * declares; this block gives each COLOUR among them its light value and
+ * nothing else. The root layout puts data-theme on <html> from the person's
+ * dk-theme cookie, and the top bar's sun and moon switch it.
+ *
+ * The rule that keeps this to one block: no component writes a colour. A new
+ * colour token above gets its light value here in the same change
+ * (scripts/check-theme.mjs fails when one is missing). Sizes, radii and the
+ * charts' mixing percentages are shared by both themes.
+ *
+ * How the light values were chosen: the same order of surfaces (page, bar,
+ * panel, field, pressed: here from grey to white and back to grey), the same
+ * green, darkened until it reads on white. Every ink is at least 4.5:1 on a
+ * panel, except --ink-4, which is the quiet one in both themes.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* ground */
+  --bg: #f2f4f3;
+  --bg-side: #f7f8f7;
+  --card: #ffffff;
+  --card-2: #f4f6f5;
+  --card-3: #e9edeb;
+  --line: #e2e6e4;
+  --line-2: #cfd6d3;
+  --track: #e1e6e3;
+
+  /* ink */
+  --ink: #0c1110;
+  --ink-2: #333c39;
+  --ink-3: #5f6966;
+  --ink-4: #78817e;
+
+  /* the one accent, and what it is mixed into */
+  --green: #0a7d35;
+  --green-2: #0b8539;
+  --green-3: #e1f4e8;
+  --green-4: #a6dcb9;
+  --green-glow: rgba(11, 133, 57, 0.16);
+
+  /* the other tones a figure can take */
+  --red: #c9302c;
+  --red-ground: #fdeceb;
+  --red-edge: #f2bab8;
+  --amber: #8f5c00;
+  --amber-ground: #fcf2dc;
+  --amber-edge: #e8cc8a;
+  --blue: #1a64cc;
+  --blue-ground: #e7f0fd;
+  --blue-edge: #b3cdf5;
+  --violet: #6f3bc9;
+  --violet-ground: #f0e9fd;
+  --violet-edge: #cfbdf3;
+  --pink: #b82a84;
+  --sand: #7d6824;
+  --grey: #5b6777;
+  --s4: #b85c0a;
+
+  /* ink on a filled green button */
+  --ink-on-green: #ffffff;
+
+  /* what floats */
+  --pop: #ffffff;
+  --pop-edge: #d2d9d6;
+  --shadow-pop: 0 18px 48px rgba(15, 23, 20, 0.16), 0 2px 8px rgba(15, 23, 20, 0.08);
+  --scrim: rgba(17, 24, 21, 0.42);
+  --focus: rgba(11, 133, 57, 0.5);
+  --select: rgba(47, 209, 95, 0.3);
+  --hover: rgba(10, 20, 16, 0.045);
+  --shine: rgba(255, 255, 255, 0.7);
+  --tab-on: #dcf2e4;
+
+  /* a chart's lines */
+  --chart-axis: #c3cbc7;
+  --chart-grid: #e7ebe9;
+  --chart-rule: #98a19e;
+  --chart-prev: #8c9592;
+
+  /* the map */
+  --map-land: #c7cfcc;
+}

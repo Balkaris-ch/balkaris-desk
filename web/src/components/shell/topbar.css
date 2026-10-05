@@ -152,6 +152,12 @@
   color: var(--ink);
 }
 
+/* The theme switch shows where a press leads: the sun in the dark, the moon in the light. */
+:root[data-theme="light"] .dk-theme-sun,
+:root:not([data-theme="light"]) .dk-theme-moon {
+  display: none;
+}
+
 .dk-bell-count {
   position: absolute;
   top: var(--x4);
