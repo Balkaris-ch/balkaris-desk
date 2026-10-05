@@ -1212,3 +1212,215 @@ a.dk-seo-competitors-page:hover {
     display: none;
   }
 }
+
+/* ---------- on the open web: look up a site, who ranks, the captured searches (Web.tsx, Act.tsx) ---------- */
+:root {
+  --dk-seo-competitors-fact-what: 190px;  /* a looked-up site beside Balkaris: the label column */
+  --dk-seo-competitors-ask-min: 22ch;     /* the look-up and check fields before they wrap */
+}
+
+.dk-seo-competitors-askgrid,
+.dk-seo-competitors-pair,
+.dk-seo-competitors-serpgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--gap);
+  align-items: start;
+}
+
+.dk-seo-competitors-askgrid {
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-competitors-ask,
+.dk-seo-competitors-inline,
+.dk-seo-competitors-actions,
+.dk-seo-competitors-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-competitors-actions {
+  padding-bottom: var(--x8);
+}
+
+.dk-seo-competitors-ask-field {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--x8);
+  min-width: var(--dk-seo-competitors-ask-min);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-competitors-ask-field:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-competitors-ask-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-competitors-ask-field input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-competitors-ask .dk-seo-competitors-said {
+  flex-basis: 100%;
+}
+
+/* A looked-up site beside Balkaris, fact by fact. */
+.dk-seo-competitors-facttable {
+  display: flex;
+  flex-direction: column;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-facttable-head,
+.dk-seo-competitors-facttable-row {
+  display: grid;
+  grid-template-columns: var(--dk-seo-competitors-fact-what) minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x12);
+  padding: var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-seo-competitors-facttable-head {
+  color: var(--ink-4);
+  font-size: var(--t-micro);
+  text-transform: uppercase;
+}
+
+.dk-seo-competitors-facttable-label {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-competitors-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-competitors-cell--off {
+  color: var(--ink-3);
+}
+
+.dk-seo-competitors-from {
+  color: var(--ink-4);
+  font-size: var(--t-tiny);
+}
+
+.dk-seo-competitors-plain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-competitors-searchlist {
+  padding-bottom: var(--x8);
+}
+
+.dk-seo-competitors-searchlist--on {
+  padding-left: var(--x8);
+  border-left: var(--x2) solid var(--green-4);
+}
+
+/* A result page: its place, the site and its title, the way out. */
+.dk-seo-competitors-serp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-competitors-serp li {
+  display: grid;
+  grid-template-columns: var(--dk-seo-competitors-pos-w) minmax(0, 1fr) auto;
+  gap: var(--x8);
+  align-items: baseline;
+  padding: var(--x4) var(--x6);
+  border-radius: var(--r-row);
+  font-size: var(--t-small);
+}
+
+.dk-seo-competitors-serp--ours {
+  background: var(--card-2);
+}
+
+.dk-seo-competitors-serp-pos {
+  color: var(--ink-3);
+  text-align: right;
+}
+
+.dk-seo-competitors-serp-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-competitors-serp-body .dk-seo-competitors-quiet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-competitors-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-competitors-form-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--x12);
+}
+
+@container (max-width: 1080px) {
+  .dk-seo-competitors-askgrid,
+  .dk-seo-competitors-pair,
+  .dk-seo-competitors-serpgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 560px) {
+  .dk-seo-competitors-facttable-head {
+    display: none;
+  }
+
+  .dk-seo-competitors-facttable-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--x4);
+  }
+
+  .dk-seo-competitors-form-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

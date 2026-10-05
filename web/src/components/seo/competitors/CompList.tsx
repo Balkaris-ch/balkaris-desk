@@ -9,10 +9,12 @@ import { Table, type Column } from "@/components/ui/Table";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { DASH, num, shortDate } from "@/lib/format";
-import { BASE, count, hrefWith, shownHost, shownName } from "./look";
+import { API, BASE, count, hrefWith, lookHref, serpHref, shownHost, shownName } from "./look";
 
 const FIND = "dk-seo-competitors-find-form";
 const RESETS = ["offset", "open"] as const;
+/* The export carries the list's filters, not its paging or the row opened. */
+const EXPORTED = ["engine", "type", "cluster", "q", "sort", "search", "shown"];
 const SORTS = [
   { value: "seen", label: "Most seen" },
   { value: "position", label: "Best Google position" },
@@ -49,7 +51,14 @@ export function CompList({ data, base, openKey }: { data: SeoCompetitorsPayload;
             <span>{data.rules.joining}</span>
           </span>
         }
-        right={<Select param="sort" label="Order" fallback="seen" resets={RESETS} options={SORTS} />}
+        right={
+          <span className="dk-seo-competitors-right">
+            <Select param="sort" label="Order" fallback="seen" resets={RESETS} options={SORTS} />
+            <a className="dk-seo-competitors-task-link" href={exportHref(base)} download title="The list as filtered, every page of it, as a CSV file">
+              <Icon name="download" size={13} /> CSV
+            </a>
+          </span>
+        }
         flush
         footer={list.state === "ok" ? <Pager total={list.value.total} offset={list.value.offset} limit={list.value.limit} base={base} /> : undefined}
       >
@@ -69,11 +78,20 @@ export function CompList({ data, base, openKey }: { data: SeoCompetitorsPayload;
             <div className="dk-seo-competitors-filters">
               <label className="dk-seo-competitors-find">
                 <Icon name="search" size={14} />
-                <input form={FIND} type="search" name="q" defaultValue={asked.q} placeholder="Search a name or a site" aria-label="Search competitors by name or site" />
+                <input form={FIND} type="search" name="q" defaultValue={asked.q} placeholder="A name, a site or a search" aria-label="Search competitors by name, site, or a search they were seen for" />
               </label>
               <Select param="type" label="Kind" fallback="all" resets={RESETS} options={list.value.types.map((t) => ({ value: t.key, label: `${t.label} (${t.count})` }))} />
               <Select param="cluster" label="Cluster" fallback="" resets={RESETS} options={[{ value: "", label: "All clusters" }, ...list.value.clusters.map((c) => ({ value: c.key, label: `${c.name} (${c.count})` }))]} />
+              {list.value.shown ? <Select param="shown" label="Shown" fallback="active" resets={RESETS} options={list.value.shown.map((x) => ({ value: x.key, label: `${x.label} (${x.count})` }))} /> : null}
             </div>
+            {asked.search ? (
+              <p className="dk-seo-competitors-note dk-seo-competitors-pad">
+                Seen for “{asked.search}”.{" "}
+                <Go href={hrefWith(base, { search: undefined })} scroll={false} className="dk-seo-competitors-task-link">
+                  Show all searches
+                </Go>
+              </p>
+            ) : null}
             <Table
               caption="Competitors"
               className="dk-seo-competitors-table"
@@ -83,7 +101,27 @@ export function CompList({ data, base, openKey }: { data: SeoCompetitorsPayload;
               keepScroll
               density="roomy"
               minWidth={820}
-              empty={asked.q || asked.cluster || asked.type !== "all" || asked.engine !== "all" ? "No competitor matches these filters." : "No competitor is recorded."}
+              empty={
+                list.value.lookFor ? (
+                  <span>
+                    No competitor matches “{asked.q}”.{" "}
+                    <Go href={lookHref(base, list.value.lookFor)} scroll={false} className="dk-seo-competitors-task-link">
+                      Look up {list.value.lookFor}
+                    </Go>
+                  </span>
+                ) : list.value.checkFor ? (
+                  <span>
+                    No competitor was seen for “{asked.q}”.{" "}
+                    <Go href={serpHref(base, list.value.checkFor)} scroll={false} className="dk-seo-competitors-task-link">
+                      Check who ranks for it
+                    </Go>
+                  </span>
+                ) : asked.q || asked.cluster || asked.search || asked.type !== "all" || asked.engine !== "all" ? (
+                  "No competitor matches these filters."
+                ) : (
+                  "No competitor is recorded."
+                )
+              }
               columns={columns(openKey, base, asked.sort)}
             />
           </>
@@ -137,6 +175,8 @@ function columns(openKey: string | null, base: Record<string, string>, sort: Com
               <span className="dk-seo-competitors-host">
                 <span className="dk-seo-competitors-host-text">{host ?? "named without a site"}</span>
                 {r.platform ? <Chip className="dk-seo-competitors-mini">platform</Chip> : null}
+                {r.decision?.watch ? <Chip tone="good" className="dk-seo-competitors-mini">watched</Chip> : null}
+                {r.decision?.ignore ? <Chip className="dk-seo-competitors-mini">ignored</Chip> : null}
               </span>
             </span>
           </span>
@@ -260,4 +300,11 @@ function Pager({ total, offset, limit, base }: { total: number; offset: number; 
       </span>
     </div>
   );
+}
+
+/** The export's address: the desk server's CSV of the list as filtered (GET /api/v1/seo/competitors/export.csv). */
+function exportHref(base: Record<string, string>): string {
+  const q = new URLSearchParams(Object.entries(base).filter(([k]) => EXPORTED.includes(k)));
+  const s = q.toString();
+  return `${API}/export.csv${s ? `?${s}` : ""}`;
 }

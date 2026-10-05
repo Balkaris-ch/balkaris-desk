@@ -2,12 +2,12 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState, type FormEvent } from "react";
-import type { ExtractKind, ExtractRule } from "@/contract/spider";
+import type { ExtractKind, ExtractRule, ExtractTry } from "@/contract/spider";
 import { Button } from "@/components/ui/Button";
 import { Dialog, DialogActions, DialogClose } from "@/components/ui/Dialog";
 import { Field, Input } from "@/components/ui/Field";
 import { Select } from "@/components/ui/Select";
-import { useSend, type Sent } from "@/components/operator/send";
+import { send, useSend, type Sent } from "@/components/operator/send";
 import { cx } from "@/lib/cx";
 import { ago } from "@/lib/format";
 
@@ -20,7 +20,9 @@ import { ago } from "@/lib/format";
  *
  *   AddRule     POST   /api/v1/spider/extract              the server tries the
  *                                                          rule on its test page
- *                                                          (up to ~3 s), then keeps it
+ *                                                          (up to ~3 s), then keeps it;
+ *               POST   /api/v1/spider/extract/try          "Try it now": the rule as typed,
+ *                                                          on one page of the site, kept nowhere
  *   ToggleRule  POST   /api/v1/spider/extract/:id/toggle   { enabled }
  *   DeleteRule  DELETE /api/v1/spider/extract/:id          the rule and what it found,
  *                                                          after a confirmation
@@ -84,6 +86,20 @@ export function AddRule({ nextCrawl }: { nextCrawl: string | null }) {
   const form = useRef<HTMLFormElement>(null);
   const [kind, setKind] = useState<ExtractKind>("css");
   const { go, busy, message } = useSend();
+  /* "Try it now": the rule as typed, run on one page of the site at once; nothing is kept. */
+  const [trying, setTrying] = useState(false);
+  const [tried, setTried] = useState<{ ok: true; value: ExtractTry } | { ok: false; message: string } | null>(null);
+  const tryNow = async () => {
+    const el = form.current;
+    if (!el || trying) return;
+    const f = new FormData(el);
+    const text = (k: string) => String(f.get(k) ?? "").trim();
+    setTrying(true);
+    setTried(null);
+    const r = await send<ExtractTry>("/api/v1/spider/extract/try", { kind: text("kind"), expression: String(f.get("expression") ?? ""), attribute: text("attribute") || null, path: text("try") || "/" });
+    setTrying(false);
+    setTried(r.ok ? { ok: true, value: r.value } : { ok: false, message: r.message });
+  };
 
   const add = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -131,6 +147,35 @@ export function AddRule({ nextCrawl }: { nextCrawl: string | null }) {
           <Input name="scope" maxLength={200} autoComplete="off" spellCheck={false} className="dk-seo-technical-rule-mono" />
         </Field>
       </div>
+      <div className="dk-seo-technical-rule-form-row">
+        <Field label="Try on (optional)" hint="A page of the site to try the rule on now, before keeping it. Empty: the home page.">
+          <Input name="try" maxLength={200} autoComplete="off" spellCheck={false} placeholder="/" className="dk-seo-technical-rule-mono" />
+        </Field>
+        <div className="dk-seo-technical-rule-try">
+          <Button type="button" variant="quiet" size="sm" icon="play" disabled={trying} aria-busy={trying || undefined} onClick={() => void tryNow()}>
+            {trying ? "Reading the page…" : "Try it now"}
+          </Button>
+        </div>
+      </div>
+      {tried ? (
+        tried.ok ? (
+          <div className="dk-seo-technical-rule-tried" role="status">
+            <p className="dk-seo-technical-quiet">
+              On {tried.value.path}: {tried.value.error ? tried.value.error : tried.value.count ? `${tried.value.count} match${tried.value.count === 1 ? "" : "es"}` : "nothing found"}
+              {tried.value.ms !== null ? `, in ${tried.value.ms} ms` : ""}. Nothing was kept.
+            </p>
+            {tried.value.matches.length ? (
+              <ol className="dk-seo-technical-rule-tried-list">
+                {tried.value.matches.map((m, i) => (
+                  <li key={i}>{m}</li>
+                ))}
+              </ol>
+            ) : null}
+          </div>
+        ) : (
+          <Said message={{ ok: false, text: tried.message }} />
+        )
+      ) : null}
       <div className="dk-seo-technical-rule-form-foot">
         <Button type="submit" variant="good" size="sm" icon="plus" disabled={busy} aria-busy={busy || undefined}>
           {busy ? "Trying it on the test page…" : "Add rule"}

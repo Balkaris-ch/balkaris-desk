@@ -1,6 +1,8 @@
 "use client";
 
-import type { JobAnswer } from "@/contract/common";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import type { JobAnswer, JobListed } from "@/contract/common";
 import type { NewTask, TaskAnswer } from "@/contract/operator";
 import type { OpportunityAnswer } from "@/contract/seo/common";
 import type { OwnerStepAnswer } from "@/contract/seo/opportunities";
@@ -8,6 +10,8 @@ import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/But
 import type { IconName } from "@/components/ui/icons";
 import { useSend } from "@/components/operator/send";
 import { cx } from "@/lib/cx";
+import { clock } from "@/lib/format";
+import { useLive } from "@/lib/live";
 
 /**
  * The Technical page's buttons. Each goes through a door the desk server
@@ -52,26 +56,80 @@ export function TaskButton({ task, label, variant = "quiet", size = "xs", icon }
   );
 }
 
-/** Ask the scheduler to run one job now. Disabled, with the reason on hover, while the job cannot run. */
+/**
+ * Ask the scheduler to run one job now. Disabled, with the reason on hover,
+ * while the job cannot run. Once asked (or while it is already running) it
+ * watches the job, and draws the page again once when the run has ended: the
+ * PageSpeed sweep takes about five minutes, and one refresh right after the
+ * scheduler's 202 used to find it still running and leave "Running…" on the
+ * button after it had finished.
+ */
 export function RunJob({ name, label, ready, running, why, size = "sm" }: { name: string; label: string; ready: boolean; running: boolean; why?: string; size?: ButtonSize }) {
   const { go, busy, message } = useSend();
-  const blocked = !ready || running;
+  const [askedAt, setAskedAt] = useState<number | null>(null);
+  const [ended, setEnded] = useState<{ at: string; ok: boolean | null; note: string | null } | null>(null);
+  const watching = !ended && (askedAt !== null || running);
+  const blocked = !ready || (running && !ended);
   return (
     <span className="dk-seo-technical-act">
       <Button
         variant="quiet"
         size={size}
         icon="refresh"
-        disabled={busy || blocked}
-        aria-busy={busy || running || undefined}
-        title={running ? "It is running now." : !ready ? why : undefined}
-        onClick={() => void go<JobAnswer>(`/api/v1/jobs/${encodeURIComponent(name)}/run`, {}, () => "Asked to run now. The figures here change when it has finished.")}
+        disabled={busy || blocked || (askedAt !== null && !ended)}
+        aria-busy={busy || watching || undefined}
+        title={running && !ended ? "It is running now." : !ready ? why : undefined}
+        onClick={async () => {
+          setEnded(null);
+          const r = await go<JobAnswer>(`/api/v1/jobs/${encodeURIComponent(name)}/run`, {}, () => "Asked to run now. This page is drawn again when it has finished.");
+          if (r.ok) setAskedAt(Date.now());
+        }}
       >
-        {running ? "Running…" : busy ? "Asking…" : label}
+        {watching ? "Running…" : busy ? "Asking…" : label}
       </Button>
-      <Said message={message} />
+      {watching ? (
+        <WatchJob
+          name={name}
+          since={askedAt}
+          onEnd={(e) => {
+            setEnded(e);
+            setAskedAt(null);
+          }}
+        />
+      ) : null}
+      {ended ? <Said message={{ ok: ended.ok !== false, text: ended.ok === false ? `It ended ${clock(ended.at)} and failed: ${ended.note ?? "no reason given"}` : `Finished ${clock(ended.at)}${ended.note ? `: ${ended.note}` : "."}` }} /> : <Said message={message} />}
     </span>
   );
+}
+
+/**
+ * Mounted only while there is a run to wait for (unmounting it stops the
+ * polling): follows GET /api/v1/jobs every four seconds and, when the job's
+ * last end is later than the ask (or than its start, for a run that was going
+ * already), says so and draws the page again once.
+ */
+function WatchJob({ name, since, onEnd }: { name: string; since: number | null; onEnd: (e: { at: string; ok: boolean | null; note: string | null }) => void }) {
+  const router = useRouter();
+  const live = useLive<JobListed[]>("/api/v1/jobs", 4_000);
+  const job = live.data?.find((j) => j.name === name);
+  /* The run asked for started after the ask (by the server's clock, which may differ from this one by a little: a minute is allowed). */
+  const started = job?.lastStart ? Date.parse(job.lastStart) : null;
+  const ours = since === null || (started !== null && started >= since - 60_000);
+  const end = job && !job.running && ours && job.lastEnd && job.lastStart && job.lastEnd >= job.lastStart ? job.lastEnd : null;
+  useEffect(() => {
+    if (!end) return;
+    onEnd({ at: end, ok: job?.lastOk ?? null, note: job?.lastNote ?? null });
+    router.refresh();
+  }, [end]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (job?.running && job.progress) {
+    return (
+      <p className="dk-seo-technical-said" role="status">
+        {job.progress.done} of {job.progress.of}
+        {job.progress.what ? `, ${job.progress.what}` : ""}
+      </p>
+    );
+  }
+  return null;
 }
 
 /** Mark a page as submitted in Search Console's URL Inspection (by hand), or take the mark back. */

@@ -3,7 +3,10 @@ import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Tooltip } from "@/components/ui/Tooltip";
+import { cx } from "@/lib/cx";
 import { ago } from "@/lib/format";
+import { DEFAULT_RANGE, seoHref } from "./href";
+import { RunNow } from "./RunNow";
 import { JobSwitch } from "./Switch";
 import "./overview.css";
 
@@ -35,21 +38,23 @@ function when(j: SeoJob): string {
 
 /**
  * The Automations strip at the foot of the board: five of the jobs the SEO
- * section runs on, each with its schedule, its last run and, for the owner,
- * its switch. "Manage automations" lists them all with their budgets.
+ * section runs on, each with its schedule, its last run, "Run now" for a
+ * person the server lets run it (`run`, the payload's `can.run`; "Retry",
+ * marked, after a failed run) and, for the owner, its switch. "Manage
+ * automations" lists them all with their budgets.
  */
-export function Automations({ jobs, owner }: { jobs: SeoJob[]; owner: boolean }) {
+export function Automations({ jobs, owner, run = [], range = DEFAULT_RANGE }: { jobs: SeoJob[]; owner: boolean; run?: string[]; range?: string }) {
   const picked = PICK.flatMap((p) => {
     const j = jobs.find((x) => x.name === p.name);
     return j ? [{ ...p, job: j }] : [];
   });
   const more = jobs.length - picked.length;
   return (
-    <Card title="Automations" icon="clock" className="dk-seo-overview-panel dk-seo-overview-a-auto" right={<LinkButton href="/seo/automations" size="sm">Manage automations{more > 0 ? ` (${jobs.length})` : ""}</LinkButton>}>
+    <Card title="Automations" icon="clock" className="dk-seo-overview-panel dk-seo-overview-a-auto" right={<LinkButton href={seoHref("/seo/automations", range)} size="sm">Manage automations{more > 0 ? ` (${jobs.length})` : ""}</LinkButton>}>
       {picked.length ? (
         <ul className="dk-seo-overview-autos" aria-label="SEO jobs">
           {picked.map(({ job: j, icon }) => (
-            <li key={j.name} className="dk-seo-overview-auto">
+            <li key={j.name} className={cx("dk-seo-overview-auto", j.lastOk === false && !j.running && "dk-seo-overview-auto--failed")}>
               <span className="dk-seo-overview-auto-icon" aria-hidden>
                 <Icon name={icon} size={18} />
               </span>
@@ -61,6 +66,8 @@ export function Automations({ jobs, owner }: { jobs: SeoJob[]; owner: boolean })
                   </span>
                 </span>
               </Tooltip>
+              {/* Not offered while it runs, while what it reads is not connected, or while it is switched off: the door would refuse. */}
+              {run.includes(j.name) && j.ready && j.enabled && !j.running ? <RunNow name={j.name} title={j.title} failed={j.lastOk === false} /> : null}
               {owner ? (
                 <JobSwitch name={j.name} title={j.title} enabled={j.enabled} />
               ) : (

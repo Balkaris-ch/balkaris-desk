@@ -8,7 +8,8 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Absent } from "@/components/ui/Read";
 import { cx } from "@/lib/cx";
 import { ago, DASH, num, shortDate } from "@/lib/format";
-import { keywordsHref, optimizeHref, type Place } from "./href";
+import { clearedHref, optimizeHref, type Place } from "./href";
+import { PlannerImport, RunResearch } from "./KwWeb";
 import { pos, trendWeeks } from "./look";
 
 /* ---------- targets ------------------------------------------------------------------------------ */
@@ -59,7 +60,7 @@ export function TargetsCard({ data, place }: { data: SeoKeywordsPayload; place: 
       info="The phrases a person marked as ones the site should rank for, with Google's average position and impressions over the window. A target is a person's mark: no run or import sets or clears it."
       right={
         t.state === "ok" && t.value.length ? (
-          <Go href={keywordsHref(place, { view: "keywords", target: true, status: "all" })} scroll={false} className="dk-seo-kw-reset">
+          <Go href={clearedHref(place, { view: "keywords", target: true, status: "all" })} scroll={false} className="dk-seo-kw-reset">
             In the table
           </Go>
         ) : null
@@ -107,7 +108,7 @@ export function SourcesCard({ data, place }: { data: SeoKeywordsPayload; place: 
               <Icon name={SOURCE_ICON[s.key] ?? "dot"} size={14} />
             </span>
             <span className="dk-seo-kw-src-text">
-              <Go href={keywordsHref(place, { view: "keywords", source: s.key, status: "all" })} scroll={false} className="dk-seo-kw-src-name">
+              <Go href={clearedHref(place, { view: "keywords", source: s.key, status: "all" })} scroll={false} className="dk-seo-kw-src-name">
                 {s.label}
               </Go>
               <span className="dk-seo-kw-src-line">{s.line}</span>
@@ -118,17 +119,41 @@ export function SourcesCard({ data, place }: { data: SeoKeywordsPayload; place: 
       </ul>
       <div className="dk-seo-kw-research">
         <p className="dk-seo-kw-research-head">
-          <span>Google Autocomplete research</span>
+          <span>The desk&apos;s daily research</span>
           <span className="dk-num">
             {num(r.used)} / {num(r.cap)} this week
           </span>
         </p>
-        <ProgressBar value={r.used} max={r.cap || 1} label="Autocomplete requests used this week" tone={r.cap && r.used >= r.cap ? "warn" : "good"} />
+        <ProgressBar value={r.used} max={r.cap || 1} label="Requests to Google's suggestions used this week" tone={r.cap && r.used >= r.cap ? "warn" : "good"} />
         <p className="dk-seo-kw-research-line">
-          {r.lastRun ? `Last run ${ago(r.lastRun)}: ${r.lastNote ?? `${num(r.foundLast)} new phrases`}.` : "Not run yet."} {num(r.found)} phrase{r.found === 1 ? "" : "s"} found by the desk&apos;s research in all
-          {r.nextRun ? `; next run ${shortDate(r.nextRun)}` : ""}. At most 20 requests a run, one a second, {num(r.cap)} a week ({r.week}); new phrases wait unjudged.
+          {/* The last run in its own figures, never its old note: that note carries the budget of the week it ran in. */}
+          {r.lastRun ? `Last run ${ago(r.lastRun)}: ${num(r.sentLast)} request${r.sentLast === 1 ? "" : "s"}, ${num(r.foundLast)} new phrase${r.foundLast === 1 ? "" : "s"}.` : "Not run yet."} {num(r.found)} phrase
+          {r.found === 1 ? "" : "s"} found by the desk&apos;s research in all
+          {r.nextRun ? `; next run ${shortDate(r.nextRun)}` : ""}. It expands the topics&apos; own phrases through Google&apos;s suggestions: at most 20 requests a run, one a second, {num(r.cap)} a week ({r.week}); new phrases wait unjudged.
         </p>
+        {r.canRun ? <RunResearch /> : null}
       </div>
+      <Demand data={data} />
     </Card>
+  );
+}
+
+/** Search volume: where it would come from, and the owner's import. */
+function Demand({ data }: { data: SeoKeywordsPayload }) {
+  const v = data.volumes;
+  return (
+    <div className="dk-seo-kw-research">
+      <p className="dk-seo-kw-research-head">
+        <span>Search volume</span>
+        <span className="dk-num">{v.withVolume ? `${num(v.withVolume)} phrases` : "none yet"}</span>
+      </p>
+      <p className="dk-seo-kw-research-line">
+        {v.withVolume
+          ? `${num(v.withVolume)} phrase${v.withVolume === 1 ? " has" : "s have"} a monthly search figure, each with its source and day; the table shows the column only then.`
+          : "No phrase has a monthly search figure: no free source gives one."}{" "}
+        {v.dataforseo.configured ? "DataForSEO is connected: tick phrases and use Refresh volumes in Bulk actions." : `DataForSEO is not connected. ${v.dataforseo.step ?? ""}`}
+      </p>
+      {data.canImport ? <PlannerImport /> : <p className="dk-seo-kw-research-line">The owner can import a Google Keyword Planner export here.</p>}
+    </div>
   );
 }

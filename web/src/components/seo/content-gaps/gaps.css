@@ -22,6 +22,8 @@
   --dk-seo-gaps-note-w: 96ch;         /* a panel's note */
   --dk-seo-gaps-name-w: 24ch;         /* a cluster's name in a pill */
   --dk-seo-gaps-cell-w: 22ch;         /* a clipped cell */
+  --dk-seo-gaps-find-w: 280px;        /* the search box beside the view switch */
+  --dk-seo-gaps-page-w: 220px;        /* a "which page answers it" field */
 }
 
 .dk-seo-gaps {
@@ -1189,6 +1191,233 @@ a.dk-seo-gaps-phrase-text:hover {
   font-weight: var(--w-regular);
 }
 
+/* ---------- the search, the order, the export ---------- */
+
+/* The search box beside the view switch; its field belongs to the page's hidden GET form. */
+.dk-seo-gaps-find {
+  display: flex;
+  flex: 0 1 var(--dk-seo-gaps-find-w);
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  height: var(--ctl);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-gaps-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-gaps-find input::placeholder {
+  color: var(--ink-4);
+}
+
+/* The search in force, above the table it narrows. */
+.dk-seo-gaps-found {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+  padding: var(--x8) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-found-clear {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-gaps-found-clear:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-export {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-seo-gaps-export:hover {
+  color: var(--green);
+}
+
+.dk-seo-gaps-list-count {
+  color: var(--ink-4);
+  font-weight: var(--w-regular);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.dk-seo-gaps-chips-label {
+  align-self: center;
+  margin-right: var(--x4);
+  color: var(--ink-4);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-table-link:hover,
+.dk-seo-gaps-table-link:hover b {
+  color: var(--green);
+}
+
+/* A link inside a row's small print: a cluster, a page, the other tab. */
+.dk-seo-gaps-phrase-link {
+  color: var(--ink-3);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-gaps-phrase-link:hover {
+  color: var(--green);
+}
+
+/* The pager's sizes: how many rows a page holds. */
+.dk-seo-gaps-pager-sizes {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  margin-right: auto;
+}
+
+.dk-seo-gaps-pager-size {
+  padding: 0 var(--x6);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+}
+
+.dk-seo-gaps-pager-size:hover {
+  color: var(--ink);
+}
+
+.dk-seo-gaps-pager-size--on {
+  background: var(--green-3);
+  color: var(--green);
+}
+
+/* ---------- a brief, a judgement, a page that answers ---------- */
+
+/* A written brief's link with a quiet "Ask again" beside it. */
+.dk-seo-gaps-briefcell {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x4) var(--x8);
+}
+
+.dk-seo-gaps-briefcell--under {
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dk-seo-gaps-act--end {
+  align-self: flex-start;
+}
+
+.dk-seo-gaps-flag--ranking {
+  border-color: var(--blue-edge);
+  color: var(--blue);
+}
+
+.dk-seo-gaps-map {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-gaps-map-label {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-map-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+}
+
+.dk-seo-gaps-pagefield {
+  width: var(--dk-seo-gaps-page-w);
+  max-width: 100%;
+  height: var(--ctl-xs);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-formbar-map {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6) var(--x8);
+}
+
+/* The cluster panel's first line: say which page answers it, and where its opportunity and page are. */
+.dk-seo-gaps-detail-map {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--x8) var(--x16);
+  padding: 0 var(--pad);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gaps-console-act {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x4) var(--x8);
+  font-size: var(--t-small);
+}
+
+/* The clusters folded under the first few. */
+.dk-seo-gaps-more-clusters > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  margin: 0 var(--pad) var(--x10);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-gaps-more-clusters > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-gaps-more-clusters[open] > summary svg {
+  transform: rotate(90deg);
+}
+
+.dk-seo-gaps-need-who {
+  flex: none;
+  font-size: var(--t-small);
+}
+
 /* ---------- needs you and the method ---------- */
 
 .dk-seo-gaps-lower {
@@ -1261,6 +1490,10 @@ a.dk-seo-gaps-phrase-text:hover {
     flex-wrap: nowrap;
     overflow-x: auto;
     padding-bottom: var(--x4);
+  }
+
+  .dk-seo-gaps-find {
+    flex-basis: 100%;
   }
 
   .dk-seo-gaps-big-figures {

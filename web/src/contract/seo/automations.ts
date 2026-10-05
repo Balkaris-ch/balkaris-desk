@@ -14,7 +14,7 @@
  *
  * Types only.
  */
-import type { ActivityItem, Reading } from "../common";
+import type { ActivityItem, Reading, Tone } from "../common";
 import type { AutomationRun, FinishedRun, JobSource, JobState } from "../automations";
 import type { RunnerState } from "../operator";
 import type { OwnerTaskRow, SeoHead, SeoJob, SeoRange } from "./common";
@@ -68,6 +68,51 @@ export interface SeoAutomationsPayload {
   period: Reading<SeoJobsPeriod>;
   /** Log lines of the SEO kinds written in the period (`recent` shows the newest twelve of them). */
   recentInPeriod: number;
+
+  /* ---- added so a step done by hand opens where it is done ---- */
+
+  /**
+   * For each step in `chromeTasks`, by its id: the screen where the lead does
+   * it (Search Console's report for the property, Brave's submit form). Empty
+   * for a step no screen is known for; Search Console's links only while the
+   * desk knows the property.
+   */
+  stepLinks: Record<string, { label: string; href: string }[]>;
+
+  /* ---- added with the week's summary (src/cc/seo/jobs-digest.ts) ---- */
+
+  /** The week, in short: the newest summary the seo-digest job wrote, the ones before it, and the owner's say on Telegram. */
+  digest: Reading<SeoDigests>;
+}
+
+/** One line of a summary, with its tone and where on the desk it is seen. */
+export interface SeoDigestLine {
+  text: string;
+  tone: Tone;
+  href: string | null;
+}
+
+/** One summary of what the SEO jobs did and found between `since` and `at`. */
+export interface SeoDigest {
+  at: string;
+  since: string;
+  lines: SeoDigestLine[];
+  /** True when Telegram took it, false when it was to be sent and could not be, null when Telegram was off. */
+  sent: boolean | null;
+}
+
+/**
+ * GET: inside the page's payload. POST /api/v1/seo/automations/digest
+ * { telegram: boolean }, the owner only, says whether it is sent on Telegram
+ * → { ok, line }. Writing one now is Run now on the job seo-digest.
+ */
+export interface SeoDigests {
+  /** Newest first, eight at most. */
+  list: SeoDigest[];
+  /** Whether the owner asked for it on Telegram, and whether the desk can send there (its bot and the owner's chat are known). */
+  telegram: { on: boolean; ready: boolean };
+  /** The job's name, for Run now. */
+  job: string;
 }
 
 /** One job's standing and runs, as the desk-wide Automations screen keeps them (contract/automations.ts). */

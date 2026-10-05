@@ -70,34 +70,93 @@ export interface SeoPlace {
   /** The tab and submenu row that is lit. */
   page: SeoPage;
   head: SeoHeadText;
+  /**
+   * Whether the page's figures follow the period. False on the section's own
+   * lists (every task, the audits, the full report): the head then draws no
+   * Period select, rather than one that changes nothing.
+   */
+  period: boolean;
 }
 
+const pageOf = (key: string): SeoPage => SEO_PAGES.find((p) => p.key === key)!;
+
 /**
- * The SEO page an address belongs to, or null when it is none of the eleven:
- * outside /seo, or one of the earlier screen's own addresses (/seo/legacy,
- * /seo/report, /seo/list/…), which keep the heads they had.
+ * The section's own lists, which no tab is, under the SEO head: the tab they
+ * belong with is lit and the breadcrumb leads back to it.
  *
- * /seo/pages/view (Page Optimization) lights Pages and has its own head.
+ *   /seo/list/tasks    every SEO task, whoever does it (the Overview's "Needs you" is the owner's part)
+ *   /seo/list/audits   every full SEO audit, what it ran and what it found (the jobs are on Automations)
+ *   /seo/report        every finding of the last crawl, by check and rule (Technical's long form)
+ */
+const LISTS: Record<string, { page: string; head: SeoHeadText }> = {
+  "list/tasks": {
+    page: "",
+    head: { crumbs: [{ label: "SEO", href: "/seo" }], title: "SEO tasks", sub: "Every step the SEO work waits on: the owner’s, the lead’s in the owner’s browser, the website’s code and content." },
+  },
+  "list/audits": {
+    page: "automations",
+    head: {
+      crumbs: [
+        { label: "SEO", href: "/seo" },
+        { label: "Automations", href: "/seo/automations" },
+      ],
+      title: "SEO audits",
+      sub: "Every full audit: what it ran, step by step, and what changed while it ran.",
+    },
+  },
+  report: {
+    page: "technical",
+    head: {
+      crumbs: [
+        { label: "SEO", href: "/seo" },
+        { label: "Technical", href: "/seo/technical" },
+      ],
+      title: "Full report",
+      sub: "Every finding of the desk’s last crawl, by check and by rule, with what was measured and the limit it was held against.",
+    },
+  },
+};
+
+/**
+ * The SEO page an address belongs to, or null when it is none of them:
+ * outside /seo, or one of the earlier screen's own addresses (/seo/legacy and
+ * its lists /seo/list/opportunities, gaps, movements, landing), which keep the
+ * heads they had.
+ *
+ * /seo/pages/view (Page Optimization) lights Pages and has its own head. The
+ * section's own lists (LISTS) light the tab they belong with.
  */
 export function seoPlace(pathname: string): SeoPlace | null {
   const parts = pathname.replace(/\/+$/, "").split("/").filter(Boolean);
   if (parts[0] !== "seo") return null;
+  const list = LISTS[parts.slice(1).join("/")];
+  if (list) return { page: pageOf(list.page), head: list.head, period: false };
   const second = parts[1] ?? "";
   const page = SEO_PAGES.find((p) => p.key === second);
   if (!page) return null;
-  if (page.key === "pages" && parts[2] === "view" && parts.length === 3) return { page, head: PAGE_OPTIMIZATION_HEAD };
+  if (page.key === "pages" && parts[2] === "view" && parts.length === 3) return { page, head: PAGE_OPTIMIZATION_HEAD, period: true };
   /* Anything deeper than a page's own address belongs to that page's builder; it keeps the shared head. */
-  return { page, head: SEO_HEAD };
+  return { page, head: SEO_HEAD, period: true };
 }
 
 /** Whether an address is inside the SEO section at all, the earlier screen's addresses included. */
 export const underSeo = (pathname: string): boolean => pathname === "/seo" || pathname.startsWith("/seo/");
 
 /**
- * The scheduled jobs a full SEO audit is made of, for the head's button when
- * it finds one already running as the page is drawn. After a press, the button
- * watches the jobs the desk said it started instead. "seo-" names are the SEO
- * engine's own jobs.
+ * The scheduled jobs a full SEO audit is made of (the desk's own list is
+ * STEPS in src/cc/seo/audit.ts: keep the two in step), for the head's button
+ * on a desk that keeps no record of the audit, when it finds one of them
+ * already running as the page is drawn. After a press, the button follows the
+ * desk's record of the audit instead. "seo-" names are the SEO engine's own
+ * jobs (snapshot, readiness, referrals, presence, research, competitors and
+ * the opportunity engine).
  */
-export const AUDIT_JOBS: readonly string[] = ["crawl", "gsc-daily", "gsc-inspect"];
+export const AUDIT_JOBS: readonly string[] = ["sitemap", "crawl", "gsc-daily", "gsc-inspect", "speed"];
 export const isAuditJob = (name: string): boolean => AUDIT_JOBS.includes(name) || name.startsWith("seo-");
+
+/** Where the audits are kept, and one audit's own view (src/cc/seo/audit.ts `auditHref` writes the same). */
+export const AUDITS_HREF = "/seo/list/audits";
+export const auditHref = (id: string): string => `${AUDITS_HREF}?open=${encodeURIComponent(id)}`;
+
+/** Every SEO task, and one opened (src/cc/seo/owner.ts `taskHref` writes the same). */
+export const TASKS_HREF = "/seo/list/tasks";

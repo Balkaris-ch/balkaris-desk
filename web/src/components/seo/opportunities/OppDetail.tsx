@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { ProposalRow } from "@/contract/operator";
 import type { Evidence, OperatorPanel, OpportunityRow, Rate } from "@/contract/seo/common";
-import type { OpportunityDetail, SeoOpportunitiesPayload, Serp } from "@/contract/seo/opportunities";
+import type { OpportunityDetail, Outcome, OutcomeSpan, SeoOpportunitiesPayload, Serp } from "@/contract/seo/opportunities";
 import { Badge, Chip } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -9,14 +9,15 @@ import { Delta } from "@/components/ui/Delta";
 import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { Absent } from "@/components/ui/Read";
+import { InspectNowButton } from "@/components/seo/google/actions";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { Tabs } from "@/components/ui/Tabs";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { ago, DASH, fullDate, num, percent, shortDate, sourceLabel } from "@/lib/format";
-import { ActButton, OwnerDone, StateButton } from "./Act";
+import { ActButton, Decide, OwnerDone } from "./Act";
 import { ActionCell } from "./OppList";
-import { actionEffect, actionLabel, gain, hrefWith, noEstimate, ownerStep, pos, PRIORITY_LABEL, PRIORITY_TONE, STATE_LABEL, STATE_TONE, times, TYPE_ICON } from "./look";
+import { actionEffect, actionLabel, gain, hrefWith, noEstimate, ownerStep, pos, PRIORITY_LABEL, PRIORITY_TONE, quoted, STATE_LABEL, STATE_TONE, times, TYPE_ICON } from "./look";
 import { PositionChart } from "./PositionChart";
 
 export type DetailTab = "analysis" | "ai" | "actions" | "history";
@@ -74,14 +75,22 @@ export function OppDetail({ data, base, tab }: { data: SeoOpportunitiesPayload; 
               {page.path === "/" ? "/ (the home page)" : page.path}
             </Go>
           ) : null}
-          {o.subject.keyword ? <span className="dk-seo-opps-kw">“{o.subject.keyword}”</span> : null}
+          {o.subject.keyword ? <span className="dk-seo-opps-kw">{quoted(o.subject.keyword)}</span> : null}
           {o.subject.cluster && !o.subject.keyword ? <span className="dk-seo-opps-kw dk-seo-opps-kw--topic">{o.subject.cluster.name}</span> : null}
           {o.state.state !== "open" ? (
             <Badge tone={STATE_TONE[o.state.state]} dot>
               {STATE_LABEL[o.state.state]}
             </Badge>
           ) : null}
+          {!o.active ? (
+            <Tooltip text={o.clearedWhy ?? "The rules no longer find it."}>
+              <span tabIndex={0}>
+                <Badge tone="quiet">No longer found</Badge>
+              </span>
+            </Tooltip>
+          ) : null}
         </p>
+        {d.lookups.length ? <Lookups d={d} /> : null}
       </div>
       <Figures d={d} rank={data.rank} />
       <Tabs
@@ -100,9 +109,40 @@ export function OppDetail({ data, base, tab }: { data: SeoOpportunitiesPayload; 
         {tab === "analysis" ? <Analysis d={d} rank={data.rank} /> : null}
         {tab === "ai" ? <Suggestions d={d} operator={data.operator} /> : null}
         {tab === "actions" ? <Actions o={o} owner={data.viewer.owner} /> : null}
-        {tab === "history" ? <History o={o} /> : null}
+        {tab === "history" ? <History d={d} /> : null}
       </div>
     </Card>
+  );
+}
+
+/**
+ * The results as the public sees them, in a new tab: the opportunity's search
+ * (or its topic's busiest phrase) in Google and Bing for Switzerland. Links
+ * only; the desk reads nothing from those pages.
+ */
+function Lookups({ d }: { d: OpportunityDetail }) {
+  const phrase = d.lookups[0]!.phrase;
+  const own = !!d.opportunity.subject.keyword;
+  return (
+    <p className="dk-seo-opps-lookups">
+      <Tooltip
+        text={
+          own
+            ? `Opens the results for ${quoted(phrase)} as a searcher in Switzerland sees them, without personal results. The desk reads nothing from them.`
+            : `One phrase of the topic: the one Google showed the site for most in the range, else its first relevant one. Opens its results as a searcher in Switzerland sees them. The desk reads nothing from them.`
+        }
+      >
+        <span className="dk-seo-opps-quiet" tabIndex={0}>
+          Who ranks for {quoted(phrase)}:
+        </span>
+      </Tooltip>
+      {d.lookups.map((l) => (
+        <Go key={l.engine} href={l.href} className="dk-seo-opps-lookup">
+          {l.label}
+          <Icon name="external" size={12} />
+        </Go>
+      ))}
+    </p>
   );
 }
 
@@ -466,6 +506,8 @@ function Actions({ o, owner }: { o: OpportunityRow; owner: boolean }) {
               {a.kind === "chrome" ? "Open in Search Console" : "Open"}
             </LinkButton>
           ) : null}
+          {/* A page waiting for Google: ask its URL Inspection now, to see whether the request has worked yet. */}
+          {a.kind === "chrome" && o.subject.page?.path ? <InspectNowButton path={o.subject.page.path} size="sm" compact /> : null}
           {step && open ? (
             /* A step from the audit: whoever took it marks its task done. The owner's own: the owner only. */
             a.kind === "owner" && !owner ? (
@@ -485,18 +527,10 @@ function Actions({ o, owner }: { o: OpportunityRow; owner: boolean }) {
       <Section title="Your decision">
         <p className="dk-seo-opps-note">
           It is {STATE_LABEL[o.state.state].toLowerCase()}
-          {o.state.by ? `, set by ${o.state.by}${o.state.at ? ` ${ago(o.state.at)}` : ""}` : ""}. The engine never changes a decision; one it no longer finds is kept as it is.
+          {o.state.by ? `, set by ${o.state.by}${o.state.at ? ` ${ago(o.state.at)}` : ""}` : ""}
+          {o.state.note && closed ? `: ${o.state.note}` : ""}. The engine never changes a decision; one it no longer finds is kept as it is.
         </p>
-        <div className="dk-seo-opps-buttons">
-          {closed ? (
-            <StateButton id={o.id} state="open" label="Open again" icon="refresh" />
-          ) : (
-            <>
-              <StateButton id={o.id} state="done" label="Mark done" icon="check-circle" variant="good" />
-              <StateButton id={o.id} state="dismissed" label="Dismiss" icon="x-circle" />
-            </>
-          )}
-        </div>
+        <Decide id={o.id} state={o.state.state} />
       </Section>
     </>
   );
@@ -504,7 +538,96 @@ function Actions({ o, owner }: { o: OpportunityRow; owner: boolean }) {
 
 /* ---------- History ---------------------------------------------------------------------------------- */
 
-function History({ o }: { o: OpportunityRow }) {
+/**
+ * What happened to it: whether it worked (the subject's figures before and
+ * after it was done or stopped being found), its facts, and every action and
+ * decision the desk recorded for it.
+ */
+function History({ d }: { d: OpportunityDetail }) {
+  const o = d.opportunity;
+  return (
+    <>
+      {d.outcome ? (
+        <Section title="Whether it worked">
+          {d.outcome.state === "ok" ? <OutcomeTable o={d.outcome.value} /> : <Absent reading={d.outcome} form="panel" />}
+          {d.outcome.state === "ok" && d.outcome.note ? <p className="dk-seo-opps-note">{d.outcome.note}</p> : null}
+        </Section>
+      ) : null}
+      <Section title="Its record">
+        <Facts o={o} />
+      </Section>
+      <Section title="What people did">
+        {d.trail.length ? (
+          <ol className="dk-seo-opps-trail">
+            {d.trail.map((t, i) => (
+              <li key={`${t.at}-${i}`}>
+                <span className="dk-seo-opps-quiet dk-num" title={fullDate(t.at)}>
+                  {ago(t.at)}
+                </span>
+                <span>
+                  <b>{t.text}</b>
+                  {t.actor ? <span className="dk-seo-opps-quiet"> · {t.actor}</span> : null}
+                  {t.detail ? <em>{t.detail}</em> : null}
+                </span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="dk-seo-opps-note">Nobody has acted on it or decided about it yet.</p>
+        )}
+      </Section>
+    </>
+  );
+}
+
+/** The 28 days before against the days after, for its search or its page. */
+function OutcomeTable({ o }: { o: Outcome }) {
+  const row = (label: string, s: OutcomeSpan) => (
+    <tr>
+      <th scope="row">
+        {label}
+        <span className="dk-seo-opps-quiet">
+          {" "}
+          {shortDate(s.start)} – {shortDate(s.end)}
+          {s.days ? ` · ${num(s.days)} day${s.days === 1 ? "" : "s"}` : ""}
+        </span>
+      </th>
+      <td className="dk-seo-opps-mini-n dk-num">{num(s.impressions)}</td>
+      <td className="dk-seo-opps-mini-n dk-num">{num(s.clicks)}</td>
+      <td className="dk-seo-opps-mini-n dk-num">{s.position === null ? <span className="dk-seo-opps-quiet">not shown</span> : pos(s.position)}</td>
+    </tr>
+  );
+  return (
+    <>
+      <p className="dk-seo-opps-note">
+        {o.what === "done" ? "Marked done" : "No longer found by the rules"} on {fullDate(o.day)}. {o.label} in Google, the days before against the days since:
+      </p>
+      <table className="dk-seo-opps-mini dk-seo-opps-outcome">
+        <caption className="dk-sr">Search Console figures before and after</caption>
+        <thead>
+          <tr>
+            <th scope="col">Span</th>
+            <th scope="col" className="dk-seo-opps-mini-n">
+              Impr.
+            </th>
+            <th scope="col" className="dk-seo-opps-mini-n">
+              Clicks
+            </th>
+            <th scope="col" className="dk-seo-opps-mini-n">
+              Pos.
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {row("Before", o.before)}
+          {row("After", o.after)}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function Facts({ o }: { o: OpportunityRow }) {
   const st = o.state;
   return (
     <ol className="dk-seo-opps-history">

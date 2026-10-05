@@ -674,6 +674,261 @@ details[open] > .dk-seo-bl-need-row .dk-seo-bl-need-title {
   line-height: var(--lh-body);
 }
 
+/* ---------- what the second pass added: pager, detail, followed links, the checker, forms ---------- */
+
+/* Two small buttons side by side in a cell. */
+.dk-seo-bl-pair {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+.dk-seo-bl-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  padding: var(--x10) var(--pad);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* "Pages linked to": Google's export, then Bing. */
+.dk-seo-bl-linked + .dk-seo-bl-linked {
+  margin-top: var(--x16);
+  padding-top: var(--x14);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-bl-linked {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-bl-linked-head {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: var(--w-semi);
+}
+
+.dk-seo-bl-imported {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  list-style: none;
+}
+
+/* One site, opened from its row. */
+.dk-seo-bl-detail {
+  scroll-margin-top: var(--x24);
+}
+
+.dk-seo-bl-detail-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x4) var(--pad) var(--x14);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-bl-detail-facts:empty {
+  display: none;
+}
+
+.dk-seo-bl-detail-visits {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-bl-detail-visits b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+/* "Links you follow": the checker over the table. */
+.dk-seo-bl-links {
+  scroll-margin-top: var(--x24);
+}
+
+.dk-seo-bl-links-check {
+  padding: var(--x4) var(--pad) var(--x14);
+}
+
+.dk-seo-bl-links-counts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-bl-check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-bl-check > .dk-seo-bl-said {
+  max-width: none;
+  text-align: left;
+}
+
+.dk-seo-bl-check-form {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-bl-check-field {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-bl-check-result {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-bl-check-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-bl-check-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  list-style: none;
+}
+
+.dk-seo-bl-check-links li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-bl-check-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x8);
+}
+
+.dk-seo-bl-check-actions .dk-seo-bl-act {
+  align-items: flex-start;
+}
+
+.dk-seo-bl-check-actions .dk-seo-bl-said {
+  text-align: left;
+}
+
+/* An address the weekly check found, waiting for a person's word. */
+.dk-seo-bl-found {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+  margin-top: var(--x4);
+  padding: var(--x6) var(--x8);
+  border: var(--x1) dashed var(--blue-edge);
+  border-radius: var(--r-field);
+  background: var(--blue-ground);
+  white-space: normal;
+}
+
+.dk-seo-bl-found .dk-seo-bl-act {
+  align-items: flex-start;
+}
+
+.dk-seo-bl-seen--bad {
+  border-color: var(--red-edge);
+  color: var(--red);
+}
+
+/* The agreed name, address and phone, over the values in use. */
+.dk-seo-bl-truth {
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--green-4);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-bl-truth-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--x4) var(--x12);
+  margin-top: var(--x6);
+  font-size: var(--t-small);
+}
+
+.dk-seo-bl-truth-list > div {
+  display: contents;
+}
+
+.dk-seo-bl-truth-list dt {
+  color: var(--ink-3);
+}
+
+.dk-seo-bl-truth-list dd {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+/* The dialogs' forms. */
+.dk-seo-bl-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+.dk-seo-bl-form > .dk-seo-bl-said {
+  max-width: none;
+  text-align: left;
+}
+
+.dk-seo-bl-formselect {
+  width: 100%;
+}
+
+.dk-seo-bl-formselect select {
+  width: 100%;
+}
+
+.dk-seo-bl-fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  padding: var(--x10) var(--x12) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+}
+
+.dk-seo-bl-fieldset legend {
+  padding: 0 var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
 /* ---------- a phone ---------- */
 
 @media (max-width: 760px) {

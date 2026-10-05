@@ -21,9 +21,12 @@ export type AuditAsked =
 /**
  * "Run full SEO audit", from the head of every SEO page.
  *
- * It asks the desk for a full audit (POST /api/v1/seo/audit: the crawl,
- * Search Console, the snapshot, the readiness check and the opportunity
- * engine, in that order, through the scheduler). Where the desk does not have
+ * It asks the desk for a full audit (POST /api/v1/seo/audit: the sitemap,
+ * the crawl, Search Console's figures, Google's index check, the rank
+ * history, PageSpeed, AI readiness, referrals, profiles and the opportunity
+ * engine last, one after the other through the scheduler; src/cc/seo/audit.ts
+ * lists them). The deep audit is asked for from the list of audits
+ * (/seo/list/audits), not from here. Where the desk does not have
  * that yet (404), it asks for the part that exists, the crawl (POST
  * /api/v1/jobs/crawl/run), and the button says so. Either only READS the
  * website and Google: nothing on the site changes. The desk server refuses as

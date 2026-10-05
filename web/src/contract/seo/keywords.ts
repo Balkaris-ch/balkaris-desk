@@ -5,7 +5,10 @@
  *
  *   ?range=30d
  *   ?view=clusters       keywords (default) | clusters: the topic clusters instead of the phrases
- *   ?lang=de             de | en | all
+ *   ?lang=de             de | en | fr | it | all
+ *   ?where=che           all (default) | che: Search Console's figures for searches from Switzerland only
+ *   ?device=mobile       all (default) | desktop | mobile | tablet: Search Console's figures for one device
+ *   ?moved=new           new | lost: phrases shown in this window and not the one before, or the reverse
  *   ?cluster=<key>       one cluster, or "none"
  *   ?intent=commercial   commercial | transactional | informational | local | navigational | all
  *   ?source=gsc          gsc | autocomplete | audit | manual | all
@@ -20,8 +23,13 @@
  *   ?dir=desc
  *   ?corder=rank         the clusters view's order: rank (the audit's order of attack) | impressions | relevant | opportunities
  *   ?offset=0&limit=25   at most 500 (the clusters view pages the same way)
+ *   ?open=397            one keyword's own view (KeywordDetail), beside the list
+ *   ?research=webdesign  the web research of a phrase, as it was last researched (ResearchPanel); with
+ *   &rlang=de&rmodes=plain,questions   its language (de | en | fr | it) and ways (plain, questions, modifiers, front, alphabet)
+ *   ?serp=webdesign&slang=de           who ranks for a phrase the table does not hold (SerpView)
  *
- *   GET /api/v1/seo/keywords/export.csv   the list as filtered, every matching row (?id=… repeated: only those)
+ *   GET /api/v1/seo/keywords/export.csv            the list as filtered, every matching row (?id=… repeated: only those)
+ *   GET /api/v1/seo/keywords/clusters.csv          the topic clusters as filtered
  *
  * Changes (a signed-in person; nothing here changes the website):
  *   POST /api/v1/seo/keywords                  { phrase, lang?, cluster?, target? } → KeywordChanged   source "manual"
@@ -31,16 +39,32 @@
  *   POST /api/v1/seo/keywords/:id/brief        {}                                 → BriefQueued      an operator brief for the phrase
  *   POST /api/v1/seo/keywords/bulk             { ids, op: target | untarget | relevant | weak | irrelevant } → KeywordsActed
  *   POST /api/v1/seo/keywords/clusters/:key/brief  {}                             → BriefQueued      an operator brief for the cluster
- *   (A cluster is mapped to a page by the engine's own POST /api/v1/seo/clusters/:key/page.)
+ *   POST /api/v1/seo/keywords/clusters/:key/page   { path | null | "auto" }          → KeywordChanged   "auto": the desk decides again
+ *   POST /api/v1/seo/keywords/:id/page         { path: "auto" } as well
+ *   POST /api/v1/seo/keywords/:id/edit         { cluster?, lang?, intent? }       → KeywordChanged   kept against runs and imports
+ *   POST /api/v1/seo/keywords/:id/remove       {}                                 → KeywordChanged   only a phrase a person alone added
+ *   POST /api/v1/seo/keywords/many             { phrases: "one per line", lang?, cluster? } → KeywordsActed
+ *   POST /api/v1/seo/keywords/topics           { name, lang, intent? }            → TopicChanged
+ *   POST /api/v1/seo/keywords/topics/:key      { name }                           → TopicChanged     rename
+ *   POST /api/v1/seo/keywords/research         { seed, lang?, modes?, fresh? }    → Researched       asks the web (counts on today's allowance)
+ *   POST /api/v1/seo/keywords/research/track   { seed, lang, phrases: [{ phrase, cluster? }], cluster? } → KeywordsTracked
+ *   POST /api/v1/seo/keywords/research/run     {}                                 → { ok, line }     the daily research, now
+ *   POST /api/v1/seo/keywords/serp             { phrase, lang?, cluster?, fresh? } → SerpAsked & { ok, line }   who ranks
+ *   POST /api/v1/seo/keywords/ai-sort          { ids } | { seed, lang, phrases }  → BriefQueued      the workstation's local model sorts them
+ *   POST /api/v1/seo/keywords/planner          { csv, lang?, addMissing? }        → PlannerImport & { ok }   the owner only
+ *   POST /api/v1/seo/keywords/volumes          { ids }                            → { ok, line }     DataForSEO, when connected
  *
- * NO SEARCH VOLUME. No free source gives it (Google Ads Keyword Planner ranges
- * may be added by hand later). The column is Search Console's impressions for
- * the site, named as such. No difficulty either: nothing free measures it.
+ * SEARCH VOLUME only where somebody gave a number: a Keyword Planner export the
+ * owner imported, or DataForSEO once connected; each figure names its source
+ * and day, and the column is drawn only when a number exists. Otherwise the
+ * column is Search Console's impressions for the site, named as such.
+ * Difficulty is DataForSEO's when bought; "competition" is the desk's own
+ * reading of a kept Google result page (its ads and map pack), named so.
  *
  * Types only.
  */
 import type { Reading, Stat } from "../common";
-import type { Priority, Rate, SeoHead } from "./common";
+import type { GoogleLane, KeywordVolume, Priority, Rate, ResearchMode, ResearchResult, SeoHead, SerpCheck, WebAllowance, WebLang } from "./common";
 
 export type KeywordSource = "gsc" | "autocomplete" | "audit" | "manual";
 export type KeywordStatus = "relevant" | "weak" | "irrelevant" | "unjudged";
@@ -59,8 +83,18 @@ export interface SeoKeywordsPayload {
   tiles: KeywordTiles;
   facets: KeywordFacets;
   list: Reading<{ total: number; offset: number; limit: number; rows: KeywordRow[] }>;
-  /** The weekly Google Autocomplete research and its request budget. */
+  /** The desk's daily research of the clusters' seeds (with a weekly budget). */
   research: ResearchState;
+  /** Research on the web, the first thing on the page: the box, today's allowance, and the asked phrase's answer. */
+  lookup: ResearchPanel;
+  /** Who ranks for a phrase the table does not hold (?serp=); null when none is asked. */
+  serp: SerpView | null;
+  /** One keyword's own view (?open=); null when none is open. */
+  open: Reading<KeywordDetail> | null;
+  /** What demand figures exist and where more would come from. */
+  volumes: VolumeState;
+  /** The person may import a Keyword Planner export (the owner). */
+  canImport: boolean;
   /** What the server understood of the address, defaults filled in. */
   asked: KeywordsQuery;
   /** The window the search figures cover, or why there are none (Search Console not connected, no snapshot yet). */
@@ -81,7 +115,22 @@ export interface SeoKeywordsPayload {
 
 export interface KeywordsQuery {
   view: KeywordsView;
-  lang: "de" | "en" | "all";
+  lang: WebLang | "all";
+  /** Search Console's figures for every country (default) or searches from Switzerland only. */
+  where: "all" | "che";
+  /** Search Console's figures for every device (default) or one. */
+  device: "all" | "desktop" | "mobile" | "tablet";
+  /** Phrases new in the window, or lost since the window before; "" for all. */
+  moved: "new" | "lost" | "";
+  /** The keyword whose own view is open, or null. */
+  open: number | null;
+  /** The phrase researched on the web ("" for none), its language and ways. */
+  research: string;
+  rlang: WebLang;
+  rmodes: ResearchMode[];
+  /** A phrase whose result pages are shown though the table does not hold it ("" for none), and its language. */
+  serp: string;
+  slang: WebLang;
   intent: Intent | "all";
   /** A cluster's key, "none", or "" for all. */
   cluster: string;
@@ -195,6 +244,95 @@ export interface KeywordRow {
   /** Open opportunities the engine found for this phrase. */
   opportunities: number;
   firstSeen: string;
+  /** Demand, when somebody gave a number for it (Keyword Planner or DataForSEO), with its source and day; null otherwise. */
+  volume: KeywordVolume | null;
+  /** The newest Google result page the desk kept for it, and the desk's own reading of it; null when never checked. */
+  kept: KeptSerp | null;
+  /** The newest brief asked for it from this page, and where it stands. */
+  brief: { task: number; state: string; at: string } | null;
+  /** A person alone added it, so a person may take it out again. */
+  removable: boolean;
+}
+
+/**
+ * The newest Google result page kept for a phrase, and the desk's own
+ * "competition" reading of it: how many ads and whether a map pack stand
+ * above the organic results. The desk's own measure, never a vendor's score.
+ */
+export interface KeptSerp {
+  check: number;
+  at: string;
+  ownPosition: number | null;
+  competition: "low" | "medium" | "high";
+  line: string;
+}
+
+/** What demand figures the table holds, and where more would come from. */
+export interface VolumeState {
+  /** Phrases with a volume, and with a difficulty. */
+  withVolume: number;
+  withDifficulty: number;
+  /** DataForSEO: connected or not, and the owner's step when not. */
+  dataforseo: { configured: boolean; step: string | null };
+}
+
+/** Research on the web: the box and the answer for the asked phrase. */
+export interface ResearchPanel {
+  /** What the box asks with (the address's research, rlang, rmodes, or the defaults). */
+  seed: string;
+  lang: WebLang;
+  modes: ResearchMode[];
+  /** Today's person-asked allowance, and the sources paused after a refusal. */
+  allowance: WebAllowance;
+  paused: { source: "google" | "bing"; until: string; why: string }[];
+  /**
+   * The answer, as last researched in the last seven days (sending nothing);
+   * waiting with the cost when this phrase was not researched in these ways;
+   * null when no phrase is asked.
+   */
+  result: Reading<ResearchResult> | null;
+  /** What researching it now would send, and what the last seven days' answers save. */
+  cost: { send: number; kept: number } | null;
+  /** Where a "Check who ranks" would go: the studio workstation, today's Google allowance, a pause. */
+  lane: GoogleLane;
+}
+
+/** Who ranks for one phrase: the newest result pages kept, what is on its way, and the Google lane. */
+export interface SerpView {
+  phrase: string;
+  lang: WebLang;
+  /** The keyword table's row, when it holds the phrase. */
+  tracked: number | null;
+  google: SerpCheck | null;
+  /** DuckDuckGo's page: a second opinion, never Google's ranking. */
+  duckduckgo: SerpCheck | null;
+  /** A check queued or running. */
+  pending: SerpCheck | null;
+  /** Earlier checks, newest first: the phrase's history of result pages. */
+  history: SerpCheck[];
+  lane: GoogleLane;
+  /** The desk's own reading of the newest Google page, or null. */
+  kept: KeptSerp | null;
+}
+
+/** One keyword's own view (?open=). */
+export interface KeywordDetail {
+  row: KeywordRow;
+  /** Search Console per day over the window (the head's period, the where and device asked). */
+  series: Reading<{ date: string; clicks: number; impressions: number; position: number | null }[]>;
+  /** The pages Google showed for it over the window. */
+  pages: Reading<{ path: string; clicks: number; impressions: number; position: number | null }[]>;
+  serp: SerpView;
+  /** The phrase it was found from by research, if any. */
+  seed: string | null;
+  /** Phrases the research found from it, at most 30. */
+  found: { id: number; phrase: string; status: KeywordStatus }[];
+  /** Its topic with the topic's page. */
+  topic: { key: string; name: string; lang: string; page: string | null } | null;
+  /** Briefs asked for it from this page, newest first. */
+  briefs: { task: number; state: string; at: string; by: string }[];
+  /** Who last refiled it by hand (topic, language, intent). */
+  editedBy: string | null;
 }
 
 /** The clusters view's list: `total` clusters match, `rows` is this page of them. */
@@ -248,8 +386,9 @@ export interface SitePageOption {
   lang: string | null;
 }
 
+/** The desk's own daily research of the clusters' seeds, with a weekly budget. */
 export interface ResearchState {
-  /** Requests to Google Autocomplete this week and the cap the desk refuses beyond. */
+  /** Requests to Google's suggestions this week and the cap the desk refuses beyond. */
   used: number;
   cap: number;
   /** The ISO week the count belongs to: "2026-W40". */
@@ -257,9 +396,32 @@ export interface ResearchState {
   lastRun: string | null;
   lastNote: string | null;
   nextRun: string | null;
-  /** Phrases the research added in all, and in its last run. */
+  /** Phrases the research added in all, and in its last run (and the requests that run sent). */
   found: number;
   foundLast: number;
+  sentLast: number;
+  /** The job can be run now from this page (it is ready and switched on). */
+  canRun: boolean;
+  line: string;
+}
+
+export interface TopicChanged {
+  ok: true;
+  topic: { key: string; name: string; lang: string };
+  line: string;
+}
+
+export interface Researched {
+  ok: true;
+  line: string;
+  /** Where the answer is drawn: the address to go to. */
+  href: string;
+}
+
+export interface KeywordsTracked {
+  ok: true;
+  added: number;
+  known: number;
   line: string;
 }
 

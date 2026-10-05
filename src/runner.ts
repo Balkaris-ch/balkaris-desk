@@ -15,6 +15,7 @@ import { ensureFor, ensureOllama, release } from "./ensure.ts";
 import type { TopicId } from "./catalogue.ts";
 import { isFormat } from "./templates.ts";
 import { operatorOnce } from "./cc/operator/work.ts";
+import { fetchOnce } from "./cc/seo/web/work.ts";
 
 /**
  * The workstation's half. Run this on the machine with the 4090.
@@ -401,7 +402,7 @@ for (;;) {
        runner ask for a question from the command center's AI Operator, and
        the box refuses to hand one out while an article job is queued. A fault
        in the operator's door is logged and counts as "nothing done". */
-    const did = (await once()) || (await operatorOnce({ desk: DESK, name: NAME, secret: SECRET }));
+    const did = (await once()) || (await fetchOnce({ desk: DESK, name: NAME, secret: SECRET })) || (await operatorOnce({ desk: DESK, name: NAME, secret: SECRET }));
     if (did) {
       quiet = 0;
       asleep = false;

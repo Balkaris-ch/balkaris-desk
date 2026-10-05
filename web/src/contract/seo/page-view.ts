@@ -92,6 +92,118 @@ export interface SeoPageViewPayload {
   }[];
   /** The operator's actions for this page, as tasks a button posts to POST /api/v1/operator/tasks. */
   operator: OperatorPanel;
+  /** The page's settings on the Optimize tab: search, sharing, index, structured data. */
+  settings: Reading<PageSettings>;
+  /** The keyword store's phrases mapped to this page, with where the page carries them. */
+  phrases: Reading<PagePhrase[]>;
+}
+
+/**
+ * THE PAGE'S SETTINGS. Each field three ways, side by side: what the live
+ * page says (the crawl), what the desk has had approved and committed (the
+ * override in content/desk/overrides.json), and what waits for approval.
+ * Changes go through the operator's one door, POST /api/v1/operator/proposals
+ * (a title and description through POST /api/v1/seo/optimize/propose, which
+ * names the page's own part); approve, reject, withdraw and check through
+ * /api/v1/operator/proposals/:id/…; a share picture is uploaded first with
+ * POST /api/v1/operator/pictures and named by its `sitePath`.
+ */
+export type SettingKey = "title" | "description" | "ogTitle" | "ogDescription" | "ogImage" | "noindex" | "canonical";
+
+/** One proposal's value for a field. */
+export interface SettingSide {
+  value: string;
+  /** The proposal (AI Operator › Approvals). */
+  id: number;
+  /** For a share picture: where it can be seen now (the desk's copy of an upload, or the live site's). */
+  picture: string | null;
+  by: string | null;
+  at: string;
+}
+
+export interface SettingField {
+  key: SettingKey;
+  label: string;
+  /** What the live page says, as the crawl read it; null when it says nothing. */
+  live: string | null;
+  /** For a share picture: its address on the live site. */
+  livePicture: string | null;
+  /** The newest approved and committed value; null when the desk set none. */
+  approved: SettingSide | null;
+  /** The newest value waiting for approval; null when none waits. */
+  waiting: SettingSide | null;
+  /** The characters a result or card shows before it cuts; null when there is no such limit. */
+  limit: number | null;
+}
+
+/** A draft the studio workstation's local model makes (POST /api/v1/operator/tasks). */
+export interface AiDraft {
+  label: string;
+  task: NewTask;
+  /** "proposal": it arrives in the approval queue; "advice": an answer in words, nothing changes by it. */
+  gives: "proposal" | "advice";
+  step: string;
+  available: boolean;
+  unavailable: string | null;
+  pending: { id: number; running: boolean; href: string } | null;
+}
+
+export interface SettingGroup {
+  key: "search" | "sharing" | "index" | "schema";
+  fields: SettingField[];
+  /** This group's proposals for the page that wait, are approved or are live, newest first. */
+  proposals: ProposalRow[];
+  ai: AiDraft[];
+}
+
+export interface SchemaBlock {
+  id: number;
+  type: string;
+  state: ProposalRow["state"];
+  json: string;
+  /** Why the desk would refuse it now, in a sentence; null when it passes the desk's own records (approval checks the live site again). */
+  problem: string | null;
+}
+
+export interface PageSettings {
+  /** Why nothing may be proposed for this page, in a sentence; null when it may. */
+  locked: string | null;
+  search: SettingGroup;
+  sharing: SettingGroup;
+  index: SettingGroup;
+  schema: SettingGroup;
+  /** The page's own part of its live title (the website appends " | Balkaris" where it fits). */
+  ownTitle: string | null;
+  /** Share pictures that can be picked: the site's default, the page's own, ones uploaded for it before. */
+  sharePictures: { label: string; sitePath: string; url: string }[];
+  /** The site's default share picture, absolute; null when unknown. */
+  defaultPicture: string | null;
+  twitterCard: string | null;
+  /** The structured-data types the live page prints (the crawl). */
+  schemaTypes: string[];
+  /** What the crawl's rules say about the page's structured data, in plain words. */
+  schemaProblems: string[];
+  /** The desk's own blocks for the page, waiting or live. */
+  schemaBlocks: SchemaBlock[];
+  /** Why the page may not be taken out of search, or null. */
+  noindexRefused: string | null;
+}
+
+/** A phrase of the keyword store mapped to this page (SEO › Keywords), and where the page carries it. */
+export interface PagePhrase {
+  id: number;
+  phrase: string;
+  lang: string | null;
+  status: "relevant" | "weak" | "irrelevant" | "unjudged";
+  sources: string[];
+  /** Every word of the phrase (3 letters or more) in the title, main heading, description, address. */
+  inTitle: boolean;
+  inH1: boolean;
+  inDescription: boolean;
+  inAddress: boolean;
+  /** From Search Console over the period, when Google showed the page for exactly this phrase; null otherwise. */
+  impressions: number | null;
+  position: number | null;
 }
 
 export interface PageSummary extends PageRef {
@@ -315,7 +427,7 @@ export interface PageSuggestion {
 
 /** One of the "Quick actions": an operator task for this page. */
 export interface QuickAction {
-  key: "optimize" | "meta" | "expand" | "links" | "schema";
+  key: "optimize" | "meta" | "og" | "schema" | "links" | "alt" | "expand";
   label: string;
   /** What the task does and where its answer appears. */
   step: string;

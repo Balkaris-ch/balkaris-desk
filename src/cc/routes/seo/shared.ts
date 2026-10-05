@@ -159,7 +159,7 @@ export const SEO_SUGGESTIONS: { label: string; task: NewTask }[] = [
 export const view = (): SiteView => siteView();
 
 /** Activity kinds the SEO engine writes, and the index events it watches. */
-export const SEO_KINDS = ["seo", "seo-action", "seo-state", "seo-import", "seo-research", "seo-ai", "seo-competitors", "seo-presence", "gsc.indexed", "gsc.dropped"];
+export const SEO_KINDS = ["seo", "seo-action", "seo-state", "seo-import", "seo-research", "seo-ai", "seo-competitors", "seo-presence", "gsc.indexed", "gsc.dropped", /* SEO › Backlinks: a followed link found or gone */ "seo-backlinks"];
 
 /* ---------- a CSV file ----------------------------------------------------------------------- */
 

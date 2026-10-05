@@ -97,12 +97,25 @@ function DirLine({ r }: { r: DirectoryRow }) {
 
 /** "Their pages": when the desk last read them, when it reads them next, and the button that reads the due ones now. */
 export function Refresh({ refresh }: { refresh: SeoCompetitorsPayload["refresh"] }) {
-  const why = refresh.registered === false ? "The competitor read is not registered on this desk yet." : refresh.running ? "Reading now." : null;
+  const why =
+    refresh.registered === false
+      ? "The competitor read is not registered on this desk yet."
+      : refresh.running
+        ? "Reading now."
+        : refresh.due === 0
+          ? "Nothing is due: every page was read in the last six days (one that failed, in the last day)."
+          : null;
   return (
     <Card title="Their pages, read weekly" icon="refresh" tone="quiet" className="dk-seo-competitors-refresh">
       <p className="dk-seo-competitors-refresh-line">
-        <span className="dk-num">{num(refresh.fetched)}</span> of <span className="dk-num">{num(refresh.pages)}</span> pages read
-        {refresh.newestRead ? `, the newest ${ago(refresh.newestRead)}` : ""}.
+        <span className="dk-num">{num(refresh.fetched)}</span> read
+        {refresh.failed ? (
+          <>
+            , <span className="dk-num">{num(refresh.failed)}</span> could not be read
+          </>
+        ) : null}
+        , of <span className="dk-num">{num(refresh.pages)}</span> pages{refresh.newestRead ? `; the newest read ${ago(refresh.newestRead)}` : ""}.
+        {refresh.due !== undefined ? ` ${num(refresh.due)} due now.` : ""}
         {refresh.lastRun ? ` Last run ${ago(refresh.lastRun)}` : " Not run yet"}
         {refresh.lastRun && refresh.lastNote ? `: ${refresh.lastNote.replace(/[.\s]+$/, "")}.` : "."}
         {refresh.nextRun ? ` Next run ${ago(refresh.nextRun)}.` : ""}

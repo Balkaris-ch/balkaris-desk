@@ -101,8 +101,16 @@ function PositionPlot({ days, label }: { days: ExplorerResult["days"]; label: st
 
 /* ---------- the card ---------------------------------------------------------------------------------- */
 
-/** "31 Aug – 29 Sep 2026" */
-export const spanText = (start: string, end: string): string => `${shortDate(start)} – ${fullDate(end)}`;
+/**
+ * A window in one date order: "31 Aug – 29 Sep 2026", or with both years when
+ * it crosses one ("30 Sep 2025 – 29 Sep 2026"), so it never reads backwards.
+ * One day is that day.
+ */
+export function spanText(start: string, end: string): string {
+  if (start === end) return fullDate(end);
+  const from = fullDate(start);
+  return `${start.slice(0, 4) === end.slice(0, 4) ? from.replace(/ \d{4}$/, "") : from} – ${fullDate(end)}`;
+}
 
 /**
  * Search Console's performance chart for the view as filtered: clicks as
@@ -119,7 +127,7 @@ export function ScChart({ result, place }: { result: Reading<ExplorerResult>; pl
       icon="line-chart"
       className="dk-seo-gsc-chart"
       info="Per day for the view as filtered, the same days the four figures above add up. Google Search, web results, final days only (two to three days behind). A day Google did not show the site is a real zero for clicks and impressions, and a gap for CTR and position."
-      sub={r ? `${spanText(r.start, r.end)}${r.days.length && r.days[0]!.date > r.start ? ` · figures from ${shortDate(r.days[0]!.date)}` : ""}` : undefined}
+      sub={r ? `${spanText(r.start, r.end)}${r.days.length && r.days[0]!.date > r.start ? ` · figures from ${fullDate(r.days[0]!.date)}` : ""}` : undefined}
       right={
         <nav className="dk-seo-gsc-switch" aria-label="What the chart shows">
           {CHART_METRICS.map((m) => (

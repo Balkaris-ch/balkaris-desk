@@ -1,5 +1,5 @@
 import { db } from "../db.ts";
-import { earlierSeo, pageLevel, pageOfHref } from "../grants.ts";
+import { pageLevel, pageOfHref } from "../grants.ts";
 import type { Person } from "../people.ts";
 import type { SearchHit } from "../../web/src/contract/common.ts";
 
@@ -8,15 +8,22 @@ import type { SearchHit } from "../../web/src/contract/common.ts";
  *
  * It answers from what the desk has, by title: the sixteen sections (and the
  * SEO section's own pages), and the desk's own articles and shared links.
- * That is all it knows today. Pages, keywords and assets arrive when their
- * collectors do, through
- * `registerSearch`, and nothing here has to change when they land.
+ * Everything else arrives through `registerSearch` from the module that holds
+ * it: the crawl's pages and the website's files (src/cc/site/index.ts),
+ * Search Console's queries and the engine's enquiries (src/cc/search/index.ts),
+ * and the SEO section's tracked phrases, clusters, competitors, opportunities,
+ * tasks and crawl findings (src/cc/seo/find.ts).
  *
  * ACCESS. A hit that leads into a part of the desk the owner did not give
  * this person (src/grants.ts) is never sent: sections, articles and every
- * registered searcher's hits alike, by the address each one leads to. A
- * keyword hit leads to the earlier SEO screen, which is several SEO pages in
- * one, so it is sent only to somebody with no SEO page switched off.
+ * registered searcher's hits alike, by the address each one leads to.
+ *
+ * KEYWORDS LEAD TO THE KEYWORDS PAGE. A query Search Console reported used to
+ * lead to /seo?open=<query>, the earlier one-screen SEO, which the Overview
+ * hands on to /seo/legacy: no SEO head, no tabs. Such a hit is sent to the
+ * Keywords page instead, listing the phrase (and opening it when the desk
+ * tracks it), and one the SEO section already found as a tracked phrase is
+ * not listed twice (`keywordView`).
  *
  * ENQUIRIES. A hit of kind "lead" carries somebody's name. Whatever a
  * registered searcher returns, a person who may not read enquiries
@@ -188,6 +195,35 @@ function deskRows(words: string[]): SearchHit[] {
   );
 }
 
+/**
+ * Where a phrase is on the Keywords page: listed (?q=, every status) and, when
+ * the desk tracks it, opened (?open=<id>, as src/cc/seo/find.ts sends its own
+ * hits). The phrase is matched as the keyword table keeps it: lower case,
+ * spaces collapsed.
+ */
+export function keywordView(query: string): string {
+  const phrase = query.toLowerCase().replace(/\s+/g, " ").trim();
+  let id: number | null = null;
+  try {
+    id = (db.prepare("SELECT id FROM cc_seo_keywords WHERE phrase = ?").get(phrase) as { id: number } | undefined)?.id ?? null;
+  } catch {
+    /* a desk before the SEO engine's tables: the list alone */
+  }
+  return `/seo/keywords?q=${encodeURIComponent(phrase)}&status=all${id !== null ? `&open=${id}` : ""}`;
+}
+
+/** A hit that still leads to the earlier SEO screen's keyword view (/seo?open=<query>) is sent to the Keywords page. */
+function rehome(h: SearchHit): SearchHit {
+  if (h.kind !== "keyword" || !h.href.startsWith("/seo?open=")) return h;
+  let query = h.title;
+  try {
+    query = new URLSearchParams(h.href.slice("/seo?".length)).get("open") ?? h.title;
+  } catch {
+    /* keep the title */
+  }
+  return { ...h, href: keywordView(query) };
+}
+
 /** One searcher's answer, or nothing if it threw, answered nonsense or took too long. */
 async function ask(fn: Searcher, q: string, who: Person): Promise<SearchHit[]> {
   let timer: NodeJS.Timeout | undefined;
@@ -211,9 +247,10 @@ async function ask(fn: Searcher, q: string, who: Person): Promise<SearchHit[]> {
 /**
  * What the search box shows for `query`, for this person: sections first, then
  * the desk's articles and links, then whatever the collectors registered.
- * Fewer than two characters finds nothing.
+ * Fewer than two characters finds nothing. Up to 40: the palette groups them by
+ * kind and shows thirty, and the SEO section alone may bring two dozen.
  */
-export async function find(query: string, who: Person, limit = 20): Promise<SearchHit[]> {
+export async function find(query: string, who: Person, limit = 40): Promise<SearchHit[]> {
   const q = query.trim().slice(0, 80);
   const words = wordsOf(q);
   if (q.length < 2 || !words.length) return [];
@@ -224,7 +261,7 @@ export async function find(query: string, who: Person, limit = 20): Promise<Sear
   } catch (e) {
     console.warn(`cc search: the desk's own rows were skipped: ${e instanceof Error ? e.message : String(e)}`);
   }
-  for (const part of await Promise.all(searchers.map((fn) => ask(fn, q, who)))) hits.push(...part);
+  for (const part of await Promise.all(searchers.map((fn) => ask(fn, q, who)))) hits.push(...part.map(rehome));
 
   const seen = new Set<string>();
   /* Nothing from a part of the desk the owner did not give them: the hit would lead to a refusal, and its title is already a look. */
@@ -232,13 +269,9 @@ export async function find(query: string, who: Person, limit = 20): Promise<Sear
     const page = pageOfHref(h.href);
     return !page || pageLevel(who, page.key) !== "none";
   };
-  /* A keyword leads to /seo?open=, which is the earlier SEO screen: one answer with several SEO pages'
-     figures, open only to somebody with no SEO page switched off (src/grants.ts `earlierSeo`). The
-     hit is one of Google's queries with its figures, so it follows the same rule as the screen. */
-  const keywords = earlierSeo(who) !== "none";
+  /* A phrase both Search Console and the keyword table know leads to one address (`keywordView`), so it is listed once. */
   return hits
     .filter((h) => h.kind !== "lead" || who.seesLeads)
-    .filter((h) => h.kind !== "keyword" || keywords)
     .filter(mayOpen)
     .filter((h) => !seen.has(`${h.kind} ${h.href}`) && !!seen.add(`${h.kind} ${h.href}`))
     .slice(0, limit);

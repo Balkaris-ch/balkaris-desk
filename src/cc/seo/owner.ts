@@ -327,8 +327,9 @@ export function markOwnerTask(id: string, done: boolean, by: string, noteText?: 
     note("seo-state", done ? `Marked done: ${had.title}` : `Opened again: ${had.title}`, {
       tone: done ? "good" : "info",
       actor: by,
-      detail: had.who === "lead-chrome" ? "A step in the owner's browser" : "An owner task",
-      href: "/seo#needs-you",
+      detail: WHO_SAYS[had.whoAll],
+      /* The owner's own steps are listed on the Overview; every task is on the list of all of them. */
+      href: had.whoAll === "owner" ? "/seo#needs-you" : taskHref(id),
       dedupe: `seo:owner:${id}:${done ? "done" : "open"}:${now()}`,
     });
   }

@@ -56,9 +56,10 @@ export function QueueButton({ task, label, step, icon = "sparkles", look = "butt
         <>
           <Icon name="check-circle" size={13} />
           <span>
-            Queued as operator task #{said.id}. It runs on the studio workstation when it is on.{" "}
-            <Go href={`/operator?result=${said.id}#response`} className="dk-seo-pages-queued-link">
-              View
+            Queued as operator task #{said.id}. It runs on the studio workstation when it is on, and its answer is kept on AI Operator.{" "}
+            {/* The queue, not ?result=: until the task is answered, the operator screen shows the newest answer of another task there. */}
+            <Go href="/operator#current-tasks" className="dk-seo-pages-queued-link">
+              See the queue
             </Go>
           </span>
         </>

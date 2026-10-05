@@ -1,0 +1,54 @@
+{
+ "version": "0.1.20230825",
+ "status_code": 20000,
+ "status_message": "Ok.",
+ "cost": 0.02003,
+ "tasks_count": 1,
+ "tasks_error": 0,
+ "tasks": [
+  {
+   "id": "09291809-1535-0265-0000-8d49256fe2ad",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "cost": 0.02003,
+   "result_count": 1,
+   "path": [
+    "v3",
+    "backlinks",
+    "summary",
+    "live"
+   ],
+   "data": {
+    "api": "backlinks",
+    "function": "summary",
+    "target": "explodingtopics.com",
+    "internal_list_limit": 10,
+    "include_subdomains": true,
+    "backlinks_filters": [
+     "dofollow",
+     "=",
+     true
+    ],
+    "backlinks_status_type": "all"
+   },
+   "result": [
+    {
+     "target": "explodingtopics.com",
+     "first_seen": "2020-01-18 11:50:58 +00:00",
+     "lost_date": null,
+     "rank": 371,
+     "backlinks": 41245,
+     "backlinks_spam_score": 8,
+     "crawled_pages": 2150,
+     "broken_backlinks": 209,
+     "referring_domains": 12372,
+     "referring_domains_nofollow": 0,
+     "referring_main_domains": 11438,
+     "referring_ips": 10401,
+     "referring_subnets": 6427,
+     "referring_pages": 38786
+    }
+   ]
+  }
+ ]
+}

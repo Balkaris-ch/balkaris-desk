@@ -6,6 +6,7 @@ import { Absent } from "@/components/ui/Read";
 import { PanelAbsent } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
 import { fullDate, num, shortDate } from "@/lib/format";
+import { DEFAULT_RANGE, seoHref } from "./href";
 import "./overview.css";
 
 /**
@@ -13,14 +14,14 @@ import "./overview.css";
  * of AI assistants that named Balkaris (recorded), visits from AI assistants
  * (GA4), requests from AI crawlers (Vercel's request records).
  */
-export function AiSearch({ reading }: { reading: Reading<AiPanel> }) {
+export function AiSearch({ reading, range = DEFAULT_RANGE }: { reading: Reading<AiPanel>; range?: string }) {
   return (
     <Card
       title="AI search"
       icon="robot"
       className="dk-seo-overview-panel dk-seo-overview-a-ai"
       info="Whether AI assistants name Balkaris: questions asked of them and their answers, recorded by the audit and by hand (each assistant’s newest round); sessions GA4 counted from AI assistants; and requests by named AI crawlers in Vercel’s request records once the drain delivers them."
-      right={<LinkButton href="/seo/ai-search" size="sm">Open</LinkButton>}
+      right={<LinkButton href={seoHref("/seo/ai-search", range)} size="sm">Open</LinkButton>}
     >
       {reading.state === "ok" ? (
         <div className="dk-seo-overview-ai">
@@ -48,7 +49,12 @@ export function AiSearch({ reading }: { reading: Reading<AiPanel> }) {
             <div>
               <p className="dk-seo-overview-sublabel">Visits from AI assistants</p>
               {reading.value.referrals.state === "ok" ? (
-                <p className="dk-seo-overview-ai-fig dk-num">{num(reading.value.referrals.value.sessions)}</p>
+                <>
+                  <p className="dk-seo-overview-ai-fig dk-num">{num(reading.value.referrals.value.sessions)}</p>
+                  <p className="dk-seo-overview-quiet dk-seo-overview-ai-window">
+                    {shortDate(reading.value.referrals.value.start)} to {shortDate(reading.value.referrals.value.end)}, the days GA4 was read
+                  </p>
+                </>
               ) : (
                 <Absent reading={reading.value.referrals} form="tile" />
               )}
@@ -63,7 +69,7 @@ export function AiSearch({ reading }: { reading: Reading<AiPanel> }) {
             </div>
           </div>
           <p className="dk-seo-overview-quiet dk-seo-overview-ai-window">
-            Visits and crawlers: {shortDate(reading.value.window.start)} to {shortDate(reading.value.window.end)}.
+            Crawlers: {shortDate(reading.value.window.start)} to {shortDate(reading.value.window.end)}.
           </p>
         </div>
       ) : (

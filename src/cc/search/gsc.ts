@@ -1762,8 +1762,14 @@ const STAND_DAYS = 7;
  * it was asked (at most a week back), each row carries its own day, and the
  * note says how many are carried. An address that left the sitemap is not
  * carried, when the desk knows which the sitemap listed. No request.
+ *
+ * `paths` is the desk's own last read of the website's sitemap (the paths it
+ * lists, src/cc/site/sitemap.ts), passed in by the caller so this file does
+ * not read the website: it says which addresses are the sitemap's when the
+ * check did not keep its own list (results kept before it did), so an
+ * address a person asked about by hand that day is not taken for one.
  */
-export async function indexStand(): Promise<Reading<IndexStand>> {
+export async function indexStand(paths: Set<string> | null = null): Promise<Reading<IndexStand>> {
   return guarded(async () => {
     const day = newestCheckDay();
     if (!day) return waiting("gsc", "The first daily index check has not run yet.");
@@ -1775,17 +1781,20 @@ export async function indexStand(): Promise<Reading<IndexStand>> {
     const size = db.prepare("SELECT value FROM cc_series WHERE metric = 'gsc.sitemap_addresses' AND day = ?").get(day) as { value: number } | undefined;
     const of = size ? size.value : null;
     const dayUrls = (db.prepare("SELECT url FROM cc_inspect WHERE day = ?").all(day) as { url: string }[]).map((r) => r.url);
+    /* Which addresses are the sitemap's: the list kept at this check; without one, the paths the desk's own
+       read of the sitemap lists; without that, what a whole check asked about, or (cut short) that and the
+       addresses of the last whole check. Null: not known, every row counts. */
     const exact = listedOn(day);
-    const checked = dayUrls.filter((u) => !exact || exact.has(u)).length;
+    const byPath = !exact && paths && paths.size ? paths : null;
+    const known = (url: string): boolean => (exact ? exact.has(url) : byPath ? byPath.has(pathOf(url)) : true);
+    const checked = dayUrls.filter(known).length;
     const dayComplete = of !== null && checked >= of;
-    /* Which addresses are the sitemap's: the list kept at this check; without one, what a whole check asked
-       about, or (cut short) that and the addresses of the last whole check. Null: not known, every row counts. */
     let sitemap: Set<string> | null = exact;
-    if (!sitemap) {
+    if (!sitemap && !byPath) {
       const last = dayComplete ? null : lastListed();
       sitemap = dayComplete ? new Set(dayUrls) : last ? new Set([...dayUrls, ...last.urls]) : null;
     }
-    const inSitemap = (url: string): boolean => !sitemap || sitemap.has(url);
+    const inSitemap = (url: string): boolean => (byPath ? byPath.has(pathOf(url)) : !sitemap || sitemap.has(url));
     /* The check's own results and anything asked since stay; an earlier result stands in only for an address the sitemap still lists. */
     const kept = newest.filter((r) => r.day >= day || inSitemap(r.url));
     const old = kept.filter((r) => r.day < day);

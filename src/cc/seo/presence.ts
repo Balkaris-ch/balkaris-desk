@@ -1,8 +1,9 @@
 import { db } from "../../db.ts";
 import type { NapField, NapMatrix, NapTruth, ProfileRow, ProfileState } from "../../../web/src/contract/seo/backlinks.ts";
+import { fetchGuarded, Refused } from "../site/audit.ts";
 import { siteHost, twinHost } from "../site/http.ts";
 import { note, setState, state, today } from "../store.ts";
-import { decode, fetchPage, readHtml } from "./html.ts";
+import { decode, fetchPage, readHtml, type Fetched } from "./html.ts";
 import { json, now } from "./tables.ts";
 
 /**
@@ -303,8 +304,28 @@ export function settleFound(key: string, use: boolean, by: string): ProfileRow {
 
 /* ---------- reading a profile ----------------------------------------------------------------- */
 
-/** Where the checks go. The check script replaces it. */
-export const wire = { fetchPage, sleep: (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)) };
+/**
+ * A profile's address as a person gave it, read behind the spider's guard
+ * (src/cc/site/audit.ts): the name must resolve to public addresses only and
+ * every redirect is checked again, so an address typed on the desk cannot
+ * make the desk fetch its own insides. Never throws.
+ */
+async function guardedPage(url: string): Promise<Fetched> {
+  try {
+    const g = await fetchGuarded(url);
+    return { status: g.status, url: g.url, html: g.body, contentType: g.headers["content-type"] ?? null, error: g.error ?? null };
+  } catch (e) {
+    const said = (e instanceof Error ? e.message : String(e)).replace(/\baudits?\b/g, "reads").replace(/\baudited\b/g, "read");
+    return { status: 0, url, html: null, contentType: null, error: e instanceof Refused ? `the desk does not read this address (${said})` : said };
+  }
+}
+
+/**
+ * Where the checks go. The check script replaces them. `fetchPage` for the
+ * website itself and the finders' fixed hosts; `guarded` for every address a
+ * profile row holds, which a person may have typed.
+ */
+export const wire = { fetchPage, guarded: guardedPage, sleep: (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)) };
 
 /** Name, address and phone from a page's own structured data (Organization, LocalBusiness and the like). */
 function napFrom(schema: Record<string, unknown>[]): { name: string | null; address: string | null; phone: string | null } | null {
@@ -373,15 +394,25 @@ function names(html: string, url: string): boolean {
 const NO_SUCH_PAGE = /"pageID"\s*:\s*"httpErrorPage"/;
 const SIGN_IN = /\/(accounts\/login|login|signin|sign-in|authwall|checkpoint)\b/i;
 
-/** A Swiss address in running text: "Musterweg 8, 8000 Zürich", "Musterweg 8 · CH-8000 Zürich", or the two on following lines. */
-const ADDRESS = /(\p{Lu}[\p{L}.'’-]+(?:[ -][\p{L}.'’-]+){0,3}\s\d{1,4}\s?[a-zA-Z]?)\s*(?:[,·|]|\n)\s*(?:CH[- ])?(\d{4})\s+(\p{Lu}[\p{L}.'’-]+(?:[ -]\p{L}[\p{L}.'’-]+){0,2})/u;
+/**
+ * A Swiss address in running text: "Musterweg 8, 8000 Zürich", "Musterweg 8 ·
+ * CH-8000 Zürich", the two on following lines, or with nothing between them
+ * ("Musterweg 8 8000 Zürich Switzerland", as the studio's own imprint has it,
+ * read 5 October 2026).
+ */
+const ADDRESS = /(\p{Lu}[\p{L}.'’-]+(?:[ -][\p{L}.'’-]+){0,3}\s\d{1,4}\s?[a-zA-Z]?)(?:\s*[,·|\n]\s*|\s+)(?:CH[- ])?(\d{4})\s+(\p{Lu}[\p{L}.'’-]+(?:[ -]\p{L}[\p{L}.'’-]+){0,2})/u;
 const PHONE = /(?:\+41|0041)[\s\d]{9,14}\d|\b0\d{2}\s?\d{3}\s?\d{2}\s?\d{2}\b/;
+/** A country after the town is not part of it. */
+const COUNTRY = /\s+(?:Switzerland|Schweiz|Suisse|Svizzera|Svizra)$/i;
 
 /** The address and phone an imprint page states in its text, when it states them the way Swiss imprints do. */
 export function napInText(text: string): { address: string | null; phone: string | null } {
   const a = ADDRESS.exec(text);
   const p = PHONE.exec(text);
-  return { address: a ? `${a[1]!.replace(/\s+/g, " ").trim()}, ${a[2]} ${a[3]!.trim()}` : null, phone: p ? p[0].replace(/\s+/g, " ").trim() : null };
+  return {
+    address: a ? `${a[1]!.replace(/\s+/g, " ").trim()}, ${a[2]} ${a[3]!.trim().replace(COUNTRY, "")}` : null,
+    phone: p ? p[0].replace(/\s+/g, " ").trim() : null,
+  };
 }
 
 /** The imprint page a home page links to, on the same site. */
@@ -418,7 +449,7 @@ async function ask(r: ProfileDb): Promise<Asked> {
     return { state: "unknown", http: null, why: "Google Maps shows a consent page and runs in the browser, so a profile cannot be read by a plain request; the audit saw it in Chrome." };
   }
   const own = isOwn(host);
-  const got = await wire.fetchPage(r.url!, { timeout: 20_000 });
+  const got = own ? await wire.fetchPage(r.url!, { timeout: 20_000 }) : await wire.guarded(r.url!);
   if (got.status === 404 || got.status === 410) return { state: "not-found", http: got.status, why: own ? `The website answered ${got.status}.` : `The address answered ${got.status}.` };
   if (got.status === 0) return { state: "unknown", http: null, why: `No answer: ${got.error ?? "the request failed"}.` };
   if (got.status !== 200 || !got.html) {
@@ -512,7 +543,15 @@ const put = () => db.prepare("UPDATE cc_seo_profiles SET state = ?, state_why = 
 
 /** Write what one ask found. A page that could not be read keeps the name, address and phone the last reading gave. */
 function keep(r: ProfileDb, a: Asked): void {
-  put().run(a.state, a.why, now(), a.http, a.nap === undefined ? r.nap : a.nap ? JSON.stringify(a.nap) : null, r.key);
+  /*
+   * A wall, a refusal or no answer says nothing about the profile itself: a
+   * profile last read as existing (or as gone) keeps that state, with the
+   * reason this read failed beside it, instead of turning "unknown".
+   */
+  const known = a.state === "unknown" && (r.state === "exists" || r.state === "not-found");
+  const state = known ? r.state : a.state;
+  const why = known ? `Kept from the last good read: this time it could not be read. ${a.why}` : a.why;
+  put().run(state, why, now(), a.http, a.nap === undefined ? r.nap : a.nap ? JSON.stringify(a.nap) : null, r.key);
 }
 
 /** Ask one profile's address now. Throws `Said` when there is nothing to ask. */
@@ -522,7 +561,8 @@ export async function checkOne(key: string): Promise<{ row: ProfileRow; line: st
   if (!r.url) throw new Said(`${r.name} has no address to ask: give it one first.`);
   const a = await ask(r);
   keep(r, a);
-  if (a.state !== r.state) note("seo-presence", `${r.name}: ${r.state} → ${a.state}`, { tone: "info", detail: a.why, href: "/seo/backlinks", dedupe: `seo:presence:one:${key}:${now()}` });
+  /* A read that failed leaves a known state in place (keep), so it is no change to report. */
+  if (a.state !== r.state && a.state !== "unknown") note("seo-presence", `${r.name}: ${r.state} → ${a.state}`, { tone: "info", detail: a.why, href: "/seo/backlinks", dedupe: `seo:presence:one:${key}:${now()}` });
   const word: Record<ProfileState, string> = { exists: "exists", "not-found": "was not found", unknown: "could not be read", "not-checked": "was not checked" };
   return { row: profile(key)!, line: `${r.name} ${word[a.state]}. ${a.why}` };
 }

@@ -1,6 +1,7 @@
 import type { OpportunityRow } from "@/contract/seo/common";
 import type { OpportunityFacets, OpportunityLine, OpportunityQuery, SeoOpportunitiesPayload } from "@/contract/seo/opportunities";
 import { Badge } from "@/components/ui/Badge";
+import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import "@/components/ui/early.css";
 import { Go } from "@/components/ui/Go";
@@ -13,23 +14,40 @@ import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { DASH, num, shortDate } from "@/lib/format";
 import { ActButton, BulkForm, BulkMenu, OwnerDone, RowMenu } from "./Act";
-import { actionEffect, BASE, gain, hrefWith, noEstimate, ownerStep, paramsOf, pos, PRIORITY_LABEL, PRIORITY_TONE, shortAction, STATE_LABEL, STATE_TONE, times, TYPE_ICON } from "./look";
+import { actionEffect, BASE, EVERY_STATE, exportHref, gain, hrefWith, noEstimate, ownerStep, paramsOf, pos, PRIORITY_LABEL, PRIORITY_TONE, quoted, shortAction, STATE_LABEL, STATE_TONE, times, TYPE_ICON } from "./look";
 
 const FIND = "dk-seo-opps-find";
 const SORTS = [
   { value: "priority", label: "By priority" },
   { value: "potential", label: "By our estimate" },
+  { value: "shown", label: "Most shown in Google" },
+  { value: "position", label: "Best position first" },
   { value: "newest", label: "Newest first" },
   { value: "page", label: "By page" },
 ];
-const STATES = [
-  { value: "", label: "To do" },
-  { value: "open", label: "Open" },
-  { value: "queued", label: "Queued" },
-  { value: "in-progress", label: "In progress" },
-  { value: "done", label: "Done" },
-  { value: "dismissed", label: "Dismissed" },
-  { value: "open,queued,in-progress,done,dismissed", label: "Every state" },
+/** The state select, each with the length of the list it leads to (the server's facets). */
+function stateOptions(facets: OpportunityFacets) {
+  const n = (s: string) => facets.states.find((x) => x.state === s)?.count ?? 0;
+  const todo = n("open") + n("queued") + n("in-progress");
+  return [
+    { value: "", label: `To do (${num(todo)})` },
+    { value: "open", label: `Open (${num(n("open"))})` },
+    { value: "queued", label: `Queued (${num(n("queued"))})` },
+    { value: "in-progress", label: `In progress (${num(n("in-progress"))})` },
+    { value: "done", label: `Done (${num(n("done"))})` },
+    { value: "dismissed", label: `Dismissed (${num(n("dismissed"))})` },
+    { value: EVERY_STATE, label: "Every state" },
+  ];
+}
+/** Whether the rules still find a row. Its default follows the state: to-do states show what is still found, a decision shows both. */
+const FOUND = [
+  { value: "1", label: "Still found by the rules" },
+  { value: "0", label: "No longer found" },
+  { value: "all", label: "Found or not" },
+];
+const COUNTRIES = [
+  { value: "all", label: "All countries" },
+  { value: "che", label: "Switzerland" },
 ];
 const LIMITS = [
   { value: "10", label: "10" },
@@ -55,7 +73,11 @@ const RESETS = ["offset", "open", "tab"] as const;
 export function OppList({ data, openId }: { data: SeoOpportunitiesPayload; openId: string | null }) {
   const asked = data.asked;
   const base = paramsOf(asked);
-  const total = data.facets.types.reduce((n, t) => n + t.count, 0);
+  const filtered = !!(asked.q || asked.types.length || asked.priority || asked.page || asked.cluster || asked.keyword || asked.action);
+  const sub =
+    asked.active === "0"
+      ? "What the rules no longer find: the work that landed, or a source that stopped showing it, each with the decision a person made."
+      : "What the rules found in Search Console, Google’s index, the crawl, PageSpeed and the SEO audit, ranked, each with the step that acts on it.";
 
   return (
     <>
@@ -71,19 +93,22 @@ export function OppList({ data, openId }: { data: SeoOpportunitiesPayload; openI
         <Card
           className="dk-seo-opps-list"
           title="SEO Opportunities"
-          sub="What the rules found in Search Console, Google’s index, the crawl and the SEO audit, ranked, each with the step that acts on it."
+          sub={sub}
           info={<RulesInfo rules={data.rules} />}
           right={
             <>
-              <Select param="state" label="Which opportunities, by state (To do: open, queued and in progress)" fallback="" resets={RESETS} options={STATES} className="dk-seo-opps-head-select" />
+              <Select param="state" label="Which opportunities, by state (To do: open, queued and in progress)" fallback="" resets={RESETS} options={stateOptions(data.facets)} className="dk-seo-opps-head-select" />
               <Select param="sort" label="Order" fallback="priority" resets={RESETS} options={SORTS} className="dk-seo-opps-head-select" />
+              <LinkButton href={exportHref(asked)} icon="download" size="sm" variant="quiet" title="Download the list as filtered and ordered, every matching row (not only this page), as CSV">
+                Export
+              </LinkButton>
               <BulkMenu />
             </>
           }
           flush
           footer={<Pager reading={data.list} asked={asked} base={base} cleared={data.facets.cleared} />}
         >
-          <Chips facets={data.facets} asked={asked} base={base} total={total} />
+          <Chips facets={data.facets} asked={asked} base={base} />
           <Filters facets={data.facets} asked={asked} />
           {data.list.state === "ok" ? (
             <Table
@@ -96,7 +121,13 @@ export function OppList({ data, openId }: { data: SeoOpportunitiesPayload; openI
               select={{ name: "ids", label: (r) => r.title }}
               density="roomy"
               minWidth={860}
-              empty={asked.q || asked.types.length || asked.priority || asked.page || asked.cluster ? "No opportunity matches these filters." : "No opportunity in this state. The engine looks again every hour."}
+              empty={
+                filtered
+                  ? "No opportunity matches these filters."
+                  : asked.active === "0"
+                    ? "The rules still find every opportunity in this state."
+                    : "No opportunity in this state. The engine looks every 15 minutes and runs whole when something it reads has changed."
+              }
               columns={columns(data, openId)}
             />
           ) : (
@@ -121,8 +152,10 @@ function RulesInfo({ rules }: { rules: SeoOpportunitiesPayload["rules"] }) {
   );
 }
 
-function Chips({ facets, asked, base, total }: { facets: OpportunityFacets; asked: OpportunityQuery; base: Record<string, string>; total: number }) {
-  const high = facets.priorities.find((p) => p.priority === "high")?.count ?? 0;
+/** Each chip's number is the length of the list it leads to: the server counts it with every other filter applied. */
+function Chips({ facets, asked, base }: { facets: OpportunityFacets; asked: OpportunityQuery; base: Record<string, string> }) {
+  const total = facets.all;
+  const high = facets.high;
   const noFilter = !asked.types.length && !asked.priority;
   const chip = (key: string, label: string, count: number, href: string, on: boolean) => (
     <Go key={key} href={href} scroll={false} className={cx("dk-seo-opps-chip", on && "dk-seo-opps-chip--on")} aria-current={on ? "true" : undefined}>
@@ -142,9 +175,9 @@ function Chips({ facets, asked, base, total }: { facets: OpportunityFacets; aske
 function Filters({ facets, asked }: { facets: OpportunityFacets; asked: OpportunityQuery }) {
   return (
     <div className="dk-seo-opps-filters">
-      <label className="dk-seo-opps-find">
+      <label className="dk-seo-opps-find" title="Every word, anywhere in an opportunity: its title, page, search, topic and the topic's phrases, what the desk measured, the step and the note on its state. The desk's own list; nothing is looked up on the web.">
         <Icon name="search" size={14} />
-        <input form={FIND} type="search" name="q" defaultValue={asked.q} placeholder="Search opportunities" aria-label="Search opportunities" />
+        <input form={FIND} type="search" name="q" defaultValue={asked.q} placeholder="Search titles, pages, phrases, evidence, steps" aria-label="Search the opportunities: titles, pages, searches, topics and their phrases, evidence, steps and notes" />
       </label>
       <Select
         param="page"
@@ -174,6 +207,15 @@ function Filters({ facets, asked }: { facets: OpportunityFacets; asked: Opportun
         resets={RESETS}
         options={[{ value: "", label: "All priorities" }, ...facets.priorities.map((p) => ({ value: p.priority, label: `${PRIORITY_LABEL[p.priority]} (${p.count})` }))]}
       />
+      <Select param="active" label="Whether the rules still find it" fallback={asked.activeDefault} resets={RESETS} options={FOUND} />
+      {asked.keyword ? (
+        <Go href={hrefWith(paramsOf(asked), { keyword: undefined })} scroll={false} replace className="dk-seo-opps-kwfilter" title="Show the opportunities of every search again">
+          <Icon name="x" size={12} />
+          <span>Search “{asked.keyword}” only</span>
+        </Go>
+      ) : null}
+      {/* The figures' country: the Current column, the detail and the "most shown" order. The rules themselves read every country. */}
+      <Select param="country" label="Whose searches the figures count" fallback="all" resets={["offset"]} options={COUNTRIES} />
     </div>
   );
 }
@@ -192,10 +234,11 @@ function Current({ r, rank }: { r: OpportunityLine; rank: SeoOpportunitiesPayloa
   }
   const n = r.now;
   const window = rank.state === "ok" ? `${shortDate(rank.value.start)} – ${shortDate(rank.value.end)}` : "the window";
-  const what = n.of === "query" ? `“${r.subject.keyword}”` : (r.subject.page?.path ?? "the page");
+  const what = n.of === "query" ? quoted(r.subject.keyword ?? "") : (r.subject.page?.path ?? "the page");
+  const where = rank.state === "ok" && rank.value.country === "che" ? " in Switzerland" : "";
   if (n.position === null) {
     return (
-      <Tooltip text={`Google did not show ${what} in ${window}.`}>
+      <Tooltip text={`Google did not show ${what}${where} in ${window}.`}>
         <span className="dk-seo-opps-quiet" tabIndex={0}>
           not shown
         </span>
@@ -203,7 +246,7 @@ function Current({ r, rank }: { r: OpportunityLine; rank: SeoOpportunitiesPayloa
     );
   }
   return (
-    <Tooltip text={`Google’s average position for ${what}, ${window}: shown ${times(n.impressions)}, ${num(n.clicks)} ${n.clicks === 1 ? "click" : "clicks"}.`}>
+    <Tooltip text={`Google’s average position for ${what}${where}, ${window}: shown ${times(n.impressions)}, ${num(n.clicks)} ${n.clicks === 1 ? "click" : "clicks"}.`}>
       <span className="dk-seo-opps-pos-figure" tabIndex={0}>
         {pos(n.position)}
         {/* The rule's own floor is in its sentence (priorityWhy), so the mark carries that sentence. */}
@@ -305,7 +348,7 @@ function columns(data: SeoOpportunitiesPayload, openId: string | null): Column<O
           )}
           {r.subject.keyword ? (
             <span className="dk-seo-opps-kw" title={r.subject.keyword}>
-              “{r.subject.keyword}”
+              {quoted(r.subject.keyword)}
             </span>
           ) : r.subject.cluster ? (
             <span className="dk-seo-opps-kw dk-seo-opps-kw--topic" title={`Topic: ${r.subject.cluster.name}`}>
@@ -391,11 +434,20 @@ function Pager({ reading, asked, base, cleared }: { reading: SeoOpportunitiesPay
     <div className="dk-seo-opps-pager">
       <p className="dk-seo-opps-pager-said">
         {total ? `Showing ${num(offset + 1)}–${num(Math.min(total, offset + limit))} of ${num(total)} opportunit${total === 1 ? "y" : "ies"}` : "No opportunities"}
-        {cleared && asked.active === "1" ? (
+        {/* What the same filters list among the rows the rules stopped finding, in any state; and the way back from there. */}
+        {cleared > 0 && asked.active === "1" ? (
           <>
             {" · "}
-            <Go href={hrefWith(base, { active: "0", state: "open,queued,in-progress,done,dismissed" })} scroll={false}>
+            <Go href={hrefWith(base, { active: "0", state: EVERY_STATE })} scroll={false} title="The opportunities these filters match that the rules no longer find, whatever their state">
               {num(cleared)} no longer found
+            </Go>
+          </>
+        ) : null}
+        {asked.active === "0" ? (
+          <>
+            {" · "}
+            <Go href={hrefWith(base, { active: undefined, state: undefined })} scroll={false}>
+              Back to what is still to do
             </Go>
           </>
         ) : null}

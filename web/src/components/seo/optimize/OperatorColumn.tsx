@@ -193,6 +193,18 @@ function Ask({ path }: { path: string }) {
   );
 }
 
+/** Where the suggestions came from, naming only the sources that gave one. */
+function sourcesLine(list: PageSuggestion[]): string {
+  const n = (from: PageSuggestion["from"]) => list.filter((s) => s.from === from).length;
+  const parts = [
+    [n("engine"), "the opportunity rules"],
+    [n("crawl"), "the crawl"],
+    [n("readiness"), "the AI-readiness check"],
+  ].filter(([k]) => (k as number) > 0) as [number, string][];
+  if (parts.length === 1) return `all from ${parts[0]![1]}`;
+  return parts.map(([k, w]) => `${k} from ${w}`).join(", ").replace(/, ([^,]*)$/, " and $1");
+}
+
 const STATE_WORD: Record<string, string> = { queued: "Queued", running: "Running", done: "Answered", failed: "Failed", cancelled: "Stopped" };
 
 /**
@@ -238,7 +250,7 @@ export function OperatorColumn({ operator, suggestions, asked, proposals, path }
         <>
           <p className="dk-seo-optimize-ops-intro">
             {suggestions.length
-              ? `${suggestions.length} suggestion${suggestions.length === 1 ? "" : "s"} for this page: ${fromEngine ? `${fromEngine} from the opportunity rules, ` : ""}the rest from the crawl and the AI-readiness check. Each says the figure behind it.`
+              ? `${suggestions.length} suggestion${suggestions.length === 1 ? "" : "s"} for this page, ${sourcesLine(suggestions)}. Each says the figure behind it.`
               : "Nothing to suggest: the rules, the crawl and the readiness check found nothing open on this page."}
           </p>
           <ul className="dk-seo-optimize-sugs">

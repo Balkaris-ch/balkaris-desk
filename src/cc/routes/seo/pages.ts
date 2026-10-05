@@ -2,7 +2,7 @@ import { Hono, type Context } from "hono";
 import type { Vars } from "../../access.ts";
 import { status as jobStatus } from "../../scheduler.ts";
 import * as gsc from "../../search/gsc.ts";
-import { addDays, eachDay, pathOf, round, siteBase } from "../../search/shared.ts";
+import { eachDay, pathOf, round, siteBase } from "../../search/shared.ts";
 import { get as httpGet, pathOf as sitePathOf, sleep, type Got } from "../../site/http.ts";
 import { off, ok, reading, today, waiting } from "../../store.ts";
 import type { Reading, Stat } from "../../../../web/src/contract/common.ts";
@@ -432,7 +432,7 @@ async function queriesByPage(range: SeoRange, search: Reading<SearchRead>): Prom
 
 /* ---------- Google's index, the engine's counts ---------------------------------------------- */
 
-/** How many daily index checks back an address's answer may come from. */
+/** How many daily index checks back an address's answer may come from (gsc.ts STAND_DAYS, which keeps it). */
 const INDEX_DAYS = 7;
 
 /** One address's answer from a daily URL Inspection, with the day it is from. */
@@ -446,27 +446,9 @@ interface IndexRead {
   by: Map<string, Inspected>;
 }
 
-const inspectedOf = (r: Record<string, unknown>): Inspected => ({
-  day: String(r.day),
-  checkedAt: String(r.checked_at ?? r.day),
-  url: String(r.url),
-  path: pathOf(String(r.url)),
-  verdict: (r.verdict as string | null) ?? null,
-  coverage: (r.coverage as string | null) ?? null,
-  lastCrawl: (r.last_crawl as string | null) ?? null,
-  googleCanonical: (r.google_canonical as string | null) ?? null,
-  userCanonical: (r.user_canonical as string | null) ?? null,
-  robots: (r.robots_state as string | null) ?? null,
-  fetchState: (r.fetch_state as string | null) ?? null,
-  indexing: (r.indexing_state as string | null) ?? null,
-  indexed: !!r.is_indexed,
-  canonicalOk: r.canonical_ok === null || r.canonical_ok === undefined ? null : !!r.canonical_ok,
-  link: (r.link as string | null) ?? null,
-});
-
-/** Of several days' answers, each address's newest. */
-function newestPerAddress(rows: Inspected[]): Map<string, Inspected> {
-  const by = new Map<string, Inspected>();
+/** Of several answers, each address's newest: the two spellings of the host Google may report are one address. */
+function newestPerAddress<T extends Inspected>(rows: T[]): Map<string, T> {
+  const by = new Map<string, T>();
   for (const x of rows) {
     const had = by.get(x.path);
     if (!had || x.day > had.day) by.set(x.path, x);
@@ -478,29 +460,18 @@ function newestPerAddress(rows: Inspected[]): Map<string, Inspected> {
  * Google's stored state per address. The daily check keeps every day it ran;
  * one that is cut short (Google failing, the allowance used up) holds a part
  * of the sitemap only. So each address shows its NEWEST answer of the last
- * `INDEX_DAYS` checks with its own day: a short day adds what it learned and
- * blanks nothing.
+ * week with its own day, as gsc.indexStand() keeps it for every SEO screen
+ * (the same count on Pages, Overview and Search Console): a short day adds
+ * what it learned and blanks nothing, and an address a person asked Google
+ * about by hand (Inspect now) shows that answer.
  */
 async function indexRead(): Promise<Reading<IndexRead>> {
-  const r = await gsc.indexing();
+  const r = await gsc.indexStand();
   if (r.state !== "ok") return r;
-  const newest = r.value.day;
-  const { db } = await import("../../../db.ts");
-  const rows = (db.prepare("SELECT * FROM cc_inspect WHERE day >= ? AND day <= ?").all(addDays(newest, -(INDEX_DAYS - 1)), newest) as Record<string, unknown>[]).map(inspectedOf);
-  const by = newestPerAddress(rows);
-  const all = [...by.values()];
-  const carried = all.filter((x) => x.day < newest).length;
-  const oldest = all.reduce((d, x) => (x.day < d ? x.day : d), newest);
-  const complete = r.value.complete !== false;
-  const basis: IndexBasis = { newest, oldest, days: INDEX_DAYS, complete, onNewest: all.length - carried, of: r.value.of ?? null, carried };
-  const note = [
-    "Google's stored state for each address in the sitemap, from the daily URL Inspection: what Google last saw, not a live test.",
-    complete ? "" : `The check of ${newest} was cut short at ${basis.onNewest} of ${basis.of ?? "the"} sitemap addresses.`,
-    carried ? `${carried} address${carried === 1 ? " shows" : "es show"} the answer of an earlier check (back to ${oldest}); each row says its day.` : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  return ok({ basis, by }, "gsc", r.asOf, note);
+  const s = r.value;
+  const by = newestPerAddress(s.rows);
+  const basis: IndexBasis = { newest: s.day, oldest: s.carriedFrom ?? s.day, days: INDEX_DAYS, complete: s.dayComplete, onNewest: s.checked, of: s.of, carried: s.carried };
+  return ok({ basis, by }, "gsc", r.asOf, `${r.note ?? ""} What Google last saw, not a live test.`.trim());
 }
 
 /** Open opportunities per page; null when the engine's table cannot be read. */
@@ -979,7 +950,7 @@ async function indexOf(path: string, inSitemap: boolean | null, index: Reading<I
   const b = index.value.basis;
   const ins = index.value.by.get(path);
   if (!ins) {
-    if (inSitemap === false) return off("gsc", "Not inspected: the daily index check asks Google about the addresses in the sitemap only, and this one is not listed there.", "Open the address in Search Console's URL Inspection to see what Google holds for it.");
+    if (inSitemap === false) return off("gsc", "Not inspected: the daily index check asks Google about the addresses in the sitemap only, and this one is not listed there.", "Ask Google about it by hand with URL Inspection in Search Console.");
     return waiting(
       "gsc",
       `Not inspected yet: none of the last ${b.days} daily index checks has an answer for this address${b.complete ? ` (the newest ran on ${b.newest})` : ` (the newest, on ${b.newest}, was cut short at ${b.onNewest} of ${b.of ?? "the"} sitemap addresses)`}. The next daily check asks again.`,
@@ -1007,7 +978,9 @@ async function indexOf(path: string, inSitemap: boolean | null, index: Reading<I
     },
     "gsc",
     ins.checkedAt,
-    `Google's stored state of the address, from the daily URL Inspection of ${ins.day}: what Google last saw, not a live test.${ins.day < b.newest ? ` The check of ${b.newest} did not reach this address.` : ""}`,
+    ins.day > b.newest
+      ? `Google's stored state of the address, asked by hand on ${ins.day} (after the daily check of ${b.newest}): what Google last saw, not a live test.`
+      : `Google's stored state of the address, from the daily URL Inspection of ${ins.day}: what Google last saw, not a live test.${ins.day < b.newest ? ` The check of ${b.newest} did not reach this address.` : ""}`,
   );
 }
 
@@ -1080,7 +1053,7 @@ function quickActions(path: string, d: PageDetail, idx: Reading<SummaryIndex>, k
   const ask = (prompt: string): NewTask => ({ kind: "ask", prompt, path, context: "pages", depth: "deep" });
   const f = d.facts;
   const short = (s: string, n: number): string => ([...s].length > n ? `${[...s].slice(0, n - 1).join("")}…` : s);
-  const searches = keywords.state === "ok" ? keywords.value.rows.slice(0, 8).map((k) => `"${short(k.query, 60)}" (${k.impressions} impressions, position ${k.position})`) : [];
+  const searches = keywords.state === "ok" ? keywords.value.rows.slice(0, 8).map((k) => `"${short(k.query, 60)}" (${k.impressions} impression${k.impressions === 1 ? "" : "s"}, position ${k.position})`) : [];
   const window = basis ? `${basis.start} to ${basis.end}` : "the window";
   const searchFact = searches.length
     ? { lead: `Searches Google showed it for, ${window} (Search Console):`, items: searches }
@@ -1674,7 +1647,9 @@ async function screen(c: Context<Vars>, paged: boolean, withSummary: boolean): P
     if (unknown) lookup = await reading("probe", () => lookupOf(unknown, range, v, search, index));
     else if (!q.open && typed && "foreign" in typed) lookup = off("probe", `${typed.foreign} is another website. Only addresses of ${bareHost()} are looked up here.`, "Other websites are looked up on SEO › Competitors.");
     else if (v.at) {
-      const path = q.open ?? page[0]?.page.path ?? null;
+      /* A pasted address of a page the crawl reads opens that page, not the first of the pages under it. */
+      const pasted = typed && "path" in typed && v.byPath.has(typed.path) ? typed.path : null;
+      const path = q.open ?? pasted ?? page[0]?.page.path ?? null;
       if (path) {
         const row = all.find((r) => r.page.path === path) ?? null;
         selected = await reading("crawl", () => summaryOf(path, row, range, v, search, index));

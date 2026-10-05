@@ -6,6 +6,7 @@ import { Ask, type Preset } from "@/components/operator/Ask";
 import { Context, type ContextTab } from "@/components/operator/Context";
 import { Feed } from "@/components/operator/Feed";
 import { Head } from "@/components/operator/Head";
+import { PageWork } from "@/components/operator/PageWork";
 import { Quick } from "@/components/operator/Quick";
 import { Response } from "@/components/operator/Response";
 import { Ribbon } from "@/components/operator/Ribbon";
@@ -21,20 +22,37 @@ const CONTEXT_TABS: ContextTab[] = ["pages", "insights", "traffic", "issues"];
 const APPROVAL_TABS: ApprovalTab[] = ["waiting", "approved", "completed"];
 
 /**
- * What another screen asked for: ?do=brief|metadata|redirect|traffic, with
- * &path= for a page and &q= for a topic. It fills the prompt box; nothing is
+ * What another screen asked for: ?do=brief|metadata|redirect|traffic|og|schema|links|alt|keywords|serp, with
+ * &path= for a page, &q= for a topic, &ids= for phrases, &serp= for a kept result page and &type= for a block. It fills the prompt box; nothing is
  * queued until the person presses the button.
  */
 function presetOf(sp: Search): Preset | null {
   const asked = one(sp.do);
   const path = one(sp.path)?.trim();
   const q = one(sp.q)?.trim().slice(0, 300);
-  const kinds: TaskKind[] = ["brief", "metadata", "redirect", "traffic", "opportunities", "audit", "ask"];
+  const kinds: TaskKind[] = ["brief", "metadata", "redirect", "traffic", "opportunities", "audit", "ask", "og", "schema", "links", "alt", "keywords", "serp"];
   const kind = kinds.find((k) => k === asked);
   if (!kind) return null;
   switch (kind) {
     case "brief":
-      return { kind, text: q ?? "" };
+      return { kind, text: q ?? "", ...(path ? { path } : {}) };
+    case "og":
+    case "schema":
+    case "links":
+    case "alt": {
+      if (!path) return null;
+      const words = { og: "Write a share card for", schema: "Draft structured data for", links: "Find pages that should link to", alt: "Write alt texts for the pictures on" }[kind];
+      const type = one(sp.type);
+      return { kind, text: `${words} ${path}`, path, ...(kind === "schema" && (type === "FAQPage" || type === "Service") ? { schemaType: type } : {}) };
+    }
+    case "keywords": {
+      const ids = (one(sp.ids) ?? "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0).slice(0, 30);
+      return { kind, text: ids.length ? `Sort ${ids.length} search phrase${ids.length === 1 ? "" : "s"}` : "Sort the searches that wait for a judgement", ...(ids.length ? { ids } : {}) };
+    }
+    case "serp": {
+      const serp = Number(one(sp.serp));
+      return { kind, text: "Compare our page with the first results", ...(Number.isInteger(serp) && serp > 0 ? { serpId: serp } : {}), ...(path ? { path } : {}) };
+    }
     case "metadata":
       return { kind, text: path ? `Create metadata for ${path}` : "Create metadata for the pages that need it", ...(path ? { paths: [path] } : {}) };
     case "redirect":
@@ -73,7 +91,7 @@ export default async function OperatorPage({ searchParams }: { searchParams: Pro
     const next = new URLSearchParams();
     for (const [k, v] of Object.entries(sp)) {
       const s = one(v);
-      if (s !== undefined && !(k in change) && !["do", "path", "q"].includes(k)) next.set(k, s);
+      if (s !== undefined && !(k in change) && !["do", "path", "q", "ids", "serp", "type"].includes(k)) next.set(k, s);
     }
     for (const [k, v] of Object.entries(change)) if (v !== null) next.set(k, v);
     const qs = next.toString();
@@ -88,8 +106,8 @@ export default async function OperatorPage({ searchParams }: { searchParams: Pro
       <Head runner={data.runner} working={data.working} />
       <div className="dk-operator-top">
         <Ask key={preset ? JSON.stringify(preset) : "plain"} preset={preset} range={data.range} specimen={!!data.specimen} />
-        <Response answer={data.answer} cards={data.cards} specimen={!!data.specimen} />
-        <Quick range={data.range} specimen={!!data.specimen} issuesHref={ctxHref("issues")} />
+        <Response answer={data.answer} pending={data.pending} cards={data.cards} specimen={!!data.specimen} />
+        <Quick range={data.range} specimen={!!data.specimen} issuesHref={ctxHref("issues")} extra={<PageWork range={data.range} specimen={!!data.specimen} serps={data.serps} />} />
         <Feed actions={data.actions} />
       </div>
       <div className="dk-operator-bottom">

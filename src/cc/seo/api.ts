@@ -45,7 +45,7 @@ import { siteView } from "./site.ts";
  *                                      after; `open` adds what that one found               → AuditsAnswer
  *   GET  /audits/:id                   one audit with what it found                         → AuditDetail
  *   GET  /audits/:id/export.csv        the same as a file
- *   GET  /owner-tasks[?who=&done=&q=]  every SEO task in one list                           → SeoTasksAnswer
+ *   GET  /owner-tasks[?who=&done=&q=&open=]  every SEO task in one list; `open` adds that one → SeoTasksAnswer
  *   GET  /owner-tasks/export.csv       the same list as a file (the same filters)
  *   POST /owner-tasks                  { step, why?, impact?, who? }  a task written by hand → OwnerTaskAnswer
  *   POST /owner-tasks/:id              { done?, note? }  a person marks a task done or open, or writes
@@ -138,7 +138,8 @@ engineApi.get("/audits/:id/export.csv", (c) => {
   for (const o of a.found.cleared) rows.push(["cleared opportunity", o.title, o.subject ?? "", o.why ?? "", "", ""]);
   for (const f of a.found.findings) rows.push(["new finding", f.text, f.path ?? "", f.severity, f.rule, ""]);
   for (const e of a.found.index) rows.push([e.indexed ? "newly indexed" : "dropped from the index", e.text, "", "", e.at, ""]);
-  return csvFile(c, `audit-${a.startedAt.slice(0, 16).replace(/[:T]/g, "")}`, ["What", "Title", "State / before / subject", "Note / after / why", "Started / rule", "Ended"], rows);
+  /* "audit-2026-10-05-1542": the day and the minute it was asked (UTC, as its id), then the day of the export. */
+  return csvFile(c, `audit-${a.startedAt.slice(0, 10)}-${a.startedAt.slice(11, 16).replace(":", "")}`, ["What", "Title", "State / before / subject", "Note / after / why", "Started / rule", "Ended"], rows);
 });
 
 engineApi.get("/audits/:id", (c) => c.json<AuditDetail>(oneAudit(c.req.param("id"))));
@@ -190,7 +191,16 @@ function tasksFor(c: { req: { query: (k: string) => string | undefined } }, who:
     .filter((t) => asked.done === "all" || t.done === (asked.done === "done"))
     .filter((t) => !words.length || words.every((w) => `${t.title} ${t.step} ${t.why} ${t.note ?? ""}`.toLowerCase().includes(w)))
     .map((t) => listed(t, who, waiting));
-  return { asked, tasks, counts: { all: all.length, open: all.filter((t) => !t.done).length, done: all.filter((t) => t.done).length, by }, can: { ownerSteps: !!who.owner } };
+  /* ?open=<id>: the one task a link or the search box leads to, whatever the filters, so they never hide it. */
+  const openId = (c.req.query("open") ?? "").trim();
+  const opened = openId ? all.find((t) => t.id === openId) : undefined;
+  return {
+    asked,
+    tasks,
+    counts: { all: all.length, open: all.filter((t) => !t.done).length, done: all.filter((t) => t.done).length, by },
+    can: { ownerSteps: !!who.owner },
+    open: opened ? listed(opened, who, waiting) : null,
+  };
 }
 
 engineApi.get("/owner-tasks", (c) => c.json<SeoTasksAnswer>(tasksFor(c, me(c))));

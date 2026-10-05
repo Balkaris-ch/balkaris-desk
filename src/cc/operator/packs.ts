@@ -5,6 +5,7 @@ import { articleStats, channels, eventByPage, GA4_NOTE, pages as gaPages, totals
 import { opportunities as searchOpportunities } from "../search/gsc.ts";
 import { brokenLinks, crawlSummary, inventory, issueCounts, issues, LIMITS, lastSitemap, page as pageDetail, type PageRow } from "../site/index.ts";
 import { abs, get } from "../site/http.ts";
+import { queryPageFigures } from "../seo/rank.ts";
 import { cached } from "../store.ts";
 
 /**
@@ -102,6 +103,34 @@ export interface Pack {
   redirects?: RedirectTarget[];
   /** Addresses that could not be offered, and why: shown with the result. */
   skipped?: string[];
+  /** "og", "schema", "links", "alt", "serp": the page, and its own words, which every figure and name must come from. */
+  page?: PageTarget;
+  /** "links": the pages that could link to it. */
+  linkFrom?: { path: string; title: string | null }[];
+  /** "alt": its pictures without an alt text. */
+  images?: { src: string; near: string | null }[];
+  /** "keywords": the phrases asked about, and the topics they may go in. */
+  phrases?: { id: number; phrase: string }[];
+  topics?: string[];
+  /** Each topic's key, by its name. */
+  topicKeys?: Record<string, string>;
+  /** "serp": the kept result page, and what it may name. */
+  serp?: { checkId: number; phrase: string; checkedAt: string | null; urls: string[] };
+  /** "schema": the block asked for. */
+  schemaType?: "FAQPage" | "Service";
+}
+
+/** One page a page task works on: its tags, and its own words. */
+export interface PageTarget {
+  path: string;
+  title: string | null;
+  description: string | null;
+  h1: string | null;
+  ogTitle: string | null;
+  ogDescription: string | null;
+  schemaTypes: string[];
+  /** Everything the page says that the desk read: tags, headings and the start of its text. */
+  own: string;
 }
 
 /** How many characters of data a task is given, by depth. About four characters a token. */
@@ -265,25 +294,59 @@ export async function insightsBlock(range: GaRange, room: number): Promise<Block
 
 /* ---------- one page in depth -------------------------------------------------------- */
 
+/**
+ * One page in depth: its tags and figures, and since 5 October 2026 what a
+ * question about the page really needs (the audit found the quick actions
+ * asking about "the searches it is shown for" and "the facts the page
+ * states" with neither given): the searches Google showed it for, its
+ * section headings, the structured data it prints, the pages that link to it
+ * from their text, and the start of its own text.
+ */
 export async function pageBlock(path: string, range: GaRange, room: number): Promise<Block> {
   const p = pageDetail(path);
   if (p.state !== "ok") return absent("page", `Page ${path}`, "crawl", p.state, p.reason);
   const v = p.value;
   const ga = await gaPages(range);
   const row = ga.data?.rows.find((r) => r.path === path);
-  const lines = [
+  const f = v.facts;
+  const head = [
     `ONE PAGE — ${v.path} (${v.kindLabel}), read by the desk's crawl.`,
-    `Answers: ${statusWord(v)}. In the sitemap: ${v.inSitemap ? "yes" : "no"}. Indexable: ${v.indexable ? "yes" : "no"}. Language: ${v.facts?.lang ?? "not declared"}.`,
+    `Answers: ${statusWord(v)}. In the sitemap: ${v.inSitemap ? "yes" : "no"}. Indexable: ${v.indexable ? "yes" : "no"}. Language: ${f?.lang ?? "not declared"}.`,
     `Title (${v.title?.length ?? 0} characters): ${v.title ?? "none"}`,
     `Description (${v.description?.length ?? 0} characters): ${v.description ?? "none"}`,
     `Main heading: ${v.h1 ?? "none"}`,
     `Words of its own content: ${v.words ?? "not read"}. Other pages linking here: ${v.inlinks}, of them from their content: ${v.inlinksFromContent}.`,
     `The desk's score: ${v.score ?? "not scored"}.`,
     row ? `GA4 for ${ga.data!.span.start} to ${ga.data!.span.end}, consenting visitors only: ${row.views} views by ${row.users} visitors (views ${change(row.views, row.previous?.views ?? null)}).` : ga.data ? "GA4: no views in the period." : `GA4: not available (${ga.error ?? "not read"}).`,
-    "Findings:",
-    ...(v.findings.length ? v.findings.map((f) => `- [${f.severity}] ${f.text}`) : ["- none"]),
   ];
-  return { name: "page", label: `Page ${path}`, source: "crawl", asOf: p.asOf, state: "ok", text: fit(lines.slice(0, 8).join("\n"), lines.slice(8), room) };
+  const rows: string[] = [];
+  rows.push(`Structured data it prints: ${f?.schemaTypes?.length ? f.schemaTypes.join(", ") : "none read"}.`);
+  rows.push(`Share card: title ${f?.og.title ? `"${f.og.title}"` : "none"}, description ${f?.og.description ? `"${f.og.description}"` : "none"}, picture ${f?.og.image ?? "none"}.`);
+  if (f?.h2s?.length) rows.push(`Section headings: ${f.h2s.slice(0, 12).join(" | ")}`);
+  const fromText = v.linksIn.filter((l) => l.place === "main").slice(0, 8);
+  rows.push(fromText.length ? `Pages linking here from their text: ${fromText.map((l) => `${l.source}${l.text ? ` ("${l.text.slice(0, 50)}")` : ""}`).join(", ")}` : "No page links here from its text.");
+  rows.push(searchLine(path));
+  rows.push("Findings:", ...(v.findings.length ? v.findings.map((x) => `- [${x.severity}] ${x.text}`) : ["- none"]));
+  const used = head.join("\n").length + rows.join("\n").length;
+  const text = await pageText(path, Math.max(300, Math.min(1500, room - used - 200)));
+  rows.push(text ? `The start of the page's own text: ${text}` : "The page's own text could not be read just now.");
+  return { name: "page", label: `Page ${path}`, source: "crawl", asOf: p.asOf, state: "ok", text: fit(head.join("\n"), rows, room) };
+}
+
+/** The searches Google showed a page for in the last 28 days of the desk's Search Console history, or why there are none. */
+function searchLine(path: string): string {
+  try {
+    const end = new Date().toISOString().slice(0, 10);
+    const start = new Date(Date.now() - 28 * 86_400_000).toISOString().slice(0, 10);
+    const rows = queryPageFigures(start, end, { path })
+      .filter((r) => r.path === path)
+      .sort((a, b) => b.impressions - a.impressions)
+      .slice(0, 8);
+    if (!rows.length) return "Search Console: no searches showed this page in the last 28 days of the desk's records (or Search Console is not read yet).";
+    return `Searches Google showed it for (Search Console, ${start} to ${end}): ${rows.map((r) => `"${r.query}" ${r.impressions} impressions, ${r.clicks} clicks${r.position !== null ? `, average position ${r.position.toFixed(1)}` : ""}`).join("; ")}.`;
+  } catch {
+    return "Search Console: not available.";
+  }
 }
 
 /* ---------- Search Console, when connected ---------------------------------------------- */
@@ -338,10 +401,14 @@ async function excerpt(path: string, chars: number): Promise<string | null> {
   }
 }
 
+/** The page's own text, from the start of <main>, at most `chars` (2,000 at most): what a model may say about it. Kept a day; null when the page cannot be read. */
+export const pageText = (path: string, chars: number): Promise<string | null> => excerpt(path, Math.min(2000, chars));
+
 /**
  * The pages a metadata task writes for: the ones asked for, or the pages in
  * the sitemap whose title or description breaks a rule, worst first, leaving
- * out pages that already have a proposal waiting.
+ * out pages that already have a proposal waiting (asked for or not: a second
+ * proposal for the same page only replaces the first).
  */
 export async function metaTargets(asked: string[] | undefined, depth: Depth): Promise<{ targets: MetaTarget[]; skipped: string[]; more: number }> {
   const inv = inventory();
@@ -356,6 +423,7 @@ export async function metaTargets(asked: string[] | undefined, depth: Depth): Pr
       const r = byPath.get(p);
       if (!r) skipped.push(`${p}: the crawl knows no page at this address.`);
       else if (r.status !== 200) skipped.push(`${p}: it answers ${statusWord(r)}, so it has no title to change.`);
+      else if (waiting.has(p)) skipped.push(`${p}: a proposal for it is already waiting; decide that one first.`);
       else paths.push(p);
     }
   } else {

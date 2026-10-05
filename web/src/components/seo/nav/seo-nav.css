@@ -18,10 +18,12 @@
    * a three-figure count on Opportunities, 5.7 each side). The eleven labels,
    * the count and the strip's inset are about 830 wide; with the sidebar, the
    * page's sides and a scrollbar, about 1140 of the window is spent before
-   * the 22 label edges get any. Narrower still, the strip scrolls. Eleven
-   * tabs: change the 22 if a tab is added.
+   * the 22 label edges get any. The work-waiting chips on Overview, Keywords
+   * and Technical (two figures each, about 32 with the gap before them) add
+   * about 100: 1240. Narrower still, the strip scrolls. Eleven tabs: change
+   * the 22 if a tab is added.
    */
-  --dk-seo-nav-fit: 1140px;
+  --dk-seo-nav-fit: 1240px;
   --dk-seo-nav-tab-x: clamp(calc(var(--x6) - var(--x1)), calc((100vw - var(--dk-seo-nav-fit)) / 22), var(--x16));
   --dk-seo-nav-underline: 2px;  /* the lit tab's green line */
   --dk-seo-nav-count-h: 18px;   /* the count on Opportunities */
@@ -175,6 +177,25 @@
   color: var(--amber);
 }
 
+/* After an audit: its own page, with what it ran and what it found (AuditButton.tsx). */
+.dk-seo-nav-said-link {
+  grid-column: 1 / -1;
+  justify-self: end;
+  color: var(--green);
+  font-size: var(--t-small);
+  text-decoration: underline;
+  text-underline-offset: var(--x2);
+}
+
+.dk-seo-nav-said-link:hover {
+  color: var(--ink);
+}
+
+.dk-seo-nav-said-link--quiet {
+  color: var(--ink-3);
+  text-decoration-color: var(--line-2);
+}
+
 /* ---------- the tabs ---------- */
 .dk-seo-nav-tabs {
   position: relative;
@@ -291,6 +312,16 @@
   line-height: 1;
 }
 
+/* Work waiting on a person (the owner's steps, phrases to judge, pages for
+   Request indexing): a quiet amber chip, so the filled green one on
+   Opportunities stays the strip's one strong mark. */
+.dk-seo-nav-count--todo {
+  background: var(--amber-ground);
+  color: var(--amber);
+  box-shadow: inset 0 0 0 var(--x1) var(--amber-edge);
+  font-weight: var(--w-medium);
+}
+
 /* An arrow at an edge with more beyond it, for a mouse (SeoTabs.tsx). */
 .dk-seo-nav-more {
   position: absolute;
@@ -347,7 +378,8 @@
     padding-top: 0;
   }
 
-  .dk-seo-nav-said {
+  .dk-seo-nav-said,
+  .dk-seo-nav-said-link {
     justify-self: start;
     text-align: left;
   }

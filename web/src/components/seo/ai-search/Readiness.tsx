@@ -29,6 +29,12 @@ export function ReadinessSite({ reading }: { reading: Reading<Readiness> }) {
       sub={v ? `${num(v.site.filter((c) => c.state === "pass").length)} of ${num(v.site.length)} pass` : undefined}
       right={v ? <Stamp reading={reading} /> : null}
     >
+      {v && v.unread ? (
+        <p className="dk-seo-ai-search-unread">
+          <Icon name="alert" size={14} />
+          <span>{v.unread.line}</span>
+        </p>
+      ) : null}
       {v ? (
         v.site.length ? (
           <ul className="dk-seo-ai-search-checks">

@@ -32,10 +32,13 @@ import { json } from "./tables.ts";
  *                                every 6 h; in between it only follows its tasks
  *   seo-readiness    every 24 h   AI readiness of every sitemap page, and the site
  *   seo-referrals    every 24 h   GA4 referrals and AI-assistant sessions
- *   seo-research     every 24 h   Google Autocomplete for the clusters' seeds:
+ *   seo-research     every 24 h   Google's suggestions for the topics' phrases:
  *                                20 requests a run, 120 a week at most
  *   seo-competitors  every 7 d    competitors' pages for our clusters, politely
  *   seo-presence     every 7 d    the studio's profiles and listings
+ *   seo-backlinks    every 24 h   referring pages and followed links (./backlinks.ts)
+ *   seo-digest       every 7 d    the week, in short, for SEO › Automations and, when
+ *                                the owner asked, Telegram (./jobs-digest.ts)
  *
  * The index check's history is the desk's own gsc-inspect job (src/cc/search/
  * gsc.ts): it keeps every sitemap address's URL Inspection result per day for
@@ -63,7 +66,7 @@ const RESEARCH_PER_RUN = 20;
  * what the engine takes from the sitemap, and four whole runs an hour would
  * make "only on news" mean nothing.
  */
-export const ENGINE_INPUTS = ["crawl", "gsc-daily", "gsc-inspect", "seo-snapshot", "seo-readiness", "seo-research", "seo-competitors", "seo-presence"];
+export const ENGINE_INPUTS = ["crawl", "gsc-daily", "gsc-inspect", "seo-snapshot", "seo-readiness", "seo-research", "seo-competitors", "seo-presence", /* the daily PageSpeed run: slow pages (engine.ts, slow) */ "speed"];
 /** The engine runs whole at least this often, new input or not. */
 const ENGINE_WHOLE_MS = 6 * 3600_000;
 const ENGINE_LAST = "seo:engine:last";
@@ -172,7 +175,7 @@ export const jobs: Job[] = [
   },
   {
     name: "seo-research",
-    title: "Research search phrases in Google Autocomplete",
+    title: "Research search phrases in Google's suggestions",
     every: 24 * 3600,
     delay: 1800,
     run: ({ progress }) => research({ most: RESEARCH_PER_RUN, progress }),
@@ -191,6 +194,30 @@ export const jobs: Job[] = [
     delay: 1500,
     run: ({ progress }) => checkProfiles(progress),
   },
+  /* SEO › Backlinks (src/cc/seo/backlinks.ts), loaded when it runs so a fault there costs this job only. */
+  {
+    name: "seo-backlinks",
+    title: "Read referring pages and check followed links",
+    every: 24 * 3600,
+    delay: 900,
+    run: async ({ progress }) => (await import("./backlinks.ts")).dailyRead(progress),
+  },
+  /* SEO › Automations: the week, in short (./jobs-digest.ts), loaded when it runs. */
+  {
+    name: "seo-digest",
+    title: "Write the week's SEO summary",
+    every: 7 * 24 * 3600,
+    delay: 3600,
+    run: async () => (await import("./jobs-digest.ts")).writeDigest(),
+  },
+  /* The web layer (src/cc/seo/web/serp.ts), loaded when it runs so a fault there costs this job only. */
+  {
+    name: "seo-rank-check",
+    title: "Check who ranks for the target phrases",
+    every: 7 * 24 * 3600,
+    delay: 2100,
+    run: async ({ progress }) => (await import("./web/serp.ts")).rankCheck(progress),
+  },
 ];
 
 /** What each job the SEO section depends on does, in a sentence or two. */
@@ -202,9 +229,20 @@ const WHAT: Record<string, { what: string; group: "seo" | "desk" }> = {
   },
   "seo-readiness": { what: "Reads every sitemap page as a crawler gets it, one at a time, and checks what AI search needs: a direct answer, questions, structured data, a price, a date, a German version; and robots.txt, llms.txt, lastmod, Bing, the Business Profile, the address.", group: "seo" },
   "seo-referrals": { what: "Reads GA4 sessions from referring sites and AI assistants by day and landing page (consenting visitors only). One report a day.", group: "seo" },
-  "seo-research": { what: `Expands the clusters' seed phrases through Google Autocomplete, one request a second, ${RESEARCH_PER_RUN} a run and never more than ${AUTOCOMPLETE_CAP} a week (the counter refuses beyond it). New phrases are kept unjudged.`, group: "seo" },
-  "seo-competitors": { what: "Reads the competitor pages captured for our clusters: robots.txt first and obeyed, two seconds between requests to a site, the desk's name on every request. Keeps title, heading, words, language, structured data and whether a price is stated.", group: "seo" },
+  "seo-research": { what: `Researches the topics' phrases in Google's suggestions, one request a second, ${RESEARCH_PER_RUN} a run and never more than ${AUTOCOMPLETE_CAP} a week (the counter refuses beyond it). New phrases are kept unjudged.`, group: "seo" },
+  "seo-competitors": {
+    what: "Reads again the competitor pages the desk knows for our clusters (the audit brought in the first ones; new ones come from who ranks for the target phrases, and from Competitors): robots.txt first and obeyed, two seconds between requests to a site, the desk's name on every request. Keeps title, heading, words, language, structured data and whether a price is stated.",
+    group: "seo",
+  },
   "seo-presence": { what: "Asks each known profile and listing address once a week: exists, not found, or could not be read, with the reason.", group: "seo" },
+  "seo-rank-check": {
+    what: "Asks Google who ranks for each phrase marked as a target and not checked in six days: through DataForSEO when it is connected, otherwise queued for the studio workstation, which fetches Google's basic result page from its home line (one every four seconds, sixty a day, ten of them left for people, nothing for a day after Google refuses). Each result becomes a sighting on the Competitors page, with Balkaris's own place.",
+    group: "seo",
+  },
+  "seo-backlinks": {
+    what: "Reads GA4 sessions by referring address (every medium, so a bio link counts), adds Bing's linking pages to the desk's list once Bing is connected, and reads again every linking page not read for a week: robots.txt first, the desk's name on every request, at most 40 pages a run. Says when a followed link appears or goes.",
+    group: "seo",
+  },
   crawl: { what: "Reads every page of the website: facts, links, findings and the site score. The engine's technical, thin-content and internal-link rules read it.", group: "desk" },
   sitemap: { what: "Reads sitemap.xml and robots.txt every quarter of an hour.", group: "desk" },
   "gsc-daily": { what: "Refreshes the Search Console figures the screens show, twice a day.", group: "desk" },
@@ -212,7 +250,19 @@ const WHAT: Record<string, { what: string; group: "seo" | "desk" }> = {
   speed: { what: "PageSpeed lab runs of the most important pages, once a day.", group: "desk" },
   "crux-daily": { what: "Asks Google's Chrome UX Report once a day what real Chrome visitors experienced over 28 days (loading, responsiveness, layout shift). Google has no such figures for a site until enough people visit it in Chrome; SEO › Technical shows them when it does.", group: "desk" },
   "bing-daily": { what: "Bing Webmaster's links and figures: waits for its key.", group: "desk" },
+  "seo-digest": {
+    what: "Once a week, gathers what these jobs did and found since the last summary (runs, late or failing jobs, new and cleared opportunities, pages indexed or dropped, new phrases, what waits for people) into a few lines on this page, and sends them to the owner on Telegram when he has asked for it.",
+    group: "seo",
+  },
 };
+
+/**
+ * The names of the jobs the SEO section depends on, in the table's order: the
+ * ones described above, then any job of this file's list nobody described
+ * yet. A job added to `jobs` is listed, watched and kept from its first
+ * deploy, with its title for a description, instead of running unseen.
+ */
+export const watched = (): string[] => [...new Set([...Object.keys(WHAT), ...jobs.map((j) => j.name)])];
 
 /** The jobs the SEO section runs on, as Automations and the Overview list them. */
 export function seoJobs(): SeoJob[] {
@@ -220,7 +270,7 @@ export function seoJobs(): SeoJob[] {
   const b = budget();
   /* gsc.ts keeps its own count of inspections per Pacific day. */
   const inspected = countOn("gsc.inspect.used", dayIn("America/Los_Angeles"));
-  return Object.keys(WHAT).flatMap((name) => {
+  return watched().flatMap((name) => {
     const j = all.find((x) => x.name === name);
     if (!j) return [];
     return [
@@ -228,8 +278,8 @@ export function seoJobs(): SeoJob[] {
         ...j,
         lastNote: j.lastNote === null ? null : scrub(j.lastNote),
         progress: j.progress?.what ? { ...j.progress, what: scrub(j.progress.what) } : j.progress,
-        what: WHAT[name]!.what,
-        group: WHAT[name]!.group,
+        what: WHAT[name]?.what ?? `${j.title}.`,
+        group: WHAT[name]?.group ?? "seo",
         budget:
           name === "seo-research"
             ? { used: b.used, cap: b.cap, period: "week" as const, line: `Google Autocomplete: ${b.used} of ${b.cap} requests this week (${b.week})` }
@@ -240,9 +290,6 @@ export function seoJobs(): SeoJob[] {
     ];
   });
 }
-
-/** The names of the jobs the SEO section depends on: what the watch looks after and the run history keeps. */
-export const watched = (): string[] => Object.keys(WHAT);
 
 /* ---------- the runs, kept longer than the scheduler's week ---------------------------- */
 
@@ -272,16 +319,18 @@ let prunedAt = 0;
 export function keepRuns(nowMs = Date.now()): number {
   const names = watched();
   const marks = names.map(() => "?").join(",");
-  /* Two days back catches a run that was open at the last copy and has ended since; the first copy takes all there is. */
-  const any = db.prepare("SELECT 1 AS x FROM cc_seo_job_runs LIMIT 1").get();
-  const from = any ? new Date(nowMs - 2 * DAY_MS).toISOString() : "";
+  /* Only what is new: a run not copied yet, or one copied while it ran that has ended since. The
+     scheduler's week is a few thousand rows, matched on the copy's key, so a look a minute costs little
+     and a gap of any length (a desk that was stopped) is caught up whole. */
   const r = db
     .prepare(
       `INSERT INTO cc_seo_job_runs (job, started, ended, ok, note)
-         SELECT job, started, ended, ok, note FROM cc_runs WHERE job IN (${marks}) AND started >= ?
+         SELECT c.job, c.started, c.ended, c.ok, c.note FROM cc_runs c
+           LEFT JOIN cc_seo_job_runs k ON k.job = c.job AND k.started = c.started
+          WHERE c.job IN (${marks}) AND (k.job IS NULL OR (k.ended IS NULL AND c.ended IS NOT NULL))
        ON CONFLICT(job, started) DO UPDATE SET ended = excluded.ended, ok = excluded.ok, note = excluded.note`,
     )
-    .run(...names, from);
+    .run(...names);
   if (nowMs - prunedAt >= 3600_000) {
     prunedAt = nowMs;
     db.prepare("DELETE FROM cc_seo_job_runs WHERE started < ?").run(new Date(nowMs - KEEP_DAYS * DAY_MS).toISOString());
@@ -417,11 +466,13 @@ export interface WatchAsk {
   since: string;
 }
 
-const w: { bootAt: number; timer: NodeJS.Timeout | null; lastBeat: number | null; pending: WatchAsk | null } = {
+const w: { bootAt: number; timer: NodeJS.Timeout | null; lastBeat: number | null; pending: WatchAsk | null; as: boolean | null } = {
   bootAt: Date.now(),
   timer: null,
   lastBeat: null,
   pending: null,
+  /* The check script's say on whether the watch runs; null everywhere else. */
+  as: null,
 };
 
 const ASKS_KEY = "seo:jobs:watch";
@@ -430,7 +481,7 @@ const NOTHING: Standing = { dueAt: null, why: null, lateSince: null, failsInRow:
 type Listed = ReturnType<typeof jobStatus>[number];
 
 /** Is the watch running: it runs wherever the scheduler does, and nowhere else. */
-export const watching = (): boolean => w.timer !== null;
+export const watching = (): boolean => w.as ?? w.timer !== null;
 
 /**
  * The scheduler starts nothing of a job before its own delay after the desk
@@ -627,17 +678,22 @@ export function startWatch(): void {
   w.timer.unref();
 }
 
-/* The top bar's light: a job the watch could not get started for half an hour means the scheduler itself
-   has stopped or is stuck behind one job. Nothing to vouch for on a desk without a scheduler, or while it settles. */
-registerCheck(() => {
-  if (!watching() || Date.now() - w.bootAt < WATCH.settleMs + WATCH.alarmAfterMs) return null;
-  const now = Date.now();
+/**
+ * The top bar's light: a job the watch could not get started for half an hour
+ * means the scheduler itself has stopped or is stuck behind one job. Nothing
+ * to vouch for on a desk without a scheduler, or while it settles. Exported
+ * for the check script.
+ */
+export function lateCheck(nowMs = Date.now()): { name: string; ok: boolean; detail: string } | null {
+  if (!watching() || nowMs - w.bootAt < WATCH.settleMs + WATCH.alarmAfterMs) return null;
   const titles = new Map(jobStatus().map((j) => [j.name, j.title]));
-  const late = [...standings(now)].filter(([, s]) => s.lateSince && now - Date.parse(s.lateSince) >= WATCH.alarmAfterMs).map(([name]) => titles.get(name) ?? name);
+  const late = [...standings(nowMs)].filter(([, s]) => s.lateSince && nowMs - Date.parse(s.lateSince) >= WATCH.alarmAfterMs).map(([name]) => titles.get(name) ?? name);
   return late.length
     ? { name: "The SEO jobs run on time", ok: false, detail: `${late.length} did not start more than half an hour after ${late.length === 1 ? "its" : "their"} time: ${late.slice(0, 3).join("; ")}${late.length > 3 ? ` and ${late.length - 3} more` : ""}. The scheduler has stopped or is stuck behind one job.` }
     : { name: "The SEO jobs run on time", ok: true, detail: "Every SEO job that is on started when its time came." };
-});
+}
+
+registerCheck(() => lateCheck());
 
 startWatch();
 
@@ -646,6 +702,10 @@ export const _test = {
   boot: (ms: number): void => {
     w.bootAt = ms;
     w.pending = null;
+  },
+  /** Say whether the watch runs (true, false), or let the timer say (null), without starting it. */
+  watching: (on: boolean | null): void => {
+    w.as = on;
   },
   /** Look as the watch looks where a scheduler runs, without starting its timer. */
   standingsOn: (nowMs: number): Map<string, Standing> => {

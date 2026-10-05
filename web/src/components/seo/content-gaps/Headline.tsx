@@ -11,9 +11,9 @@ import { Stamp } from "@/components/ui/Stamp";
 import { Info } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { DASH, num } from "@/lib/format";
-import { BriefButton, StepButton } from "./Act";
-import { BriefMark, LangMark } from "./Bits";
-import { BASE, bare, coverText, plural, shareText } from "./look";
+import { StepButton } from "./Act";
+import { BriefCell, LangMark } from "./Bits";
+import { bare, coverText, hrefFresh, plural, shareText } from "./look";
 
 /**
  * The two largest gaps, in one band above the view switch (the owner's
@@ -26,11 +26,11 @@ import { BASE, bare, coverText, plural, shareText } from "./look";
  * Every figure is a count from the keyword table, the crawl or the readiness
  * check: phrases are counted, never weighed by a search volume nobody gives.
  */
-export function Headline({ german, price }: { german: Reading<GermanGap>; price: Reading<PriceGap> }) {
+export function Headline({ german, price, base }: { german: Reading<GermanGap>; price: Reading<PriceGap>; base: Record<string, string> }) {
   return (
     <div className="dk-seo-gaps-headline">
-      <GermanCard reading={german} />
-      <PriceCard reading={price} />
+      <GermanCard reading={german} base={base} />
+      <PriceCard reading={price} base={base} />
     </div>
   );
 }
@@ -57,18 +57,18 @@ function Split({ parts, label }: { parts: { value: number; tone: "violet" | "inf
   );
 }
 
-/** "Start with": the cluster to answer first, with its brief, on one line. */
-function StartWith({ c, label = "Start with", phrases, why }: { c: ClusterRow | undefined; label?: string; phrases: string; why: string }) {
+/** "Start with": the cluster to answer first, with its brief (or where its brief stands), on one line. */
+function StartWith({ c, label = "Start with", phrases, why, base }: { c: ClusterRow | undefined; label?: string; phrases: string; why: string; base: Record<string, string> }) {
   if (!c) return null;
   return (
     <div className="dk-seo-gaps-start">
       <span className="dk-seo-gaps-start-label">{label}</span>
-      <Go className="dk-seo-gaps-start-name" href={`${BASE}?view=clusters&open=${encodeURIComponent(c.key)}`} title={`${phrases}${c.rank ? ` · #${c.rank} in the audit's order of attack` : ""}`}>
+      <Go className="dk-seo-gaps-start-name" href={hrefFresh(base, { view: "clusters", open: c.key })} title={`${phrases}${c.rank ? ` · #${c.rank} in the audit's order of attack` : ""}`}>
         {bare(c.name)}
       </Go>
       <LangMark lang={c.lang} />
       <span className="dk-seo-gaps-start-meta dk-num">{phrases}</span>
-      {c.brief.available ? <BriefButton cluster={c.key} title={why} /> : <BriefMark brief={c.brief} />}
+      <BriefCell brief={c.brief} cluster={c.key} title={why} />
     </div>
   );
 }
@@ -92,6 +92,9 @@ function Steps({ steps, label }: { steps: OpportunityRow[]; label: string }) {
         {steps.map((s) => {
           const open = s.state.state === "open";
           const can = s.action.available && (s.action.kind === "brief" || s.action.kind === "proposal" || (s.action.kind === "code" && open));
+          const t = s.state.task;
+          /* The operator wrote it: the link to read it comes first, and asking again is a quiet choice beside it, never the same button as before. */
+          const written = !!t && t.state === "done" && (s.action.kind === "brief" || s.action.kind === "proposal");
           return (
             <li key={s.id} className="dk-seo-gaps-step">
               <span className="dk-seo-gaps-step-text">
@@ -109,15 +112,23 @@ function Steps({ steps, label }: { steps: OpportunityRow[]; label: string }) {
                   {!open ? ` · ${s.state.note ?? s.state.state}` : ""}
                 </span>
               </span>
-              {can ? (
+              {written ? (
+                <span className="dk-seo-gaps-briefcell">
+                  <Go className="dk-seo-gaps-brief dk-seo-gaps-brief--done" href={t!.href} title={s.state.note ?? undefined}>
+                    <Icon name="check-circle" size={12} />
+                    {s.action.kind === "proposal" ? "Proposal ready" : "Brief ready"} · #{t!.id}
+                  </Go>
+                  {can ? <StepButton id={s.id} label="Ask again" title={`Operator task #${t!.id} is written already; this asks for a new one. ${s.action.step}`} /> : null}
+                </span>
+              ) : can ? (
                 <StepButton
                   id={s.id}
                   label={s.action.kind === "code" ? "Put on the to-do list" : s.action.kind === "proposal" ? "Ask for a proposal" : "Write a brief"}
                   title={s.action.step}
                 />
-              ) : s.state.task ? (
-                <Go className="dk-seo-gaps-step-state" href={s.state.task.href}>
-                  Task #{s.state.task.id} {s.state.task.state}
+              ) : t ? (
+                <Go className="dk-seo-gaps-step-state" href={t.href}>
+                  Task #{t.id} {t.state}
                 </Go>
               ) : (
                 <Go className="dk-seo-gaps-step-state" href={`/seo/opportunities?open=${encodeURIComponent(s.id)}`}>
@@ -174,7 +185,7 @@ function Big({
   );
 }
 
-function GermanCard({ reading }: { reading: Reading<GermanGap> }) {
+function GermanCard({ reading, base }: { reading: Reading<GermanGap>; base: Record<string, string> }) {
   const g = reading.state === "ok" ? reading.value : null;
   return (
     <Big
@@ -185,7 +196,7 @@ function GermanCard({ reading }: { reading: Reading<GermanGap> }) {
       reading={reading}
       info="Relevant phrases of the keyword table (the SEO audit's research, Search Console and Google Autocomplete) by the language they are searched in: distinct phrases counted, not weighed by a search volume no free source gives. The site's pages by the language their html declares, as the crawl read them; hreflang by the readiness check. Impressions: Search Console's, for the site, in the period."
       link={
-        <LinkButton href={`${BASE}?view=language&open=de`} size="xs" variant="quiet" iconRight="arrow-right">
+        <LinkButton href={hrefFresh(base, { view: "language", open: "de" })} size="xs" variant="quiet" iconRight="arrow-right">
           German gaps
         </LinkButton>
       }
@@ -225,7 +236,7 @@ function GermanCard({ reading }: { reading: Reading<GermanGap> }) {
             <b className="dk-num">
               {num(g.clusters.gaps)} of {num(g.clusters.de)}
             </b>{" "}
-            German topics have no German page.
+            <span title="A cluster is one topic in one language, as the keyword table files the phrases.">German clusters</span> have no German page.
             {g.impressions ? (
               <>
                 {" "}
@@ -238,6 +249,7 @@ function GermanCard({ reading }: { reading: Reading<GermanGap> }) {
           <div className="dk-seo-gaps-big-act">
             <StartWith
               c={g.top[0]}
+              base={base}
               phrases={g.top[0] ? plural(g.top[0].keywords.relevant, "phrase") : ""}
               why="The operator writes the brief for a German (de-CH) page on this topic, from its searches. A person writes and publishes the page."
             />
@@ -249,7 +261,7 @@ function GermanCard({ reading }: { reading: Reading<GermanGap> }) {
   );
 }
 
-function PriceCard({ reading }: { reading: Reading<PriceGap> }) {
+function PriceCard({ reading, base }: { reading: Reading<PriceGap>; base: Record<string, string> }) {
   const p = reading.state === "ok" ? reading.value : null;
   return (
     <Big
@@ -259,9 +271,9 @@ function PriceCard({ reading }: { reading: Reading<PriceGap> }) {
       rank="the next: “was kostet …”"
       aside={p?.owner ? <OwnerLink task={p.owner} /> : null}
       reading={reading}
-      info="A phrase asks a price when it carries kosten, kostet, preis, price, cost, how much, tarif, budget or CHF: distinct phrases counted, not weighed by a volume. Answered: the keyword table maps it to a page of its own language. The site's prices: the readiness check's CHF test on the service and landing pages it applies to. Competitors: the pages the desk read for the same searches."
+      info="A phrase asks a price when it carries kosten, kostet, preis, price, cost, how much, tarif, budget or CHF: distinct phrases counted, not weighed by a volume. Answered: the keyword table maps it to a page of its own language. The site's prices: the readiness check's CHF test on the service and landing pages it applies to. Competitors: only the pages that ranked for the same searches; a home page, read when the capture named only the site, is not how a competitor answers the search and is not counted."
       link={
-        <LinkButton href={`${BASE}?view=keywords&price=1`} size="xs" variant="quiet" iconRight="arrow-right">
+        <LinkButton href={hrefFresh(base, { view: "keywords", price: "1" })} size="xs" variant="quiet" iconRight="arrow-right">
           Price phrases
         </LinkButton>
       }
@@ -306,19 +318,26 @@ function PriceCard({ reading }: { reading: Reading<PriceGap> }) {
             <b className="dk-num">
               {num(p.clusters.gaps)} of {num(p.clusters.total)}
             </b>{" "}
-            price topics have no page in their language.
+            price clusters have no page in their language.
             {p.competitors ? (
               <>
                 {" "}
-                <span title="The competitor pages the desk read for the same searches, and how many of them state a price.">
-                  Competitors: <b className="dk-num">{num(p.competitors.priced)}</b> of {num(p.competitors.pages)} pages read state one.
-                </span>
+                {p.competitors.ranking ? (
+                  <span title={`The competitor pages that ranked for the same searches, and how many of them state a price.${p.competitors.home ? ` ${plural(p.competitors.home, "home page")} read as well are not counted: a home page is not how a competitor answers the search.` : ""}`}>
+                    Competitors: <b className="dk-num">{num(p.competitors.priced)}</b> of {plural(p.competitors.ranking, "ranking page")} read state one.
+                  </span>
+                ) : (
+                  <span className="dk-seo-gaps-quiet" title="The capture named the competitors without the address that ranked, so only their home pages were read: those do not say how they answer a price question.">
+                    Competitors: no ranking page read yet ({plural(p.competitors.home, "home page")} only).
+                  </span>
+                )}
               </>
             ) : null}
           </p>
           <div className="dk-seo-gaps-big-act">
             <StartWith
               c={p.top[0]}
+              base={base}
               phrases={p.top[0] ? plural(p.top[0].price, "price phrase") : ""}
               why="The topic with the most price phrases and no page of its language. The operator writes the brief for the page that answers them, from its searches; the prices themselves are the owner's to give. A person writes and publishes the page."
             />
@@ -351,7 +370,7 @@ function Part({ reading, children }: { reading: Reading<Stat>; children: (s: Sta
  * The coverage of the whole keyword table, beside the view switch: what the
  * coverage list breaks down. The German and price figures are in the cards.
  */
-export function TableCoverage({ tiles }: { tiles: GapTiles }) {
+export function TableCoverage({ tiles, unjudged }: { tiles: GapTiles; unjudged: { count: number; href: string } | null }) {
   const first = [tiles.gaps, tiles.mappedPhrases, tiles.clusters].find((r) => r.state === "ok");
   const sub = tiles.clusters.state === "ok" ? tiles.clusters.value.sub : undefined;
   return (
@@ -361,7 +380,7 @@ export function TableCoverage({ tiles }: { tiles: GapTiles }) {
         <Part reading={tiles.gaps}>
           {(s) => (
             <>
-              <b className="dk-num">{s.of !== undefined ? coverText(s.value, s.of).main : num(s.value)}</b> topics have no page
+              <b className="dk-num">{s.of !== undefined ? coverText(s.value, s.of).main : num(s.value)}</b> clusters have no page of their language
             </>
           )}
         </Part>
@@ -379,8 +398,17 @@ export function TableCoverage({ tiles }: { tiles: GapTiles }) {
           }}
         </Part>
       </span>
+      {/* Finds wait for a person: this page counts relevant phrases only, so a phrase found and not judged adds no gap until somebody judges it. */}
+      {unjudged && unjudged.count ? (
+        <>
+          <span aria-hidden>·</span>
+          <Go className="dk-seo-gaps-table-link" href={unjudged.href} title="Phrases Search Console and Google Autocomplete found that nobody has judged yet. This page counts relevant phrases only: judge them in Keywords, or a search Google reports in From Search Console here.">
+            <b className="dk-num">{num(unjudged.count)}</b> new {unjudged.count === 1 ? "phrase waits" : "phrases wait"} to be judged
+          </Go>
+        </>
+      ) : null}
       <Info
-        text={`A topic cluster is a gap when it holds a relevant phrase and no page of its own language answers it. A phrase is answered when the keyword table maps it to a page of its language: the audit's mapping, a person's, or the desk's rule. All counted, never weighed.${sub ? ` Clusters: ${sub}.` : ""}`}
+        text={`A cluster (one topic in one language) is a gap when it holds a relevant phrase and no page of its own language answers it. A phrase is answered when the keyword table maps it to a page of its language: the audit's mapping, a person's, or the desk's rule. All counted, never weighed.${sub ? ` Clusters: ${sub}.` : ""}`}
       />
       {first ? <Stamp reading={first} /> : null}
     </p>

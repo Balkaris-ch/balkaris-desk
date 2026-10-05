@@ -38,9 +38,11 @@ function Step({ text }: { text: string }) {
  * "Needs you": what only the owner can do (a login, a decision, a profile),
  * open first, each with its exact step, its impact and effort as the audit
  * judged them, and a "Mark done" a person presses when it is done. Never a
- * button that pretends to do the step itself.
+ * button that pretends to do the step itself. These are the owner's own steps,
+ * so only the owner is offered the mark (`ownerSteps`, from the payload's
+ * `can`; the server refuses anybody else); the others see who marks it.
  */
-export function NeedsYou({ reading }: { reading: Reading<{ open: number; done: number; rows: OwnerTaskRow[] }> }) {
+export function NeedsYou({ reading, ownerSteps = true }: { reading: Reading<{ open: number; done: number; rows: OwnerTaskRow[] }>; ownerSteps?: boolean }) {
   const [all, setAll] = useState(false);
   const [opened, setOpened] = useState<string | null>(null);
   const v = reading.state === "ok" ? reading.value : null;
@@ -76,7 +78,13 @@ export function NeedsYou({ reading }: { reading: Reading<{ open: number; done: n
                         <Chip tone={PRIORITY_TONE[r.impact]}>{r.impact === "high" ? "High impact" : r.impact === "medium" ? "Medium impact" : "Low impact"}</Chip>
                         {r.effort ? <span className="dk-seo-overview-quiet">{r.effort}</span> : null}
                       </span>
-                      <OwnerMark id={r.id} done={r.done} />
+                      {ownerSteps ? (
+                        <OwnerMark id={r.id} done={r.done} />
+                      ) : (
+                        <span className="dk-seo-overview-quiet" title="One of the owner’s own steps: he marks it done himself.">
+                          The owner marks it
+                        </span>
+                      )}
                     </div>
                     {open ? (
                       <div className="dk-seo-overview-need-body">

@@ -1,6 +1,7 @@
 import { z } from "zod";
-import type { Brief, Opportunity, TaskKind } from "../../../web/src/contract/operator.ts";
+import type { Brief, KeywordJudgement, Opportunity, ProposalKind, ProposalRow, SerpBrief, SuggestedTodo, TaskKind } from "../../../web/src/contract/operator.ts";
 import { BRAND, DESCRIPTION_MOST, OWN_TITLE_MOST, ownTitle, PLAIN, shownTitle, TITLE_MOST, type Pack } from "./packs.ts";
+import { isSiteTask, siteCheck, sitePrompt, type Guards } from "./sitekinds.ts";
 
 /**
  * What each kind of task asks the model, and how its answer is checked.
@@ -134,6 +135,14 @@ const BriefShape = z.object({
 export function buildPrompt(kind: TaskKind, question: string, pack: Pack, retryNote: string | null): Prompted {
   const deep = pack.depth === "deep";
   const base = { system: SYSTEM, model: deep ? ("write" as const) : ("quick" as const), timeoutMs: 300_000 };
+  if (isSiteTask(kind)) {
+    const s = sitePrompt(kind, pack, data(pack));
+    const again = retryNote ? `
+
+YOUR LAST ANSWER WAS REFUSED: ${retryNote}
+Answer again, fixing only that.` : "";
+    return { ...base, prompt: s.prompt + again, schema: s.schema, temperature: s.temperature };
+  }
   let prompt: string;
   let temperature = 0.3;
 
@@ -376,10 +385,10 @@ export function plain(text: string): string {
 
 /** A change the answer proposes, before it is a row. */
 export interface NewProposal {
-  kind: "meta" | "redirect";
+  kind: ProposalKind;
   address: string;
-  before: { title?: string | null; description?: string | null; to?: string | null };
-  after: { title?: string; description?: string; to?: string };
+  before: ProposalRow["before"];
+  after: ProposalRow["after"];
   why: string | null;
 }
 
@@ -387,6 +396,9 @@ export interface Kept {
   text: string;
   opportunities?: Opportunity[];
   brief?: Brief;
+  keywords?: KeywordJudgement[];
+  serp?: SerpBrief;
+  todos?: SuggestedTodo[];
   proposals: NewProposal[];
   /** What was refused or changed, said plainly. */
   flags: string[];
@@ -410,6 +422,15 @@ const zodWhy = (e: z.ZodError): string => {
 
 const list = (xs: string[], most = 4): string => (xs.length <= most ? xs.join(", ") : `${xs.slice(0, most).join(", ")} and ${xs.length - most} more`);
 
+/** The figure and name guards, handed to the page tasks' checks (sitekinds.ts). */
+const GUARDS: Guards = {
+  strayFigures: (text, own) => strayFigures(text, figuresIn(own)).stray,
+  strayNames,
+  parse,
+  zodWhy,
+  list,
+};
+
 /**
  * Check one answer. `final` is the second answer: then what can be kept is
  * kept and the rest named, instead of asking again.
@@ -417,6 +438,19 @@ const list = (xs: string[], most = 4): string => (xs.length <= most ? xs.join(",
 export function check(kind: TaskKind, question: string, pack: Pack, raw: string, final: boolean, liveTitles: Map<string, string | null>): Checked {
   const allowed = figuresIn(...pack.blocks.map((b) => b.text), question);
   const known = new Set(pack.known);
+  if (isSiteTask(kind)) {
+    try {
+      const r = siteCheck(kind, pack, raw, final, GUARDS);
+      if (!r.ok) return r;
+      const k = r.kept;
+      return {
+        ok: true,
+        kept: { text: k.text, proposals: k.proposals as NewProposal[], flags: k.flags, ...(k.keywords ? { keywords: k.keywords } : {}), ...(k.serp ? { serp: k.serp } : {}), ...(k.todos ? { todos: k.todos } : {}) },
+      };
+    } catch (e) {
+      return { ok: false, why: e instanceof Error ? e.message : String(e) };
+    }
+  }
 
   try {
     switch (kind) {

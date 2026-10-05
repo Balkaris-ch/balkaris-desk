@@ -9,7 +9,7 @@ import { Absent } from "@/components/ui/Read";
 import { Stamp } from "@/components/ui/Stamp";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { DASH, num } from "@/lib/format";
-import { gain, hrefWith, noEstimate, pos, PRIORITY_LABEL, PRIORITY_TONE, TYPE_ICON } from "./look";
+import { gain, hrefWith, noEstimate, pos, PRIORITY_LABEL, PRIORITY_TONE, quoted, TYPE_ICON } from "./look";
 
 /**
  * The three panels under the list (board 111): the selected opportunity's
@@ -29,7 +29,14 @@ export function KeywordCluster({ d }: { d: OpportunityDetail | null }) {
       icon={page ? "search" : "layers"}
       info="Impressions are how often Google showed the site for the phrase in the head’s range, from the desk’s Search Console history. Not search volume: no free source gives that."
       sub={c?.state === "ok" && c.value.cluster ? <Chip icon="tag" className="dk-seo-opps-cluster-chip">{c.value.cluster.name}</Chip> : null}
-      footer={c?.state === "ok" && c.value.total > c.value.rows.length ? <CardFoot href={c.value.href}>{`View all ${num(c.value.total)} ${page ? "searches" : "phrases"}`}</CardFoot> : c?.state === "ok" ? <CardFoot href={c.value.href}>View in Keywords</CardFoot> : undefined}
+      footer={
+        /* Where the whole set is: a cluster's phrases in Keywords (every judgement shown), a page's searches in Search Console's explorer. */
+        c?.state === "ok" && c.value.total > c.value.rows.length ? (
+          <CardFoot href={c.value.href}>{`View all ${num(c.value.total)} ${page ? "searches in Search Console" : "phrases in Keywords"}`}</CardFoot>
+        ) : c?.state === "ok" ? (
+          <CardFoot href={c.value.href}>{page ? "View in Search Console" : "View in Keywords"}</CardFoot>
+        ) : undefined
+      }
     >
       {!c ? (
         <Empty compact icon="layers" title="Nothing selected" />
@@ -93,7 +100,7 @@ export function RankingPotential({ d, curveNote }: { d: OpportunityDetail | null
   const now = (p.impressionsPerMonth * p.currentCtr) / 100;
   const then = (p.impressionsPerMonth * p.targetCtr) / 100;
   const high = Math.max(then, now, 0.0001);
-  const subject = o.subject.keyword ? `“${o.subject.keyword}”` : (o.subject.page?.path ?? "it");
+  const subject = o.subject.keyword ? quoted(o.subject.keyword) : (o.subject.page?.path ?? "it");
   const at = p.targetPosition <= 3 ? `the top ${p.targetPosition}` : `position ${p.targetPosition}`;
   const sentence =
     o.type === "low-ctr"

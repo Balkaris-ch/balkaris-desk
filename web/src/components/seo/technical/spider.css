@@ -782,3 +782,57 @@
     justify-content: flex-start;
   }
 }
+
+/* ---------- the day's audits, and an audit asked again (5 October 2026) ---------- */
+
+.dk-seo-technical-audit-again {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin: var(--x8) 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-audit-recent {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-technical-audit-recent li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--ctl-sm);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* "Try it now" beside the page it is tried on, and what it found. */
+.dk-seo-technical-rule-try {
+  display: flex;
+  align-items: flex-end;
+  padding-bottom: var(--x2);
+}
+
+.dk-seo-technical-rule-tried {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+}
+
+.dk-seo-technical-rule-tried-list {
+  max-height: var(--dk-seo-technical-list-h);
+  margin: 0;
+  padding-left: var(--x20);
+  overflow-y: auto;
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}

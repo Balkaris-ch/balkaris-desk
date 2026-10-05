@@ -1236,6 +1236,245 @@ a.dk-seo-pages-pg:hover {
   font-size: var(--t-label);
 }
 
+/* ---------- the part of search the figures are of: two rows of linked choices ---------- */
+.dk-seo-pages-part {
+  display: grid;
+  gap: var(--x6);
+  margin-bottom: var(--x16);
+}
+
+.dk-seo-pages-part .dk-seo-pages-fhead {
+  margin-bottom: 0;
+  cursor: default;
+}
+
+.dk-seo-pages-seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x2);
+  padding: var(--x2);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-pages-seg-opt {
+  flex: 1 1 auto;
+  padding: var(--x3) var(--x8);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  text-align: center;
+  white-space: nowrap;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.dk-seo-pages-seg-opt:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-pages-seg-opt--on {
+  background: var(--card-3);
+  color: var(--ink);
+}
+
+.dk-seo-pages-fnote--top {
+  margin: 0 0 var(--x16);
+  padding: 0;
+  border: 0;
+}
+
+/* ---------- the list's optional columns and their chooser ---------- */
+.dk-seo-pages-cols {
+  position: relative;
+}
+
+.dk-seo-pages-cols-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-pages-cols-btn::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-pages-cols-btn:hover,
+.dk-seo-pages-cols[open] .dk-seo-pages-cols-btn {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-pages-cols-menu {
+  position: absolute;
+  top: calc(100% + var(--x4));
+  right: 0;
+  z-index: var(--z-pop);
+  display: grid;
+  gap: var(--x1);
+  min-width: calc(var(--x56) * 3);
+  padding: var(--x6);
+  border: var(--x1) solid var(--pop-edge);
+  border-radius: var(--r-field);
+  background: var(--pop);
+  box-shadow: var(--shadow-pop);
+}
+
+.dk-seo-pages-cell-title {
+  max-width: calc(var(--x56) * 3.2);
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-cell-bad {
+  color: var(--red);
+}
+
+.dk-seo-pages-idx--older {
+  opacity: 0.7;
+}
+
+.dk-seo-pages-delta {
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-pages-delta--up {
+  color: var(--green);
+}
+
+.dk-seo-pages-delta--down {
+  color: var(--red);
+}
+
+.dk-seo-pages-delta--flat {
+  color: var(--ink-4);
+}
+
+/* The addresses Google counted that the crawl does not read: folded under the list until asked for. */
+.dk-seo-pages-elsewhere summary {
+  cursor: pointer;
+}
+
+.dk-seo-pages-elsewhere summary:hover {
+  color: var(--ink-2);
+}
+
+.dk-seo-pages-elsewhere-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--x56) * 3.4), 1fr));
+  gap: var(--x4) var(--x16);
+  margin: var(--x8) 0 var(--x4);
+}
+
+.dk-seo-pages-elsewhere-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-pages-elsewhere-list a {
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-elsewhere-list a:hover {
+  color: var(--green);
+}
+
+/* ---------- PageSpeed in the Technical view ---------- */
+.dk-seo-pages-speed {
+  display: grid;
+  gap: var(--x8);
+}
+
+.dk-seo-pages-speed li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x10);
+}
+
+.dk-seo-pages-speed-kind {
+  min-width: calc(var(--x56) + var(--x6));
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+/* ---------- an address looked up on the live site, in the summary's place ---------- */
+.dk-seo-pages-lookup-icon {
+  display: inline-grid;
+  place-content: center;
+  width: var(--x40);
+  height: var(--x40);
+  border-radius: var(--r-tile-icon);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-pages-lookup-body {
+  display: grid;
+  gap: var(--x10);
+  padding: 0 var(--pad) var(--pad);
+}
+
+.dk-seo-pages-hops {
+  display: grid;
+  gap: var(--x2);
+  margin: var(--x6) 0;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-pages-lookup-kw {
+  display: grid;
+  gap: var(--x4);
+  margin-top: var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-seo-pages-lookup-kw li {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-pages-lookup-kw a {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-pages-lookup-kw a:hover {
+  color: var(--green);
+}
+
+.dk-seo-pages-redirect {
+  display: grid;
+  gap: var(--x8);
+  justify-items: start;
+}
+
+.dk-seo-pages-redirect .dk-field {
+  width: 100%;
+}
+
 /* ---------- narrow ---------- */
 @container dk-seo-pages (max-width: 520px) {
   .dk-seo-pages-ov-top {

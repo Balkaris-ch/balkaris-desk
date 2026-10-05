@@ -5,7 +5,7 @@ import { Icon } from "@/components/ui/icons";
 import { Info } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
-import { keywordsHref, type Place } from "./href";
+import { KEYWORD_ONLY, keywordsHref, type Place } from "./href";
 
 /**
  * The list's head, inside its panel. Board 113 puts the filters straight
@@ -36,7 +36,7 @@ export function KwHead({
   const phrases = data.tiles.total.state === "ok" ? data.tiles.total.value.value : null;
   const mode = (key: "keywords" | "clusters", label: string, count: number | null, icon: "list" | "layers") => (
     <Go
-      href={keywordsHref(place, { view: key, offset: 0 })}
+      href={keywordsHref(place, key === "clusters" ? { ...KEYWORD_ONLY, view: key, offset: 0, open: null } : { view: key, offset: 0 })}
       scroll={false}
       className={cx("dk-seo-kw-mode", view === key && "dk-seo-kw-mode--on")}
       aria-current={view === key ? "page" : undefined}

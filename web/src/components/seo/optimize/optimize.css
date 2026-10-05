@@ -23,6 +23,7 @@
   --dk-seo-optimize-ops-mark: 40px;  /* the operator's mark */
   --dk-seo-optimize-sug-icon: 30px;  /* a suggestion's icon square */
   --dk-seo-optimize-scroll-h: 440px; /* a long table, before it scrolls inside its panel */
+  --dk-seo-optimize-set-pic-w: 180px; /* a share picture beside its words in the settings */
 }
 
 .dk-seo-optimize {
@@ -1368,4 +1369,133 @@
   gap: var(--x10);
   color: var(--ink);
   font-size: var(--t-body);
+}
+
+/* ---------- the page's settings (Optimize tab) ---------- */
+.dk-seo-optimize-set .dk-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+}
+
+/* Live, approved, waiting: three columns a reader compares across one row. */
+.dk-seo-optimize-set-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-small);
+}
+
+.dk-seo-optimize-set-table th,
+.dk-seo-optimize-set-table td {
+  padding: var(--x8) var(--x10) var(--x8) 0;
+  border-bottom: var(--x1) solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dk-seo-optimize-set-table thead th {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--track-label);
+}
+
+.dk-seo-optimize-set-table tbody th {
+  width: 18%;
+  color: var(--ink-3);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-optimize-set-table td {
+  width: 27%;
+}
+
+.dk-seo-optimize-set-val {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  color: var(--ink);
+}
+
+.dk-seo-optimize-set-pic {
+  display: block;
+  width: 100%;
+  max-width: var(--dk-seo-optimize-set-pic-w);
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border-radius: var(--r-field);
+  background: var(--card-3);
+}
+
+.dk-seo-optimize-set-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x12);
+}
+
+.dk-seo-optimize-set-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+}
+
+.dk-seo-optimize-set-ai,
+.dk-seo-optimize-set-acts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+}
+
+.dk-seo-optimize-set-edit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  flex-basis: 100%;
+}
+
+.dk-seo-optimize-set-edit > button {
+  align-self: flex-start;
+}
+
+.dk-seo-optimize-set-form {
+  padding: var(--x14);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-optimize-set-forms {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--x20);
+}
+
+@container (max-width: 720px) {
+  .dk-seo-optimize-set-forms {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-seo-optimize-set-upload {
+  align-self: flex-start;
+  cursor: pointer;
+}
+
+.dk-seo-optimize-set-block summary {
+  cursor: pointer;
+  font-size: var(--t-small);
+  color: var(--ink-3);
+}
+
+.dk-seo-optimize-set-code {
+  max-height: var(--dk-seo-optimize-scroll-h);
+  overflow: auto;
+  margin: var(--x8) 0 0;
+  padding: var(--x10);
+  border-radius: var(--r-field);
+  background: var(--card-3);
+  white-space: pre;
 }

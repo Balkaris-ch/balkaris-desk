@@ -12,6 +12,7 @@ import { bing, gsc } from "../search/index.ts";
 import type { LinkCounts } from "../search/bing.ts";
 import type { CtrOutlier, Gap, IndexReport, Listed, Mover, Opportunity, PageRow as SearchPageRow, PageTitle, PositionBuckets, QueryPageRow, QueryRow, SearchTotals } from "../search/gsc.ts";
 import type { DayWindow } from "../search/shared.ts";
+import { csvMark } from "./seo/shared.ts";
 import * as site from "../site/index.ts";
 import { specimenAllowed } from "../specimen.ts";
 import { off, ok, reading, series, since, today, waiting } from "../store.ts";
@@ -95,6 +96,10 @@ import type {
  * `specimen: true` and the page prints a ribbon. The crawl's panels stay real.
  */
 export const routes = new Hono<Vars>();
+
+/* Every CSV the section answers starts with the byte-order mark Excel needs to read UTF-8 ("für", not
+   "fÃ¼r"), whichever page wrote it: src/cc/routes/seo/shared.ts, csvMark. First, so it wraps them all. */
+routes.use("*", csvMark);
 
 /* ---------- ranges and windows -------------------------------------------------------- */
 

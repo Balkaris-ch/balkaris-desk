@@ -5,9 +5,11 @@ import { Card } from "@/components/ui/Card";
 import { Stamp } from "@/components/ui/Stamp";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { PanelAbsent } from "@/components/seo/bits";
+import { Go } from "@/components/ui/Go";
 import { cx } from "@/lib/cx";
 import { DASH, num, shortDate } from "@/lib/format";
 import { LangMark, PRIORITY_TONE } from "./bits";
+import { DEFAULT_RANGE, gapHref, keywordHref, seoHref } from "./href";
 import { RowAction } from "./RowAction";
 import "./overview.css";
 
@@ -17,7 +19,7 @@ import "./overview.css";
  * board's "volume" has no free source: the column is Google's impressions of
  * the site for the phrase, named as such.
  */
-export function Keywords({ reading }: { reading: Reading<KeywordPanel> }) {
+export function Keywords({ reading, range = DEFAULT_RANGE, operate = true }: { reading: Reading<KeywordPanel>; range?: string; operate?: boolean }) {
   const w = reading.state === "ok" ? reading.value.window : null;
   return (
     <Card
@@ -26,7 +28,7 @@ export function Keywords({ reading }: { reading: Reading<KeywordPanel> }) {
       className="dk-seo-overview-panel dk-seo-overview-a-kw"
       info="Searches Google showed the site for at average position 4 to 20, then topics of real searches no page answers. Impressions are the times Google showed the site for the phrase: no free source gives a search volume. For a topic, phrases counts its relevant phrases."
       sub={w ? `Google Search, ${shortDate(w.start)} to ${shortDate(w.end)}` : undefined}
-      right={<LinkButton href="/seo/keywords" size="sm">View all</LinkButton>}
+      right={<LinkButton href={seoHref("/seo/keywords", range)} size="sm">View all</LinkButton>}
       flush
     >
       {reading.state === "ok" ? (
@@ -53,9 +55,14 @@ export function Keywords({ reading }: { reading: Reading<KeywordPanel> }) {
                 <tr key={r.opportunityId}>
                   <td className="dk-seo-overview-topic">
                     <span className={cx("dk-seo-overview-opp-dot", `dk-tone-${PRIORITY_TONE[r.priority]}`)} title={`${r.priority} priority`} aria-hidden />
-                    <span className="dk-seo-overview-topic-name" title={r.page ? `${r.phrase} → ${r.page}` : r.phrase}>
+                    {/* A query opens on Keywords, filtered to it; a topic opens its cluster on Content Gaps. */}
+                    <Go
+                      href={r.kind === "gap" ? gapHref(r.opportunityId.slice(r.opportunityId.indexOf(":") + 1), range) : keywordHref(r.phrase.replace(/^["“](.*)["”]$/, "$1"), range)}
+                      className="dk-seo-overview-topic-name dk-seo-overview-topic-link"
+                      title={r.page ? `${r.phrase} → ${r.page}` : r.phrase}
+                    >
                       {r.kind === "gap" ? r.phrase.replace(/\s*\((DE|EN)\)$/i, "") : r.phrase}
-                    </span>
+                    </Go>
                     <LangMark lang={r.lang} />
                     {r.kind === "gap" ? <span className="dk-seo-overview-gaptag">{r.phrases !== null ? `${num(r.phrases)} phrases, no page` : "no page"}</span> : null}
                   </td>
@@ -74,6 +81,8 @@ export function Keywords({ reading }: { reading: Reading<KeywordPanel> }) {
                       state={r.state}
                       stateNote={r.stateNote}
                       variant="quiet"
+                      range={range}
+                      operate={operate}
                     />
                   </td>
                 </tr>

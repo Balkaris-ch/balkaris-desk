@@ -214,6 +214,8 @@ export function CompetitorsPanel({ data }: { data: SeoPageViewPayload }) {
             { key: "words", head: "Words", numeric: true, width: "72px", cell: (r) => (r.words === null ? DASH : num(r.words)) },
             { key: "price", head: "Price", width: "64px", cell: (r) => (r.priceStated === null ? DASH : r.priceStated ? "Stated" : "None") },
             { key: "seen", head: "Seen for", width: "24%", cell: (r) => (r.query ? <span className="dk-seo-optimize-quiet dk-seo-optimize-wrap">{r.query}</span> : DASH) },
+            /* The day the position was seen: one import, not refreshed, so an ageing snapshot says its age. */
+            { key: "day", head: "Seen on", width: "88px", cell: (r) => (r.seen ? <span className="dk-seo-optimize-quiet dk-num">{shortDate(r.seen)}</span> : DASH) },
           ]}
         />
       ) : (

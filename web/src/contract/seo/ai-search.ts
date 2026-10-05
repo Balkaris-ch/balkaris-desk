@@ -25,6 +25,7 @@
  *   POST /questions           owner  { question, lang?, kind?, active }    track or retire one   → AiDone
  *   POST /page/check                 { path }       read one page again now and judge it        → PageCheckAnswer
  *   POST /readiness/run              ask for the readiness check of every page now             → AiDone
+ *   POST /visits/run                 ask GA4 for the AI assistants' visits now                  → AiDone
  *   POST /act                        { ids }        an opportunity's action                      → OpportunitiesActed
  *   POST /owner                      { id, done }   an owner task's done mark (his own steps: the owner) → OwnerTaskAnswer
  *   POST /task                       NewTask        a task for the operator (the workstation's own model) → TaskAnswer
@@ -72,6 +73,20 @@ export interface SeoAiSearchPayload {
   importSteps: { gscGenerativeAi: ImportStep; bingAiPerformance: ImportStep };
   /** Every assistant a check can be recorded for, in the order the page lists them. */
   engines: { engine: AiEngine; label: string }[];
+  /** The daily GA4 read of the assistants' visits as it stands, so "Read now" can say what is happening; null when the desk has no such job. */
+  visitsJob: AiJob | null;
+}
+
+/** A daily job behind a panel, as the panel tells it: running, how far, and how its last run ended. */
+export interface AiJob {
+  running: boolean;
+  /** "41 of 98: /branding" while it runs; null otherwise. */
+  progress: string | null;
+  lastStart: string | null;
+  lastOk: boolean | null;
+  lastNote: string | null;
+  /** False while what it reads is not connected: it cannot be asked to run. */
+  ready: boolean;
 }
 
 /* ---------- what the address asked for -------------------------------------------------- */
@@ -124,6 +139,8 @@ export interface AiAnswers {
   pairs: number;
   /** The question in detail: the one the address opens, else the first of the list; null when the list is empty. */
   open: AiQuestionDetail | null;
+  /** Every tracked question before any filter, in the list's order: what the record and round forms offer. */
+  all: { key: string; question: string; lang: "de" | "en"; kind: AiCheckRow["kind"] }[];
   /** Questions a person retired: kept with their answers, not listed, not in any count above. */
   retired: { key: string; question: string; lang: "de" | "en"; kind: AiCheckRow["kind"]; answers: number }[];
 }
@@ -446,7 +463,7 @@ export interface Readiness {
   /** What the last run could not read, said whole ("The run of 5 Oct 2026 read none of the 98 pages: the website answered 402 …"); null when it read every page. */
   unread: { at: string; line: string } | null;
   /** The daily job as it stands, so "Run the check" can say what is happening; null when the desk has no such job. */
-  job: { running: boolean; progress: string | null; lastStart: string | null; lastOk: boolean | null; lastNote: string | null } | null;
+  job: AiJob | null;
 }
 
 export interface ReadinessTally {

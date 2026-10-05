@@ -2,10 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { me, type Vars } from "../access.ts";
 import { articleStats, channels, gaRange, pages as gaPages, type GaRange } from "../ga4.ts";
-import { approve, cannotApprove, proposalCount, proposalRow, proposals, proposeRedirect, reject, withdraw } from "../operator/apply.ts";
+import { approve, cannotApprove, proposalCount, proposalRow, proposals, proposeByHand, readBack, reject, withdraw } from "../operator/apply.ts";
+import { pictureBytes, takeUpload } from "../operator/pictures.ts";
+import { serpChoices } from "../operator/sitepacks.ts";
+import { changesOf, taskById } from "../operator/tables.ts";
 import { contextInsights, contextIssues, contextPages, contextTraffic, fixable, waitingDrafts } from "../operator/context.ts";
 import { shownTitle } from "../operator/packs.ts";
-import { advanceAudits, allResults, allTasks, cancel, cards, createTask, latest, newest, openRows, result, runnerState, taskCounts, workingNow } from "../operator/queue.ts";
+import { addTodos, advanceAudits, allResults, allTasks, cancel, cards, createTask, latest, newest, openRows, result, runnerState, taskCounts, workingNow } from "../operator/queue.ts";
 import { db } from "../../db.ts";
 import { addTodo, markTodo, removeTodo, todos } from "../operator/todos.ts";
 import { specimenAllowed } from "../specimen.ts";
@@ -16,6 +19,7 @@ import type {
   OperatorHistory,
   OperatorLive,
   OperatorPayload,
+  PictureAnswer,
   ProposalAnswer,
   ProposalRow,
   ResultCard,
@@ -23,6 +27,7 @@ import type {
   TaskResult,
   TaskRow,
   TodoAnswer,
+  TodosAdded,
 } from "../../../web/src/contract/operator.ts";
 
 /**
@@ -34,10 +39,16 @@ import type {
  *   GET  /tasks/:id             one finished task in full
  *   POST /tasks                 queue a task                       anyone signed in
  *   POST /tasks/:id/cancel      Stop                               anyone signed in
- *   POST /proposals             a redirect asked for by hand       anyone signed in
+ *   POST /tasks/:id/todos       put a task's to-dos on the list    anyone signed in
+ *   POST /proposals             a change written by hand, any kind anyone signed in
  *   POST /proposals/:id/approve apply it to the live site          a person who can publish
  *   POST /proposals/:id/withdraw take it off the live site again   a person who can publish
  *   POST /proposals/:id/reject  say no; nothing on the site moves  anyone signed in
+ *   POST /proposals/:id/check   read the live page back            anyone signed in
+ *   POST /pictures              upload a share picture             anyone signed in
+ *   GET  /pictures/:name        an uploaded share picture
+ *
+ * work/audit/OPERATOR-API.md has every body and answer.
  *   POST /todos                 add to the to-do list              anyone signed in
  *   POST /todos/:id             { done } or { remove: true }       anyone signed in
  *   POST /refresh               re-read GA4 for one context tab    anyone signed in
@@ -92,6 +103,9 @@ function specimenProposal(id: number, kind: ProposalRow["kind"], state: Proposal
     address,
     before,
     after,
+    changes: changesOf(kind, address, before, after, null),
+    picture: null,
+    readBack: null,
     why: "Specimen: a finding that stands where the crawl's own will be.",
     source: "operator",
     taskId: 9101,
@@ -196,7 +210,10 @@ routes.get("/", async (c) => {
     /* counted as nothing to propose; the tab's own reading says why */
   }
 
-  const answer: TaskResult | null = (asked > 0 ? result(asked) : null) ?? latest();
+  /* A task asked for by number that has not finished is said to be waiting, never replaced by another task's answer (a "View" link right after queueing lands here). */
+  const askedTask = asked > 0 ? taskById(asked) : undefined;
+  const pending = askedTask && askedTask.state !== "done" && askedTask.state !== "failed" ? (openRows().find((t) => t.id === asked) ?? null) : null;
+  const answer: TaskResult | null = (asked > 0 ? result(asked) : null) ?? (pending ? null : latest());
   const payload: OperatorPayload = {
     range,
     me: {
@@ -209,6 +226,8 @@ routes.get("/", async (c) => {
     todos: todos(),
     context: { pages: pagesR, insights: insightsR, traffic: trafficR, issues: issuesR, fixable: fix },
     answer,
+    pending,
+    serps: serpChoices(),
     latest: newest(),
     cards: cards(),
     actions: actions(5),
@@ -229,6 +248,7 @@ routes.get("/", async (c) => {
       working: { id: 9001, title: SPECIMEN_TASKS[0]!.title },
       tasks: SPECIMEN_TASKS,
       answer: asked > 0 && asked < 9000 ? payload.answer : SPECIMEN_ANSWER,
+      pending: null,
       latest: null,
       cards: SPECIMEN_CARDS,
       actions: SPECIMEN_ACTIONS,
@@ -284,13 +304,16 @@ routes.get("/tasks/:id", (c) => {
 /* ---------- changes ------------------------------------------------------------------------ */
 
 const NewTaskBody = z.object({
-  kind: z.enum(["ask", "traffic", "opportunities", "metadata", "redirect", "brief", "audit"]),
+  kind: z.enum(["ask", "traffic", "opportunities", "metadata", "redirect", "brief", "audit", "og", "schema", "links", "alt", "keywords", "serp"]),
   prompt: z.string().max(2000).optional(),
   context: z.enum(["website", "pages", "traffic", "issues", "insights", "none"]).optional(),
   depth: z.enum(["quick", "deep"]).optional(),
   paths: z.array(z.string().max(200)).max(10).optional(),
   path: z.string().max(200).optional(),
   range: z.string().max(8).optional(),
+  ids: z.array(z.number().int().positive()).max(30).optional(),
+  serpId: z.number().int().positive().optional(),
+  schemaType: z.enum(["FAQPage", "Service"]).optional(),
 });
 
 routes.post("/tasks", async (c) => {
@@ -301,11 +324,46 @@ routes.post("/tasks", async (c) => {
 
 routes.post("/tasks/:id/cancel", (c) => c.json<TaskAnswer>({ ok: true, task: cancel(idOf(c.req.param("id")), me(c)) }));
 
-const RedirectBody = z.object({ from: z.string().min(1).max(200), to: z.string().min(1).max(200) });
+routes.post("/tasks/:id/todos", (c) => c.json<TodosAdded>({ ok: true, ...addTodos(idOf(c.req.param("id")), me(c)) }));
+
+/* A change written by hand. Without "kind" the body is a redirect, as it always was. */
+const ADDRESS = z.string().min(1).max(200);
+const WHY = z.string().max(400).optional();
+const ProposalBody = z.union([
+  z.object({ kind: z.literal("redirect").optional(), from: ADDRESS, to: ADDRESS, why: WHY }),
+  z.object({ kind: z.literal("meta"), address: ADDRESS, title: z.string().max(200).optional(), description: z.string().max(400).optional(), why: WHY }),
+  z.object({ kind: z.literal("og"), address: ADDRESS, ogTitle: z.string().max(200).optional(), ogDescription: z.string().max(400).optional(), ogImage: z.string().max(220).optional(), why: WHY }),
+  z.object({ kind: z.literal("index"), address: ADDRESS, noindex: z.boolean(), why: WHY }),
+  z.object({ kind: z.literal("canonical"), address: ADDRESS, canonical: ADDRESS, why: WHY }),
+  z.object({ kind: z.literal("schema"), address: ADDRESS, jsonLd: z.union([z.string().max(20_000), z.record(z.string(), z.unknown())]), why: WHY }),
+]);
 
 routes.post("/proposals", async (c) => {
-  const body = RedirectBody.parse(await c.req.json().catch(() => ({})));
-  return c.json<ProposalAnswer>({ ok: true, proposal: await proposeRedirect(body.from, body.to, me(c)) }, 201);
+  const got = ProposalBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!got.success) return c.json<ApiError>({ error: "Send a change: { kind, address, ... } as work/audit/OPERATOR-API.md describes, or { from, to } for a redirect." }, 400);
+  const made = await proposeByHand(got.data as never, me(c));
+  return c.json<ProposalAnswer>({ ok: true, ...made }, 201);
+});
+
+routes.post("/proposals/:id/check", async (c) => c.json<ProposalAnswer>({ ok: true, ...(await readBack(idOf(c.req.param("id")), me(c))) }));
+
+/* A share picture: the file as base64 in JSON, at most 600 KB before encoding. */
+const PictureBody = z.object({ address: ADDRESS, data: z.string().min(16).max(900_000), filename: z.string().max(200).optional() });
+
+routes.post("/pictures", async (c) => {
+  const got = PictureBody.safeParse(await c.req.json().catch(() => ({})));
+  if (!got.success) return c.json<ApiError>({ error: "Send { address, data }: the page, and the picture as base64 (PNG, JPEG or WebP, at most 600 KB)." }, 400);
+  const picture = await takeUpload(got.data.address.trim(), got.data.data, me(c));
+  return c.json<PictureAnswer>(
+    { ok: true, picture, line: `Ready: ${picture.width} by ${picture.height} pixels, ${Math.round(picture.bytes / 1024)} KB. It is committed to the site only with an approved share card.` },
+    201,
+  );
+});
+
+routes.get("/pictures/:name", (c) => {
+  const p = pictureBytes(c.req.param("name"));
+  if (!p) return c.json<ApiError>({ error: "There is no such picture." }, 404);
+  return c.body(new Uint8Array(p.data), 200, { "content-type": p.type, "cache-control": "private, max-age=86400", "x-content-type-options": "nosniff" });
 });
 
 routes.post("/proposals/:id/approve", async (c) => c.json<ProposalAnswer>({ ok: true, proposal: await approve(idOf(c.req.param("id")), me(c)) }));

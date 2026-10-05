@@ -1,0 +1,118 @@
+{
+ "version": "0.1.20250526",
+ "status_code": 20000,
+ "status_message": "Ok.",
+ "cost": 0.011,
+ "tasks_count": 1,
+ "tasks_error": 0,
+ "tasks": [
+  {
+   "id": "06201739-8284-0381-0000-dd310797563a",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "cost": 0.011,
+   "result_count": 1,
+   "path": [
+    "v3",
+    "dataforseo_labs",
+    "google",
+    "ranked_keywords",
+    "live"
+   ],
+   "data": {
+    "api": "dataforseo_labs",
+    "function": "ranked_keywords",
+    "se_type": "google",
+    "target": "dataforseo.com",
+    "language_name": "English",
+    "location_name": "United States",
+    "load_rank_absolute": true,
+    "limit": 10,
+    "item_types": [
+     "ai_overview_reference",
+     "organic",
+     "paid",
+     "featured_snippet",
+     "local_pack"
+    ]
+   },
+   "result": [
+    {
+     "se_type": "google",
+     "target": "dataforseo.com",
+     "location_code": 2840,
+     "language_code": "en",
+     "total_count": 3696,
+     "items_count": 2,
+     "metrics": {
+      "organic": {
+       "pos_1": 26,
+       "pos_2_3": 49,
+       "pos_4_10": 569,
+       "pos_11_20": 628,
+       "pos_21_30": 510,
+       "pos_31_40": 373,
+       "pos_41_50": 312,
+       "pos_51_60": 288,
+       "pos_61_70": 260,
+       "pos_71_80": 233,
+       "pos_81_90": 251,
+       "pos_91_100": 190,
+       "etv": 16248.60499012284,
+       "count": 3689,
+       "estimated_paid_traffic_cost": 105396.22162114584,
+       "is_new": 1110,
+       "is_up": 1181,
+       "is_down": 1118,
+       "is_lost": 0
+      }
+     },
+     "items": [
+      {
+       "se_type": "google",
+       "keyword_data": {
+        "keyword": "1000 keywords",
+        "keyword_info": {
+         "search_volume": 140,
+         "cpc": null,
+         "competition_level": "LOW"
+        }
+       },
+       "ranked_serp_element": {
+        "serp_item": {
+         "type": "organic",
+         "rank_group": 1,
+         "rank_absolute": 1,
+         "domain": "dataforseo.com",
+         "url": "https://dataforseo.com/free-seo-stats/top-1000-keywords",
+         "etv": 42.560001373291016
+        }
+       }
+      },
+      {
+       "se_type": "google",
+       "keyword_data": {
+        "keyword": "1000 useful websites",
+        "keyword_info": {
+         "search_volume": 70,
+         "cpc": null,
+         "competition_level": "LOW"
+        }
+       },
+       "ranked_serp_element": {
+        "serp_item": {
+         "type": "organic",
+         "rank_group": 1,
+         "rank_absolute": 1,
+         "domain": "dataforseo.com",
+         "url": "https://dataforseo.com/free-seo-stats/top-1000-websites",
+         "etv": 21.280000686645508
+        }
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

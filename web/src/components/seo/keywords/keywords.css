@@ -18,6 +18,7 @@
   --dk-seo-kw-topic-w: 24ch;      /* its topic under it */
   --dk-seo-kw-path-w: 22ch;       /* a page's address in the table */
   --dk-seo-kw-trend-w: 76px;      /* the position line in a row */
+  --dk-seo-kw-strength-w: 48px;   /* Google's ordering bar in a research row */
   --dk-seo-kw-menu-w: 240px;      /* a row's menu */
   --dk-seo-kw-map-w: 340px;       /* the mapping step inside it */
   --dk-seo-kw-said-w: 32ch;       /* a button's sentence */
@@ -201,7 +202,8 @@
 /* The filters (board: search, positions, pages, intent, sort; with language, topic, source, wording, judgement), wrapping as the panel narrows. */
 .dk-seo-kw-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) repeat(8, minmax(0, 1fr)) minmax(0, 1.4fr);
+  /* Two rows on a wide screen: the search and five selects, then five selects and the order. */
+  grid-template-columns: minmax(0, 2fr) repeat(5, minmax(0, 1fr));
   gap: var(--x8);
   padding: var(--x12) var(--pad) var(--x14);
 }
@@ -1025,4 +1027,238 @@ a.dk-seo-kw-cl-n:hover {
   .dk-seo-kw-tgt--head > span:nth-child(4) {
     display: none;
   }
+}
+
+/* ---------- research on the web (KwResearch, KwWeb) ---------- */
+.dk-seo-kw-rbox {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  padding-bottom: var(--x10);
+}
+
+.dk-seo-kw-rbox-seed {
+  flex: 1 1 var(--dk-seo-kw-find-min);
+  min-width: 0;
+}
+
+.dk-seo-kw-rbox-seed input {
+  width: 100%;
+}
+
+.dk-seo-kw-rbox-ways {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x12);
+}
+
+.dk-seo-kw-rcard .dk-seo-kw-basis,
+.dk-seo-kw-open .dk-seo-kw-basis,
+.dk-seo-kw-serp .dk-seo-kw-basis {
+  padding: 0 0 var(--x8);
+}
+
+.dk-seo-kw-rsources {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding-bottom: var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-kw-rgroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-top: var(--x12);
+}
+
+.dk-seo-kw-rgroup-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-weight: 600;
+}
+
+.dk-seo-kw-rgroup-head .dk-num {
+  color: var(--ink-4);
+  font-weight: 400;
+}
+
+.dk-seo-kw-ractions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  padding: var(--x12) 0 var(--x4);
+}
+
+.dk-seo-kw-engines {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x4);
+}
+
+.dk-seo-kw-strength {
+  display: inline-grid;
+  grid-template-columns: minmax(var(--dk-seo-kw-strength-w), 1fr) auto;
+  align-items: center;
+  gap: var(--x6);
+  min-width: var(--dk-seo-kw-trend-w);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-planner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-planner input[type="file"] {
+  max-width: 100%;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* ---------- who ranks (KwSerp) ---------- */
+.dk-seo-kw-serp {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+}
+
+.dk-seo-kw-serp-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--x8);
+}
+
+.dk-seo-kw-serp-pending {
+  display: flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-kw-serp-head {
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  padding-bottom: var(--x6);
+}
+
+.dk-seo-kw-serp-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-kw-serp-list > li {
+  display: grid;
+  grid-template-columns: var(--x24) minmax(0, 1fr);
+  gap: var(--x8);
+  padding: var(--x4) var(--x6);
+  border-radius: var(--r-chip);
+}
+
+.dk-seo-kw-serp-own {
+  background: var(--card-3);
+  box-shadow: inset var(--x2) 0 0 var(--green);
+}
+
+.dk-seo-kw-serp-pos {
+  color: var(--ink-4);
+  text-align: right;
+}
+
+.dk-seo-kw-serp-what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-kw-serp-title {
+  overflow: hidden;
+  color: var(--ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-kw-serp-host {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-kw-serp-plain {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+  padding: 0;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  list-style: none;
+}
+
+.dk-seo-kw-serp-second {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line-2);
+}
+
+.dk-seo-kw-serp-second > .dk-seo-kw-serp-page {
+  align-self: stretch;
+}
+
+.dk-seo-kw-serp-history > summary {
+  cursor: pointer;
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+/* ---------- a keyword's own view (KwOpen) ---------- */
+.dk-seo-kw-open-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--x8);
+  padding-bottom: var(--x12);
+}
+
+.dk-seo-kw-open-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--x16);
+  padding-bottom: var(--x12);
+}
+
+.dk-seo-kw-open-sec {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-kw-open-days {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
 }

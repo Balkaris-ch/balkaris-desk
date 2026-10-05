@@ -94,7 +94,7 @@ export interface SeoContentGapsPayload {
   /* Every cluster's row was sent here once (`clusters`); no screen read it, so it is left out: the coverage list and `selected` carry the rows a view needs. */
   /** view=keywords: relevant phrases with no page of their language. */
   keywords: Reading<Paged<GapKeyword>> | null;
-  /** view=console: the searches Google showed the site for where no page shown carries their words. */
+  /** view=console: the searches Google showed the site for where no page shown carries their words; judged or not, except those a person judged not relevant (the reading's note counts them). */
   console: Reading<Paged<ConsoleGap>> | null;
   /** view=competitors: the competitor sites the desk read a page of, with the topics each was seen for. */
   competitors: Reading<{ rows: CompetitorSite[]; sites: number; pages: { ranking: number; home: number } }> | null;

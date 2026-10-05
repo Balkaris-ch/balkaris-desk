@@ -36,10 +36,13 @@ function here(q: Record<string, string | string[] | undefined>, change: Record<s
 }
 
 /**
- * THE EARLIER SEO SCREEN, kept whole at an address nothing links to while the
- * SEO section's pages take its panels over (the Overview reuses its
- * components). /seo?open=<query> (the top bar's keyword hits) and
- * /seo?specimen=1 still arrive here: the Overview sends them on.
+ * THE EARLIER SEO SCREEN, kept whole while the SEO section's pages take its
+ * panels over. Nothing in the section links here any more: the top bar's
+ * keyword hits lead to the Keywords page (src/cc/find.ts), and only a typed
+ * /seo?open=<query> or /seo?specimen=1 arrives, because the Overview sends
+ * them on. Its four "View all" lists (/seo/list/opportunities, gaps,
+ * movements, landing) lead back here. Retiring it is the integrator's call
+ * once the specimen has another home.
  *
  * SEO: the website's search health. One request for the whole screen; every
  * panel is drawn from its own reading, so a panel whose source is not

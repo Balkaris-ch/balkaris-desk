@@ -8,6 +8,7 @@ import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/But
 import { Input } from "@/components/ui/Field";
 import type { IconName } from "@/components/ui/icons";
 import { cx } from "@/lib/cx";
+import { PAGES_LIST } from "./look";
 
 /**
  * The page's buttons that change something. Each posts to the desk server
@@ -26,9 +27,6 @@ const BRIEFS = "/api/v1/seo/content-gaps/briefs";
 const STEP = "/api/v1/seo/content-gaps/step";
 const JUDGE = "/api/v1/seo/content-gaps/judge";
 const MAP = "/api/v1/seo/content-gaps/map";
-
-/** The id of the page's one list of the site's addresses (page.tsx draws it), offered by every "which page" field. */
-export const PAGES_LIST = "dk-seo-gaps-pages";
 
 /** One line for what a brief request did. */
 function summary(v: BriefsAnswer): string {

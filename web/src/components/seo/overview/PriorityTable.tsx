@@ -13,7 +13,8 @@ import { cx } from "@/lib/cx";
 import { DASH, num } from "@/lib/format";
 import { actedLine, Said } from "./Act";
 import { PRIORITY_TONE, PRIORITY_WORD, TYPE_TONE } from "./bits";
-import { opportunityHref, RowAction } from "./RowAction";
+import { DEFAULT_RANGE, opportunitiesHref, opportunityHref } from "./href";
+import { NEEDS_OPERATOR, RowAction } from "./RowAction";
 
 /* Five rows, as on the boards: two-line titles make each row taller than the boards' one-line keywords. */
 const SHOWN = 5;
@@ -22,7 +23,7 @@ const SHOWN = 5;
 const keeps = (f: PriorityPanel["filters"][number], r: OpportunityRow): boolean => (!f.types || f.types.includes(r.type)) && (!f.priority || r.priority === f.priority);
 
 /** Ticked rows go to the operator together: only actions that queue an operator task, and only when they can be taken now. */
-const bulkable = (r: OpportunityRow): boolean => r.action.available && (r.action.kind === "proposal" || r.action.kind === "brief");
+const queues = (r: OpportunityRow): boolean => r.action.available && (r.action.kind === "proposal" || r.action.kind === "brief");
 
 /** "position 9.4 → 3": Google's average position now and the one our estimate aims at, when the row has one. */
 function positions(r: OpportunityRow): string | null {
@@ -37,17 +38,25 @@ function positions(r: OpportunityRow): string | null {
  * the highest-ranked rows, a tick box on each row whose action queues an
  * operator task, and the action itself. "Queue selected" sends the ticked
  * rows to the operator together; what it proposes waits for approval.
+ *
+ * The server sends up to `perFilter` rows a chip; five are drawn and "Show n
+ * more" draws the rest. "View all" opens SEO › Opportunities on the chosen
+ * chip's types and priority, with the period. Without edit on the AI Operator
+ * (`operate` false) no row offers a button or a tick box the server would refuse.
  */
-export function PriorityTable({ panel }: { panel: PriorityPanel }) {
+export function PriorityTable({ panel, range = DEFAULT_RANGE, operate = true }: { panel: PriorityPanel; range?: string; operate?: boolean }) {
   const [filter, setFilter] = useState(panel.filters[0]?.key ?? "all");
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
+  const [more, setMore] = useState(false);
   const bulk = useSend();
   const f = panel.filters.find((x) => x.key === filter) ?? panel.filters[0]!;
-  const rows = useMemo(() => {
+  const bulkable = (r: OpportunityRow): boolean => operate && queues(r);
+  const sent = useMemo(() => {
     const byId = new Map(panel.rows.map((r) => [r.id, r]));
     const listed = (f.ids ?? []).map((id) => byId.get(id)).filter((r): r is OpportunityRow => !!r);
-    return (listed.length ? listed : panel.rows.filter((r) => keeps(f, r))).slice(0, SHOWN);
+    return listed.length ? listed : panel.rows.filter((r) => keeps(f, r));
   }, [panel.rows, f]);
+  const rows = more ? sent : sent.slice(0, SHOWN);
   const chosen = [...picked].filter((id) => panel.rows.some((r) => r.id === id && bulkable(r)));
 
   const toggle = (id: string) =>
@@ -69,7 +78,10 @@ export function PriorityTable({ panel }: { panel: PriorityPanel }) {
         {panel.filters
           .filter((x) => x.count > 0 || x.key === "all")
           .map((x) => (
-            <button key={x.key} type="button" className={cx("dk-seo-overview-chip", x.key === f.key && "dk-seo-overview-chip--on")} aria-pressed={x.key === f.key} onClick={() => setFilter(x.key)}>
+            <button key={x.key} type="button" className={cx("dk-seo-overview-chip", x.key === f.key && "dk-seo-overview-chip--on")} aria-pressed={x.key === f.key} onClick={() => {
+                setFilter(x.key);
+                setMore(false);
+              }}>
               <span>{x.label}</span>
               <span className="dk-seo-overview-chip-n dk-num">{num(x.count)}</span>
             </button>
@@ -109,7 +121,7 @@ export function PriorityTable({ panel }: { panel: PriorityPanel }) {
                     {bulkable(r) ? (
                       <input type="checkbox" checked={picked.has(r.id)} onChange={() => toggle(r.id)} aria-label={`Choose: ${r.title}`} />
                     ) : (
-                      <input type="checkbox" disabled aria-label={`${r.title}: its action is not an operator task`} />
+                      <input type="checkbox" disabled aria-label={queues(r) ? `${r.title}: ${NEEDS_OPERATOR}` : `${r.title}: its action is not an operator task`} />
                     )}
                   </td>
                   <td className="dk-seo-overview-opp">
@@ -155,10 +167,12 @@ export function PriorityTable({ panel }: { panel: PriorityPanel }) {
                       why={r.action.why}
                       state={r.state.state}
                       stateNote={r.state.note}
+                      range={range}
+                      operate={operate}
                     />
                   </td>
                   <td className="dk-seo-overview-more">
-                    <Go href={opportunityHref(r.id)} aria-label={`Open: ${r.title}`} className="dk-seo-overview-more-link">
+                    <Go href={opportunityHref(r.id, range)} aria-label={`Open: ${r.title}`} className="dk-seo-overview-more-link">
                       <Icon name="more" size={16} />
                     </Go>
                   </td>
@@ -169,10 +183,16 @@ export function PriorityTable({ panel }: { panel: PriorityPanel }) {
         </table>
       </div>
 
+      {sent.length > SHOWN ? (
+        <button type="button" className="dk-seo-overview-more-btn dk-seo-overview-prio-more" onClick={() => setMore((x) => !x)}>
+          {more ? "Show fewer" : `Show ${num(sent.length - SHOWN)} more`}
+        </button>
+      ) : null}
+
       <div className="dk-seo-overview-prio-foot">
-        <Go href="/seo/opportunities" className="dk-seo-overview-footlink">
+        <Go href={opportunitiesHref(f, range)} className="dk-seo-overview-footlink">
           <Icon name="arrow-right" size={14} />
-          View all opportunities
+          {f.key === "all" ? "View all opportunities" : `View all ${num(f.count)}: ${f.label}`}
         </Go>
         {chosen.length ? (
           <span className="dk-seo-overview-bulk">
@@ -180,8 +200,10 @@ export function PriorityTable({ panel }: { panel: PriorityPanel }) {
               {bulk.busy ? "Asking…" : `Queue ${chosen.length} for the operator`}
             </Button>
           </span>
-        ) : (
+        ) : operate ? (
           <span className="dk-seo-overview-quiet dk-seo-overview-bulk-hint">Tick rows to queue them together. What the operator proposes waits for approval.</span>
+        ) : (
+          <span className="dk-seo-overview-quiet dk-seo-overview-bulk-hint">{NEEDS_OPERATOR}</span>
         )}
       </div>
       <Said message={bulk.message} />

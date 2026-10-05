@@ -11,6 +11,8 @@ import { DASH, fullDate, num } from "@/lib/format";
  */
 
 export const BASE = "/seo/competitors";
+/** The desk server's address for this page's actions (the browser posts to its own origin). */
+export const API = "/api/v1/seo/competitors";
 
 /** The page's search params as the server applied them, as a flat record for links. */
 export function paramsOf(asked: CompetitorsAsked, range: string, extra: Record<string, string | undefined> = {}): Record<string, string> {
@@ -24,6 +26,11 @@ export function paramsOf(asked: CompetitorsAsked, range: string, extra: Record<s
   if (asked.offset) out.offset = String(asked.offset);
   if (asked.limit !== 15) out.limit = String(asked.limit);
   if (asked.open) out.open = asked.open;
+  if (asked.look) out.look = asked.look;
+  if (asked.serp) out.serp = asked.serp;
+  if (asked.serp && asked.serpLang) out.serpLang = asked.serpLang;
+  if (asked.search) out.search = asked.search;
+  if (asked.shown && asked.shown !== "active") out.shown = asked.shown;
   for (const [k, v] of Object.entries(extra)) if (v) out[k] = v;
   return out;
 }
@@ -35,7 +42,7 @@ export function paramsOf(asked: CompetitorsAsked, range: string, extra: Record<s
  */
 export function hrefWith(base: Record<string, string>, change: Record<string, string | undefined | null>): string {
   const next = new URLSearchParams(base);
-  const filters = ["engine", "type", "cluster", "q", "sort", "limit"];
+  const filters = ["engine", "type", "cluster", "q", "sort", "limit", "shown", "search"];
   if (Object.keys(change).some((k) => filters.includes(k))) {
     next.delete("offset");
     next.delete("open");
@@ -80,12 +87,15 @@ export function byLabel(by: string): string {
   if (by === "audit") return "the SEO audit, in the owner's Chrome";
   if (by === "lead-chrome") return "the lead, in the owner's Chrome";
   if (by === "api") return "an API";
+  if (by === "workstation") return "a check through the studio workstation";
+  if (by === "server") return "a check by the desk server";
+  if (by === "dataforseo") return "a check bought from DataForSEO";
   return by;
 }
 
 /** The engine's mark in a list. */
 export function engineIcon(engine: string): IconName {
-  if (engine === "google") return "search";
+  if (engine === "google" || engine === "duckduckgo") return "search";
   if (engine === "google-local") return "map-pin";
   return "sparkles";
 }
@@ -121,3 +131,9 @@ export const safeHref = (url: string | null | undefined): string | null => (url 
 
 /** "https://example-studio.ch/services/web" → "example-studio.ch/services/web". */
 export const shortUrl = (url: string): string => url.replace(/^https?:\/\/(www\.)?/i, "").replace(/\/$/, "");
+
+/** This page with one site looked up beside Balkaris. */
+export const lookHref = (base: Record<string, string>, domain: string): string => hrefWith(base, { look: domain });
+
+/** This page showing the checks of one phrase. */
+export const serpHref = (base: Record<string, string>, phrase: string, lang?: string | null): string => hrefWith(base, { serp: phrase, serpLang: lang ?? undefined });

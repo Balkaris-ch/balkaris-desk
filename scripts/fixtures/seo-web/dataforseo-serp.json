@@ -1,0 +1,222 @@
+{
+ "version": "0.1.20200129",
+ "status_code": 20000,
+ "status_message": "Ok.",
+ "cost": 0.003,
+ "tasks_count": 1,
+ "tasks_error": 0,
+ "tasks": [
+  {
+   "id": "11151456-0696-0066-0000-002a5915da37",
+   "status_code": 20000,
+   "status_message": "Ok.",
+   "cost": 0.003,
+   "result_count": 1,
+   "path": [
+    "v3",
+    "serp",
+    "google",
+    "organic",
+    "advanced",
+    "live"
+   ],
+   "data": {
+    "api": "serp",
+    "function": "live",
+    "se": "google",
+    "se_type": "organic",
+    "language_name": "English",
+    "location_name": "United States",
+    "keyword": "flight ticket new york san francisco",
+    "tag": "tag2",
+    "device": "desktop",
+    "os": "windows"
+   },
+   "result": [
+    {
+     "keyword": "flight ticket new york san francisco",
+     "type": "organic",
+     "se_domain": "google.com",
+     "location_code": 2840,
+     "language_code": "en",
+     "check_url": "https://www.google.com/search?q=flight%20ticket%20new%20york%20san%20francisco&num=100&hl=en&gl=US&gws_rd=cr&ie=UTF-8&oe=UTF-8&uule=w+CAIQIFISCQs2MuSEtepUEUK33kOSuTsc",
+     "datetime": "2019-11-15 12:57:46 +00:00",
+     "item_types": [
+      "answer_box",
+      "app",
+      "carousel",
+      "multi_carousel",
+      "featured_snippet",
+      "google_flights",
+      "google_reviews",
+      "images",
+      "jobs",
+      "knowledge_graph",
+      "local_pack",
+      "hotels_pack",
+      "map",
+      "organic",
+      "paid",
+      "people_also_ask",
+      "related_searches",
+      "people_also_search",
+      "shopping",
+      "top_stories",
+      "twitter",
+      "video",
+      "events",
+      "math_solver",
+      "recipes",
+      "top_sights",
+      "scholarly_articles",
+      "popular_products",
+      "questions_and_answers",
+      "find_results_on",
+      "stocks_box",
+      "commercial_units",
+      "local_services",
+      "google_hotels",
+      "currency_box",
+      "short_videos",
+      "refine_products",
+      "perspectives",
+      "discussions_and_forums",
+      "compare_sites",
+      "ai_overview"
+     ],
+     "se_results_count": 85600000,
+     "items_count": 5,
+     "items": [
+      {
+       "type": "organic",
+       "rank_group": 26,
+       "rank_absolute": 30,
+       "page": 1,
+       "position": "left",
+       "domain": "www.t-mobile.com",
+       "title": "Apple iPhone 12 Pro 5G | 4 colors in 512GB, 256GB & 128GB",
+       "url": "https://www.t-mobile.com/cell-phone/apple-iphone-12-pro",
+       "breadcrumb": "https://www.t-mobile.com › Phones › Apple",
+       "website_name": "T-Mobile",
+       "is_image": false,
+       "is_video": false,
+       "is_featured_snippet": false,
+       "is_malicious": false,
+       "is_web_story": false,
+       "description": "Get a great deal on the 5G-ready Apple iPhone 12 Pro. See all the features, specs, price and get it on T-Mobile.",
+       "pre_snippet": null,
+       "extended_snippet": "Rating: 4 · ‎231 reviews · ‎US$30.00 to US$899.99 · ‎In stock",
+       "amp_version": false,
+       "rating": {
+        "rating_type": "Max5",
+        "value": 4,
+        "votes_count": 231,
+        "rating_max": 5
+       },
+       "extended_people_also_search": null,
+       "related_result": [
+        {
+         "type": "related_result",
+         "domain": "www.t-mobile.com",
+         "title": "Apple iPhone 12 | 5 colors in 64GB & 128GB | T-Mobile",
+         "url": "https://www.t-mobile.com/cell-phone/apple-iphone-12",
+         "breadcrumb": "https://www.t-mobile.com › Phones › Apple",
+         "is_image": false,
+         "is_video": false,
+         "description": "iPhone 12. 5G to download movies on the fly and stream high-quality video. Beautifully bright 6.1-inch Super Retina XDR display. Ceramic Shield with 4x ...",
+         "pre_snippet": null,
+         "extended_snippet": null,
+         "amp_version": false,
+         "rating": {
+          "rating_type": "Max5",
+          "value": 4.6,
+          "votes_count": 30,
+          "rating_max": 5
+         }
+        }
+       ]
+      },
+      {
+       "type": "related_searches",
+       "rank_group": 1,
+       "rank_absolute": 8,
+       "page": 1,
+       "position": "left",
+       "items": [
+        "iphone xr",
+        "iphone xs",
+        "iphone 11",
+        "iphone price",
+        "iphone 8",
+        "iphone xs max",
+        "iphone 11 price",
+        "iphone xs price"
+       ]
+      },
+      {
+       "type": "local_pack",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "page": 1,
+       "position": "left",
+       "title": "The Signal Pub",
+       "description": "0.1 mi · 7 Devonshire Rd nnDine-in · Takeaway n",
+       "domain": null,
+       "phone": null,
+       "url": null,
+       "is_paid": false,
+       "rating": {
+        "rating_type": "Max5",
+        "value": 4.1,
+        "votes_count": null,
+        "rating_max": 5
+       },
+       "cid": "2754844324650035941"
+      },
+      {
+       "type": "paid",
+       "rank_group": 1,
+       "rank_absolute": 1,
+       "page": 1,
+       "position": "left",
+       "title": "Cheap Flights to Boston - Roundtrip starting from $97",
+       "domain": "www.expedia.com",
+       "website_name": "Expedia",
+       "breadcrumb": "https://www.expedia.com/",
+       "is_image": true,
+       "is_video": false,
+       "url": "https://www.expedia.com/Cheap-Flights-To-Boston.d178239.Travel-Guide-Flights",
+       "description": "How can Expedia help you save? Freq sales, last-minute travel deals and bundle discounts. Did you know booking flight & hotel together is usually cheaper than booking separately?",
+       "description_rows": null,
+       "rating": {
+        "rating_type": "Max5",
+        "value": 4.8,
+        "votes_count": 803,
+        "rating_max": 5
+       }
+      },
+      {
+       "type": "people_also_ask",
+       "rank_group": 1,
+       "rank_absolute": 3,
+       "page": 1,
+       "position": "left",
+       "items": [
+        {
+         "type": "people_also_ask_element",
+         "title": "What are the symptoms of HIDS disease?",
+         "seed_question": null
+        },
+        {
+         "type": "people_also_ask_element",
+         "title": "What is the difference between HIDS and NIDS?",
+         "seed_question": null
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

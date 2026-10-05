@@ -20,7 +20,9 @@
  *
  * WHO MAY (`can`). /task, and /act for a proposal or a brief, queue work for
  * the AI Operator and take edit on that area too (403 with the sentence
- * otherwise); /owner refuses anybody but the owner for the owner's own steps.
+ * otherwise); /owner refuses anybody but the owner for the owner's own steps;
+ * `can.run` lists the SEO jobs the person may run now through the core API's
+ * POST /api/v1/jobs/:name/run (the Automations strip's Run now).
  */
 import type { ActivityItem, Reading, SourceId, Stat } from "../common";
 import type { NewTask, RunnerState } from "../operator";
@@ -76,6 +78,12 @@ export interface OverviewCan {
   operate: boolean;
   /** May mark the owner's own steps done: the owner alone. */
   ownerSteps: boolean;
+  /**
+   * The SEO jobs this person may run now (POST /api/v1/jobs/:name/run): edit
+   * on Automations, or edit somewhere the job feeds (src/grants.ts
+   * `mayRunJob`). The Automations strip offers "Run now" on these alone.
+   */
+  run: string[];
 }
 
 export interface OverviewTiles {
@@ -303,6 +311,16 @@ export interface PresencePanel {
   referrers: Reading<{ start: string; end: string; total: number; rows: { host: string; sessions: number }[] }>;
   /** The profiles and listings the desk knows of: how many exist, how many were not found. */
   profiles: { exist: number; missing: number; unknown: number; of: number };
+  /**
+   * Links known without Bing (src/cc/seo/backlinks.ts): Google's own Links
+   * report as last imported from Search Console (`google`, null before the
+   * first import), and the linking pages the desk reads itself, by what its
+   * last reading found. Waiting, with the step, while neither exists.
+   */
+  known: Reading<{
+    google: { sites: number; pages: number; importedAt: string | null } | null;
+    read: { live: number; lost: number; other: number; all: number };
+  }>;
 }
 
 export interface ConsolePanel {

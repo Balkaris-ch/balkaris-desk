@@ -193,8 +193,8 @@ interface SearchContext {
   targets: Map<string, { by: string; at: string }> | null;
 }
 
-/** A query as a title quotes it: the searcher's own quotation marks left out. */
-const shownQuery = (q: string): string => q.replace(/^["'“”]+|["'“”]+$/g, "").trim() || q;
+/** A query as a title quotes it: the searcher's own quotation marks left out. The screens quote it the same way. */
+export const shownQuery = (q: string): string => q.replace(/^["'“”]+|["'“”]+$/g, "").trim() || q;
 
 /**
  * Google's figures per phrase as the keyword table spells it. Search Console

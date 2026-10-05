@@ -1656,3 +1656,136 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- overrides v2 and the page tasks (5 October 2026) ---------------------------------------- */
+
+/* A share picture, before and after: drawn as the picture, at a card's own proportion. */
+.dk-operator-diff-pics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--x10);
+}
+
+.dk-operator-diff-pic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+}
+
+.dk-operator-diff-pic img {
+  width: 100%;
+  aspect-ratio: 1200 / 630;
+  object-fit: cover;
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-3);
+}
+
+/* Structured data, as the file will hold it. */
+.dk-operator-code {
+  margin: 0;
+  max-height: 280px;
+  overflow: auto;
+  padding: var(--x8);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card);
+  color: var(--ink-2);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.dk-operator-diff-after .dk-operator-code {
+  grid-column: 2 / -1;
+}
+
+/* Keyword judgements: a small table that scrolls on its own on a phone. */
+.dk-operator-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-top: var(--x12);
+}
+
+.dk-operator-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--t-small);
+}
+
+.dk-operator-table th,
+.dk-operator-table td {
+  padding: var(--x6) var(--x8);
+  border-bottom: var(--x1) solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.dk-operator-table th {
+  color: var(--ink-3);
+  font-family: var(--font-label);
+  font-size: var(--t-tiny);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-operator-judge--relevant {
+  color: var(--green);
+}
+
+.dk-operator-judge--weak {
+  color: var(--amber);
+}
+
+.dk-operator-judge--irrelevant {
+  color: var(--ink-3);
+}
+
+.dk-operator-why {
+  color: var(--ink-3);
+}
+
+.dk-operator-apply {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x10);
+  margin-top: var(--x12);
+}
+
+.dk-operator-serp,
+.dk-operator-todos-suggested,
+.dk-operator-kw {
+  margin-top: var(--x12);
+}
+
+/* One page, one search: the row of four under the quick tasks. */
+.dk-operator-pagework {
+  margin-top: var(--x14);
+}
+
+.dk-operator-pagework-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+}
+
+.dk-operator-radios {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  margin: 0 0 var(--x12);
+  padding: 0;
+  border: 0;
+  font-size: var(--t-body);
+}
+
+.dk-operator-radios label {
+  display: flex;
+  gap: var(--x8);
+  align-items: baseline;
+}

@@ -22,6 +22,17 @@ export const LIMITS = [12, 50, 200] as const;
 /** The id of the search box's own form (a GET form outside the tables' forms: forms do not nest). */
 export const FIND = "dk-seo-gaps-find";
 
+/**
+ * The id of the page's one list of the site's addresses (page.tsx draws it),
+ * offered by every "which page" field. Here and not in Act.tsx: a server
+ * component that imports a value from a "use client" file gets a reference,
+ * not the string.
+ */
+export const PAGES_LIST = "dk-seo-gaps-pages";
+
+/** The params the search box's form carries over: the view and its filters, not the place in it. */
+export const FIND_KEEPS = ["range", "view", "tab", "lang", "price", "question", "gap", "priority", "sort", "dir", "limit"] as const;
+
 export const VIEW_ICON: Record<GapView, IconName> = {
   topic: "layers",
   industry: "users",

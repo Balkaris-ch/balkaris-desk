@@ -520,6 +520,8 @@ export interface SeoTasksAnswer {
   counts: { all: number; open: number; done: number; by: Record<TaskDoer, { open: number; done: number }> };
   /** What this person may do here: add a task (anyone who may change this page), close the owner's own steps (the owner). */
   can: { ownerSteps: boolean };
+  /** ?open=<id>: that task whatever the filters say (the search box and the opportunities lead to one); null when none was asked or none has that id. */
+  open?: SeoTask | null;
 }
 
 /** POST /api/v1/seo/owner-tasks: a task written by hand. */
@@ -528,4 +530,318 @@ export interface NewSeoTask {
   why?: string;
   impact?: Priority;
   who?: TaskDoer;
+}
+
+/* ---------- the web layer: what the open web says (src/cc/seo/web/) ---------------------------
+ *
+ * Added by the web foundation, for the Keywords and Competitors pages: what people type (search
+ * suggestions), who ranks for a phrase (a result page), and what the open web says about any
+ * domain. Every figure keeps who said it and when; what could not be had is a Reading that is not
+ * ok, with the reason. The functions that make these, with examples, limits and their refusal
+ * sentences, are in work/audit/FOUNDATION-API.md.
+ */
+
+/** The languages Switzerland searches in. */
+export type WebLang = "de" | "en" | "fr" | "it";
+
+/** How a researched phrase is expanded: itself, question words in front, price/place/intent words behind, a to z behind, words in front. */
+export type ResearchMode = "plain" | "questions" | "modifiers" | "alphabet" | "front";
+
+/** Who offered a suggestion. (Brave refuses a server: tried on 5 October 2026, 429. DuckDuckGo, Ecosia, Qwant, Swisscows return Bing's list.) */
+export type SuggestSource = "google" | "bing";
+
+/** Today's allowance of something the desk asks the web for. */
+export interface WebAllowance {
+  used: number;
+  cap: number;
+  left: number;
+  /** The Zurich day it counts. */
+  day: string;
+}
+
+export interface WebSuggestion {
+  /** Lower case, single spaces: the keyword table's own spelling. */
+  phrase: string;
+  sources: SuggestSource[];
+  /** Google's ordering strength (its suggestrelevance, about 550 to 1300). An order, never a search volume. Null when Google did not offer it. */
+  strength: number | null;
+  /** Google's own type for it (QUERY, NAVIGATION, ENTITY …), or null. */
+  type: string | null;
+  /** The expansions that found it, the first one first. */
+  modes: ResearchMode[];
+  /** The request that found it first, as asked: "was kostet webdesign zürich". */
+  via: string;
+  /** It asks something (a question word, or a "?"). */
+  question: boolean;
+  /** The keyword table's row, when the desk already tracks the phrase. */
+  tracked: { id: number; status: "relevant" | "weak" | "irrelevant" | "unjudged"; cluster: string | null } | null;
+  /** Where the desk's own rule files it: the table's cluster, else the cluster of its language whose phrases share most of its words. Null when none fits. */
+  cluster: { key: string; name: string; filed: "table" | "words" } | null;
+}
+
+/** What one source did in one research. */
+export interface ResearchSourceLine {
+  source: SuggestSource;
+  label: string;
+  /** asked now; kept (answers of the last 7 days re-used); refused (it refused, or is paused); skipped (no mode asks it, or the allowance ran out first). */
+  state: "asked" | "kept" | "refused" | "skipped";
+  /** Requests sent to it now. */
+  sent: number;
+  line: string;
+}
+
+export interface ResearchResult {
+  seed: string;
+  lang: WebLang;
+  country: string;
+  modes: ResearchMode[];
+  suggestions: WebSuggestion[];
+  sources: ResearchSourceLine[];
+  /** Requests sent now, and requests saved by answers kept from the last 7 days. */
+  sent: number;
+  kept: number;
+  /** The person-asked allowance after this research. */
+  allowance: WebAllowance;
+  /** When the oldest answer used was asked (ISO). */
+  asOf: string;
+  /** The refusal that stopped it before every request was made; null when nothing did. */
+  stopped: string | null;
+  line: string;
+}
+
+/** Who answered a result page. A DuckDuckGo page is never shown as Google's ranking. */
+export type SerpEngine = "google" | "duckduckgo";
+/** Who fetched it: the studio workstation (Google's basic page, from its home line), the server (DuckDuckGo), or DataForSEO (paid). */
+export type SerpFetcher = "workstation" | "server" | "dataforseo";
+
+export interface SerpOrganicRow {
+  /** 1 for the first organic result; ads and the map pack are not counted. */
+  position: number;
+  title: string;
+  url: string;
+  host: string;
+  snippet: string;
+}
+
+export interface SerpLocalRow {
+  name: string;
+  rating: number | null;
+  reviews: number | null;
+  category: string | null;
+  address: string | null;
+}
+
+export interface SerpPage {
+  organic: SerpOrganicRow[];
+  /** The map pack. Google places it by where the asker is: the studio's line, or Switzerland for DataForSEO. */
+  localPack: SerpLocalRow[];
+  ads: number;
+  adHosts: string[];
+  /** "People also search for". */
+  related: string[];
+  /** "People also ask": only DataForSEO returns them; Google's basic page never carries them. */
+  questions: string[];
+}
+
+export interface SerpCheck {
+  id: number;
+  phrase: string;
+  lang: WebLang;
+  country: string;
+  engine: SerpEngine;
+  source: SerpFetcher;
+  state: "queued" | "running" | "done" | "failed";
+  cluster: string | null;
+  requestedBy: string;
+  requestedAt: string;
+  doneAt: string | null;
+  error: string | null;
+  page: SerpPage | null;
+  /** Balkaris's own place among the organic results; null = not in the first ten, or not done yet. */
+  ownPosition: number | null;
+  ownUrl: string | null;
+  /** "Google, fetched by the studio workstation" / "DuckDuckGo (not Google), read by the server" / "Google, through DataForSEO". */
+  label: string;
+  /** Where it stands, in one sentence. */
+  line: string;
+}
+
+/** What asking "who ranks" started: Google's check (or why none), DuckDuckGo's second opinion (or why none), one sentence. */
+export interface SerpAsked {
+  google: SerpCheck | null;
+  duckduckgo: SerpCheck | null;
+  line: string;
+}
+
+/** The free Google path as it stands: the workstation, today's allowance, a pause after a refusal. */
+export interface GoogleLane {
+  workstation: { on: boolean; lastSeen: string | null; line: string };
+  allowance: WebAllowance;
+  paused: { until: string; why: string } | null;
+  /** Google checks waiting for the workstation. */
+  queued: number;
+  /** DataForSEO answers instead of the workstation when it is configured. */
+  paid: boolean;
+  line: string;
+}
+
+/** A fact about a domain: a Reading, and the name of who said it ("RDAP (SWITCH)", "Tranco list"). */
+export type DomainFact<T> = Reading<T> & { from: string };
+
+export interface RegistrationFact {
+  /** YYYY-MM-DD, or null when the registry does not say. */
+  registered: string | null;
+  expires: string | null;
+  registrar: string | null;
+  status: string[];
+  nameservers: string[];
+}
+
+export interface RobotsFact {
+  status: number;
+  sitemaps: string[];
+  /** Allow and Disallow lines for every crawler ("User-agent: *"). */
+  rules: number;
+  /** "Disallow: /" for every crawler. */
+  closed: boolean;
+  /** Whether the desk itself may read the home page. */
+  deskAllowed: boolean;
+}
+
+export interface SitemapFact {
+  /** The sitemaps read (an index's children included), at most 12. */
+  read: string[];
+  pages: number;
+  /** More pages exist than were counted (a cap of 12 sitemaps or 50,000 addresses). */
+  capped: boolean;
+  /** Pages by the first part of their address ("/blog" 42), the largest first, at most 12. */
+  sections: { section: string; pages: number }[];
+  /** The newest lastmod (YYYY-MM-DD), or null when the sitemap gives none. */
+  newest: string | null;
+  /** Languages the addresses or their hreflang alternates name ("de", "fr"). */
+  languages: string[];
+}
+
+export interface HomeFact {
+  url: string;
+  status: number;
+  title: string | null;
+  description: string | null;
+  lang: string | null;
+  hreflang: string[];
+  schemaTypes: string[];
+  /** What the page itself says it is built with (a generator tag, its asset paths). Empty when it says nothing. */
+  builtWith: string[];
+  words: number;
+  price: { stated: boolean; text: string | null };
+}
+
+export interface TrancoFact {
+  rank: number;
+  /** The list's day. */
+  date: string;
+  /** Its best rank in the 30 days Tranco returns. */
+  best: number;
+  days: number;
+}
+
+export interface WaybackFact {
+  /** The first day the Internet Archive kept a page of it that answered 200: YYYY-MM-DD. */
+  firstSeen: string;
+  address: string;
+}
+
+export interface CommonCrawlFact {
+  /** The crawl read: "CC-MAIN-2026-39". */
+  crawl: string;
+  /** Pages it captured with status 200 (at most 1,000 counted). */
+  pages: number;
+  capped: boolean;
+  /** Languages Common Crawl detected, ISO 639-3 ("deu", "fra"), with how many pages. */
+  languages: { code: string; pages: number }[];
+}
+
+export interface WikipediaFact {
+  /** Articles in de, fr, it and en Wikipedia that link to the domain. */
+  links: { wiki: string; title: string; url: string }[];
+  capped: boolean;
+}
+
+export interface CruxFact {
+  origin: string;
+  formFactor: "PHONE";
+  lcpMs: number | null;
+  inpMs: number | null;
+  cls: number | null;
+  from: string | null;
+  to: string | null;
+}
+
+export interface PageSpeedFact {
+  url: string;
+  strategy: "mobile";
+  performance: number | null;
+  seo: number | null;
+  lcpMs: number | null;
+  cls: number | null;
+  tbtMs: number | null;
+}
+
+export interface DomainFacts {
+  /** The domain without "www.": "webkinder.ch". */
+  domain: string;
+  /** The address its home page was read at. */
+  home: string;
+  /** When the newest fact was read (ISO). */
+  asOf: string;
+  facts: {
+    registration: DomainFact<RegistrationFact>;
+    robots: DomainFact<RobotsFact>;
+    sitemap: DomainFact<SitemapFact>;
+    home: DomainFact<HomeFact>;
+    tranco: DomainFact<TrancoFact>;
+    wayback: DomainFact<WaybackFact>;
+    commoncrawl: DomainFact<CommonCrawlFact>;
+    wikipedia: DomainFact<WikipediaFact>;
+    crux: DomainFact<CruxFact>;
+    pagespeed: DomainFact<PageSpeedFact>;
+  };
+  line: string;
+}
+
+/** A demand figure on a keyword, with who gave it and when. Absent figures are null, never 0. */
+export interface KeywordVolume {
+  /** Average monthly searches; null when only a range is known. */
+  volume: number | null;
+  low: number | null;
+  high: number | null;
+  cpc: number | null;
+  currency: string | null;
+  competition: "low" | "medium" | "high" | null;
+  competitionIndex: number | null;
+  /** planner: a Google Keyword Planner export a person imported; dataforseo: Google Ads figures bought through DataForSEO. */
+  source: "planner" | "dataforseo";
+  at: string;
+  /** DataForSEO Labs' keyword difficulty, 0 to 100, with its day; null when none was bought (English for Switzerland has none). */
+  difficulty: { value: number; at: string } | null;
+}
+
+/** What importing a Keyword Planner export did. */
+export interface PlannerImport {
+  rows: number;
+  matched: number;
+  added: number;
+  skipped: { line: number; why: string }[];
+  currency: string | null;
+  /** The period the export covers, as its preamble says it. */
+  period: string | null;
+  line: string;
+}
+
+/** What DataForSEO says about a domain's place on google.ch (Labs) and its links (Backlinks). Off until the owner opens an account. */
+export interface PaidDomainFacts {
+  overview: DomainFact<{ lang: WebLang; count: number; top3: number; top10: number; etv: number | null }>;
+  ranked: DomainFact<{ lang: WebLang; total: number; rows: { keyword: string; position: number; url: string; volume: number | null; etv: number | null }[] }>;
+  competitors: DomainFact<{ lang: WebLang; rows: { domain: string; avgPosition: number | null; shared: number; etv: number | null }[] }>;
+  backlinks: DomainFact<{ rank: number | null; backlinks: number | null; referringDomains: number | null; referringMainDomains: number | null; firstSeen: string | null; spamScore: number | null }>;
 }

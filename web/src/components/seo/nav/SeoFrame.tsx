@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Suspense, type ReactNode } from "react";
-import type { AuditRun } from "@/contract/seo/common";
+import type { AuditRun, SeoTab } from "@/contract/seo/common";
 import { RANGES, rangeLabel } from "@/lib/format";
 import { Icon } from "@/components/ui/icons";
 import { Select } from "@/components/ui/Select";
@@ -17,8 +17,8 @@ import "./seo-nav.css";
 const PERIODS = RANGES.map((r) => ({ value: r, label: rangeLabel(r) }));
 
 export interface SeoFrameProps {
-  /** Open opportunities for the tab's count, or null to draw none. */
-  opportunities: number | null;
+  /** The tabs as the desk counted them (GET /api/v1/seo/nav), or null to draw no count at all. */
+  tabs: SeoTab[] | null;
   /** The full audit the desk was running when the page was drawn (its own record), or null. */
   audit: AuditRun | null;
   /** On a desk with no record of the audit: the audit's jobs already running when the page was drawn. */
@@ -38,15 +38,17 @@ export interface SeoFrameProps {
  * head and the lit tab depend on it. The page itself passes through as
  * `children` and stays a server component.
  *
- * The earlier SEO screen's addresses (/seo/legacy, /seo/report, /seo/list/…)
- * are none of the eleven pages: they keep their own heads and get nothing
- * from here.
+ * The earlier SEO screen's addresses (/seo/legacy and its four lists) are
+ * none of the eleven pages: they keep their own heads and get nothing from
+ * here. The section's own lists (every task, the audits, the full report)
+ * have this head with the tab they belong with lit, and no Period select:
+ * nothing on them follows the period (pages.ts, `period`).
  *
  * Neither does somebody the owner gave no SEO page at all: the page's own
  * refusal is then all there is to draw, with no head, period or audit button
  * over it. With some of the pages, the head stays and the strip lists those.
  */
-export function SeoFrame({ opportunities, audit, running, pages, children }: SeoFrameProps) {
+export function SeoFrame({ tabs, audit, running, pages, children }: SeoFrameProps) {
   const place = seoPlace(usePathname());
   if (!place || !SEO_PAGES.some((p) => mayOpen(pages, p.href))) return <>{children}</>;
   const { head } = place;
@@ -72,14 +74,16 @@ export function SeoFrame({ opportunities, audit, running, pages, children }: Seo
         </div>
         <div className="dk-seo-nav-tools">
           {/* The select reads the address in the browser; until it has, its place is kept. */}
-          <Suspense fallback={<span className="dk-seo-nav-range-space" />}>
-            <Select param="range" fallback="30d" label="Period" options={PERIODS} size="md" className="dk-seo-nav-range" />
-          </Suspense>
+          {place.period ? (
+            <Suspense fallback={<span className="dk-seo-nav-range-space" />}>
+              <Select param="range" fallback="30d" label="Period" options={PERIODS} size="md" className="dk-seo-nav-range" />
+            </Suspense>
+          ) : null}
           <AuditButton audit={audit} running={running} />
         </div>
       </header>
       <Suspense fallback={<div className="dk-seo-nav-tabs-space" />}>
-        <SeoTabs opportunities={opportunities} pages={pages} />
+        <SeoTabs tabs={tabs} pages={pages} />
       </Suspense>
       {children}
     </>

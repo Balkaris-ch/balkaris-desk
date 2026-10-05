@@ -3,12 +3,31 @@ import { Chip } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Card, CardFoot } from "@/components/ui/Card";
 import { Go } from "@/components/ui/Go";
-import { ActButton } from "@/components/seo/overview/Act";
 import { PRIORITY_TONE, PRIORITY_WORD, TYPE_TONE } from "@/components/seo/overview/bits";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
+import { AiActButton } from "./Act";
 import "@/components/ui/table.css";
 import "./ai-search.css";
+
+/**
+ * The actions a row can take from here: a brief or a proposal queues an
+ * operator task, a step in the website's code is put on its to-do list (the
+ * engine marks it queued for the code, as Content Gaps does). Until "code"
+ * was in this list, "Hand to the website's code" was grey text the server
+ * would have taken.
+ */
+const TAKES = new Set(["brief", "proposal", "code"]);
+
+/** The row's action: its button, or why there is none (a task already queued, a step the owner takes elsewhere). */
+function Action({ r }: { r: OpportunityRow }) {
+  if (r.action.available && TAKES.has(r.action.kind)) return <AiActButton id={r.id} label={r.action.label} variant={r.action.kind === "code" ? "quiet" : "good"} title={r.action.step} />;
+  return (
+    <span className="dk-seo-ai-search-quiet" title={r.action.why ?? r.action.step}>
+      {r.state.task ? `Task #${r.state.task.id} ${r.state.task.state}` : r.action.label}
+    </span>
+  );
+}
 
 /**
  * What to change on the site so an assistant can quote it: the open
@@ -16,7 +35,8 @@ import "./ai-search.css";
  * and German pages, the two kinds side by side, and the counts of every kind
  * that decides AI answers, each leading to its list in Opportunities. A
  * button queues the operator task (a brief, or a proposal that waits for
- * approval); nothing changes the live site by itself.
+ * approval) or hands the step to the website's code; nothing changes the
+ * live site by itself.
  */
 export function Opps({ rows, types }: { rows: OpportunityRow[]; types: { type: OpportunityType; label: string; count: number; href: string }[] }) {
   const total = types.reduce((n, t) => n + t.count, 0);
@@ -70,13 +90,7 @@ export function Opps({ rows, types }: { rows: OpportunityRow[]; types: { type: O
                       <Chip tone={TYPE_TONE[r.type]}>{r.typeLabel}</Chip>
                     </td>
                     <td className="dk-seo-ai-search-opp-act">
-                      {r.action.available && (r.action.kind === "brief" || r.action.kind === "proposal") ? (
-                        <ActButton id={r.id} label={r.action.label} />
-                      ) : (
-                        <span className="dk-seo-ai-search-quiet" title={r.action.why ?? r.action.step}>
-                          {r.state.task ? `Task #${r.state.task.id} ${r.state.task.state}` : r.action.label}
-                        </span>
-                      )}
+                      <Action r={r} />
                     </td>
                   </tr>
                 );
@@ -101,11 +115,7 @@ export function Opps({ rows, types }: { rows: OpportunityRow[]; types: { type: O
                 </Go>
                 <div className="dk-seo-ai-search-opp-card-act">
                   <Chip tone={TYPE_TONE[r.type]}>{r.typeLabel}</Chip>
-                  {r.action.available && (r.action.kind === "brief" || r.action.kind === "proposal") ? (
-                    <ActButton id={r.id} label={r.action.label} />
-                  ) : (
-                    <span className="dk-seo-ai-search-quiet">{r.state.task ? `Task #${r.state.task.id} ${r.state.task.state}` : r.action.label}</span>
-                  )}
+                  <Action r={r} />
                 </div>
               </li>
             );

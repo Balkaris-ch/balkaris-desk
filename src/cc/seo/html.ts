@@ -1,4 +1,5 @@
 import { UA } from "../site/http.ts";
+import { siteWire } from "./web/guard.ts";
 
 /**
  * Reading a page the way the SEO engine needs it: politely, and without a DOM.
@@ -52,6 +53,19 @@ export async function fetchPage(url: string, o: { timeout?: number; accept?: str
     const msg = e instanceof Error ? (e.name === "TimeoutError" ? "no answer in time" : e.message) : String(e);
     return { status: 0, url, html: null, contentType: null, error: msg.slice(0, 160) };
   }
+}
+
+/**
+ * GET an address somebody typed or a competitor's page, through the web
+ * layer's guard (src/cc/seo/web/guard.ts): public names only, the address
+ * checked again after DNS, at connect time and on every redirect, so a typed
+ * host can never make the desk read the box it runs on. Same answer shape as
+ * `fetchPage`; never throws.
+ */
+export async function fetchGuarded(url: string, o: { timeout?: number; accept?: string } = {}): Promise<Fetched> {
+  const got = await siteWire.get(url, { timeoutMs: o.timeout ?? 20_000, accept: o.accept, maxBytes: MAX_BYTES, hops: 4 });
+  const contentType = got.headers["content-type"] ?? null;
+  return { status: got.status, url: got.url || url, html: got.error && !got.body.length ? null : got.body.toString("utf8"), contentType, error: got.error };
 }
 
 const ENTITIES: Record<string, string> = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", rsquo: "’", lsquo: "‘", rdquo: "”", ldquo: "“", ndash: "–", mdash: "—", auml: "ä", ouml: "ö", uuml: "ü", Auml: "Ä", Ouml: "Ö", Uuml: "Ü", szlig: "ß", eacute: "é", egrave: "è" };

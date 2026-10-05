@@ -1,4 +1,5 @@
 import type { OperatorHistory, ProposalRow, ResultCard, TaskRow } from "@/contract/operator";
+import { proposalLine } from "@/components/operator/look";
 import type { ActivityItem } from "@/contract/common";
 import { api } from "@/lib/api";
 import { ago, fullDate, clock } from "@/lib/format";
@@ -86,7 +87,7 @@ export default async function OperatorHistoryPage({ searchParams }: { searchPara
             empty="Nothing has been proposed yet."
             columns={[
               { key: "address", head: "Address", cell: (p) => p.address },
-              { key: "change", head: "Change", width: "34%", cell: (p) => <span title={JSON.stringify(p.after)}>{p.kind === "redirect" ? `Redirect to ${p.after.to}` : [p.after.title !== undefined ? "title" : "", p.after.description !== undefined ? "description" : ""].filter(Boolean).join(" and ")}</span> },
+              { key: "change", head: "Change", width: "34%", cell: (p) => <span title={JSON.stringify(p.after)}>{proposalLine(p).title}: {proposalLine(p).sub.replace(`${p.address}: `, "")}</span> },
               { key: "from", head: "Proposed by", width: "140px", cell: (p) => (p.source === "operator" ? (p.taskId ? <Go href={`/operator/results/${p.taskId}`}>Operator, task #{p.taskId}</Go> : "Operator") : (p.proposedBy ?? "A person")) },
               { key: "state", head: "State", width: "110px", cell: (p) => <Badge tone={PROPOSAL_TONE[p.state]} dot>{PROPOSAL_WORD[p.state]}</Badge> },
               { key: "by", head: "Decided", width: "220px", cell: (p) => (p.decidedBy ? `${p.decidedBy}, ${ago(p.decidedAt ?? p.createdAt)}${p.sha ? ` · ${p.sha}` : ""}` : "—") },

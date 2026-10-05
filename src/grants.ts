@@ -130,10 +130,11 @@ export const AREAS: readonly Area[] = [
        does at Google itself (/seo/google: inspect an address, submit a sitemap, IndexNow) is a panel of
        Technical whose buttons Search Console and Pages draw too. */
     pages: [
-      { key: "seo", label: "Overview", api: [`${V}/seo/overview`] },
+      /* Every SEO task (/seo/list/tasks) hangs off the Overview, whose "Needs you" is the owner's part of it. */
+      { key: "seo", label: "Overview", api: [`${V}/seo/overview`, `${V}/seo/owner-tasks`] },
       /* Taking an opportunity's action and closing an audit step are drawn on Technical too (its opportunities
          card), so both pages list those two addresses: listed by Technical alone they would stop being Opportunities'. */
-      seo("opportunities", "Opportunities", [`${V}/seo/opportunities`, `${V}/seo/opportunities/act`, `${V}/seo/opportunities/owner-task`]),
+      seo("opportunities", "Opportunities", [`${V}/seo/opportunities`, `${V}/seo/opportunities/act`, `${V}/seo/opportunities/owner-task`, `${V}/seo/google`]),
       seo("pages", "Pages", [`${V}/seo/pages`, `${V}/seo/optimize`, `${V}/seo/google`]),
       seo("keywords", "Keywords", [`${V}/seo/keywords`, `${V}/seo/clusters`]),
       seo("content-gaps", "Content Gaps", [`${V}/seo/content-gaps`, `${V}/seo/owner-tasks`]),
@@ -500,6 +501,11 @@ const JOB_AREAS = new Map<string, readonly string[]>(
     "seo-research": ["seo"],
     "seo-competitors": ["seo"],
     "seo-presence": ["seo"],
+    "seo-backlinks": ["seo"],
+    /* SEO › Automations: the week's summary (src/cc/seo/jobs-digest.ts). */
+    "seo-digest": ["seo"],
+    /* The web layer's weekly rank check (src/cc/seo/web/serp.ts). */
+    "seo-rank-check": ["seo"],
   }),
 );
 

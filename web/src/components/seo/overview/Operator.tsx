@@ -9,8 +9,17 @@ import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
 import { useSend } from "@/components/operator/send";
 import { cx } from "@/lib/cx";
+import { num } from "@/lib/format";
 import { queuedLine, Said, TASKS } from "./Act";
+import { NEEDS_OPERATOR } from "./RowAction";
 import "./overview.css";
+
+/**
+ * The longest question the operator's queue takes (src/cc/operator/queue.ts
+ * `createTask`, and this page's door, src/cc/routes/seo/overview.ts): the
+ * workstation's model reads a few thousand characters in all, data included.
+ */
+const MOST = 1000;
 
 const RUNNER: Record<OperatorPanel["runner"]["state"], { tone: ChipTone; word: string }> = {
   online: { tone: "good", word: "Online" },
@@ -24,9 +33,11 @@ const RUNNER: Record<OperatorPanel["runner"]["state"], { tone: ChipTone; word: s
  * suggested task is queued, and the studio workstation's local model answers
  * it when the workstation is on. The panel says so in its own words, and
  * anything the operator proposes for the website waits for a person's
- * approval in AI Operator › Approvals.
+ * approval in AI Operator › Approvals. Queueing takes edit on the AI Operator
+ * too (`operate`, from the payload's `can`): without it the box and the
+ * suggestions say so and send nothing.
  */
-export function Operator({ panel }: { panel: OperatorPanel }) {
+export function Operator({ panel, operate = true }: { panel: OperatorPanel; operate?: boolean }) {
   const [text, setText] = useState("");
   const [which, setWhich] = useState<number | null>(null);
   const ask = useSend();
@@ -40,7 +51,11 @@ export function Operator({ panel }: { panel: OperatorPanel }) {
       ask.setMessage({ ok: false, text: "Write a question first." });
       return;
     }
-    const sent = await ask.go<TaskAnswer>(TASKS, { kind: "ask", prompt: prompt.slice(0, 2000), context: "website", depth: "deep" }, queuedLine);
+    if (prompt.length > MOST) {
+      ask.setMessage({ ok: false, text: `Keep the question under ${num(MOST)} characters: the workstation’s model reads a few thousand in all, data included.` });
+      return;
+    }
+    const sent = await ask.go<TaskAnswer>(TASKS, { kind: "ask", prompt, context: "website", depth: "deep" }, queuedLine);
     if (sent.ok) setText("");
   };
 
@@ -75,13 +90,21 @@ export function Operator({ panel }: { panel: OperatorPanel }) {
             onChange={(e) => setText(e.target.value)}
             onKeyDown={key}
             rows={3}
-            maxLength={2000}
-            placeholder="Ask about the website’s search: a page, a query, what to fix first…"
+            maxLength={MOST}
+            disabled={!operate}
+            aria-describedby={text.length > MOST * 0.8 ? "dk-seo-overview-op-left" : undefined}
+            placeholder={operate ? "Ask about the website’s search: a page, a query, what to fix first…" : "Asking the operator takes edit on the AI Operator."}
           />
-          <button type="submit" className="dk-seo-overview-op-send" disabled={ask.busy} aria-label="Queue the question for the operator">
+          <button type="submit" className="dk-seo-overview-op-send" disabled={ask.busy || !operate} aria-label="Queue the question for the operator">
             <Icon name={ask.busy ? "refresh" : "send"} size={16} />
           </button>
         </form>
+        {text.length > MOST * 0.8 ? (
+          <p id="dk-seo-overview-op-left" className="dk-seo-overview-quiet dk-seo-overview-op-left">
+            {num(MOST - text.length)} characters left
+          </p>
+        ) : null}
+        {operate ? null : <p className="dk-seo-overview-quiet dk-seo-overview-op-left">{NEEDS_OPERATOR}</p>}
         <Said message={ask.message} />
 
         <p className="dk-seo-overview-sublabel">Suggested actions</p>
@@ -91,7 +114,8 @@ export function Operator({ panel }: { panel: OperatorPanel }) {
               <button
                 type="button"
                 className={cx("dk-seo-overview-op-do", run.busy && which === i && "dk-seo-overview-op-do--busy")}
-                disabled={run.busy}
+                disabled={run.busy || !operate}
+                title={operate ? undefined : NEEDS_OPERATOR}
                 onClick={async () => {
                   setWhich(i);
                   await run.go<TaskAnswer>(TASKS, s.task, queuedLine);

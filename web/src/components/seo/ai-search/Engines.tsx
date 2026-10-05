@@ -6,7 +6,8 @@ import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
 import { fullDate, num } from "@/lib/format";
-import { RecordAnswers } from "./RecordAnswers";
+import { RecordAnswers, type Known } from "./RecordAnswers";
+import { RecordRound } from "./Round";
 import "@/components/ui/table.css";
 import "./ai-search.css";
 
@@ -94,16 +95,10 @@ function Rounds({ rounds }: { rounds: AiRound[] }) {
  * "Record answers" is the owner's: one answer, as a person read it in a
  * browser.
  */
-export function Engines({ reading, engines, owner }: { reading: Reading<AiChecks>; engines: { engine: AiEngine; label: string }[]; owner: boolean }) {
+export function Engines({ reading, engines, owner, known }: { reading: Reading<AiChecks>; engines: { engine: AiEngine; label: string }[]; owner: boolean; known: Known[] }) {
   const v = reading.state === "ok" ? reading.value : null;
   const asked = new Set(v?.tally.map((t) => t.engine) ?? []);
   const never = engines.filter((e) => !asked.has(e.engine));
-  /* The questions asked before, each with the language and kind of its newest record (rows come newest day first). */
-  const questions = new Map<string, { question: string; lang: AiCheckRow["lang"]; kind: AiCheckRow["kind"] }>();
-  for (const r of v?.rows ?? []) {
-    const k = r.question.trim().toLowerCase();
-    if (!questions.has(k)) questions.set(k, { question: r.question, lang: r.lang, kind: r.kind });
-  }
 
   return (
     <Card
@@ -111,7 +106,12 @@ export function Engines({ reading, engines, owner }: { reading: Reading<AiChecks
       icon="robot"
       className="dk-seo-ai-search-panel"
       info="Per assistant, its newest recorded answer to each question asked of it: questions asked, answers that named Balkaris, and the same for questions that do not name Balkaris themselves. A newer answer to a question replaces the older one; a later record of the same question, assistant and day replaces the earlier one. Counts, never percentages: a round is a few questions. Answers are recorded by a person or an API; no job asks the assistants by itself."
-      right={<RecordAnswers engines={engines} questions={[...questions.values()]} owner={owner} />}
+      right={
+        <span className="dk-seo-ai-search-head-acts">
+          <RecordRound engines={engines} questions={known} owner={owner} />
+          <RecordAnswers engines={engines} questions={known} owner={owner} />
+        </span>
+      }
     >
       {v ? (
         <>
@@ -194,7 +194,7 @@ export function Engines({ reading, engines, owner }: { reading: Reading<AiChecks
           ) : null}
           {never.length ? (
             <p className="dk-seo-ai-search-line dk-seo-ai-search-quiet">
-              Never asked: {never.map((e) => e.label).join(", ")}. A round of the same questions there is one “Record answers” per answer.
+              Never asked: {never.map((e) => e.label).join(", ")}. “Record a round” records one assistant&apos;s answers to every tracked question at once.
             </p>
           ) : null}
           <div className="dk-seo-ai-search-stampline">

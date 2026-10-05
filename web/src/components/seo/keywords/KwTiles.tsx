@@ -1,7 +1,9 @@
 import type { Reading, Stat } from "@/contract/common";
 import type { KeywordTiles } from "@/contract/seo/keywords";
 import { SparkBars } from "@/components/charts";
+import { Go } from "@/components/ui/Go";
 import { Tile, Tiles } from "@/components/ui/Tile";
+import { clearedHref, type Place } from "./href";
 
 const bars = (tone?: "bad") => (s: Stat) => <SparkBars data={s.series} tone={tone} />;
 
@@ -15,7 +17,14 @@ const change = (r: Reading<Stat>): "under" | "none" => (r.state === "ok" && r.va
  * the site for (Search Console impressions): no tool measures a position
  * Google did not show.
  */
-export function KwTileRow({ tiles }: { tiles: KeywordTiles }) {
+export function KwTileRow({ tiles, place }: { tiles: KeywordTiles; place: Place }) {
+  /* New and lost are lists too: each tile opens its phrases in the table, every judgement shown, as the tile counts them. */
+  const list = (moved: "new" | "lost", r: Reading<Stat>) =>
+    r.state === "ok" && r.value.value ? (
+      <Go href={clearedHref(place, { view: "keywords", moved, status: "all" })} scroll={false} className="dk-seo-kw-reset">
+        List them
+      </Go>
+    ) : undefined;
   return (
     <Tiles count={5} className="dk-seo-kw-tiles">
       <Tile
@@ -50,12 +59,14 @@ export function KwTileRow({ tiles }: { tiles: KeywordTiles }) {
         label="New keywords"
         reading={tiles.newQueries}
         delta="none"
+        foot={list("new", tiles.newQueries)}
         info="Queries Google showed the site for in this window and not in the window of the same length before it. Only when the desk's own history covers that window from its first day and Search Console reported its queries: a window whose queries Google withheld is not a window of zero queries."
       />
       <Tile
         label="Lost keywords"
         reading={tiles.lostQueries}
         delta="none"
+        foot={list("lost", tiles.lostQueries)}
         downIsGood
         info="Queries Google showed the site for in the window before and not in this one. Only when the desk's own history covers that window and Search Console reported its queries."
       />

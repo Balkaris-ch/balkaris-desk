@@ -60,6 +60,8 @@ export interface SeoBacklinksPayload {
   linksJob: JobLine | null;
   /** Search Console's Links report for this property, where the export is made. */
   gscLinksUrl: string;
+  /** Who is looking: the import and the one true name, address and phone are the owner's to change. */
+  viewer: { owner: boolean };
 }
 
 export type JobLine = Pick<JobStatus, "name" | "title" | "enabled" | "running" | "lastEnd" | "lastOk" | "lastNote" | "nextRun"> & { ready: boolean };
@@ -117,11 +119,17 @@ export interface LinkingSite {
   host: string;
   /** Every host a source named under this site, when there is more than the site itself. */
   hosts: string[];
-  /** An AI assistant (also counted on AI Search), one of the studio's own profiles, or another site. */
+  /**
+   * An AI assistant (also counted on AI Search), one of the studio's own
+   * profiles, or another site. "profile" only when a source named the
+   * profile's own address as the page that linked or referred: a visit from
+   * instagram.com may be somebody else's post, so the network alone is not
+   * the studio's profile.
+   */
   kind: "ai" | "profile" | "site";
   /** The assistant's name ("ChatGPT") or the profile's name in the registry; null for another site. */
   label: string | null;
-  /** The registry's key when the site is one of the studio's profiles. */
+  /** The registry's key when the studio has a profile on this site (whether or not the visits came from it). */
   profileKey: string | null;
   /**
    * Links from this site: null while no source of links is read at all.
@@ -232,8 +240,8 @@ export interface TrackedList {
 
 /** Search Console › Links, as the owner exported it and the desk keeps it. Each table is the newest import of its kind. */
 export interface GoogleLinks {
-  /** "Top linking sites": site, linking pages, target pages. */
-  sites: { host: string; pages: number; targets: number }[];
+  /** "Top linking sites": site, linking pages, target pages, and the day the desk first had the site from an export (kept across later imports). */
+  sites: { host: string; pages: number; targets: number; firstSeen: string | null }[];
   /** "Top linked pages": page of the website, incoming links, linking sites. */
   pages: { path: string; links: number; sites: number }[];
   /** "Top linking text", in Google's order. */

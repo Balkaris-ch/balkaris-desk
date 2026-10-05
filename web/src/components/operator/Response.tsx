@@ -1,4 +1,4 @@
-import type { ResultCard, TaskResult } from "@/contract/operator";
+import type { ResultCard, TaskResult, TaskRow } from "@/contract/operator";
 import { Card } from "@/components/ui/Card";
 import { LinkButton } from "@/components/ui/Button";
 import { Empty } from "@/components/ui/Empty";
@@ -14,7 +14,7 @@ import { KIND_LOOK } from "./look";
  * ?result=), how old it is and what data it was given, then cards linking to
  * the newest result of each other kind. The whole answer is one click away.
  */
-export function Response({ answer, cards, specimen }: { answer: TaskResult | null; cards: ResultCard[]; specimen: boolean }) {
+export function Response({ answer, pending, cards, specimen }: { answer: TaskResult | null; pending: TaskRow | null; cards: ResultCard[]; specimen: boolean }) {
   const look = answer ? KIND_LOOK[answer.task.kind] : null;
   const done = answer?.task.finishedAt ?? null;
   /* Two, in one row: the panel then stands as tall as the prompt box beside it, as on the board. */
@@ -41,6 +41,11 @@ export function Response({ answer, cards, specimen }: { answer: TaskResult | nul
       className="dk-operator-panel dk-operator-response"
       id="response"
     >
+      {pending ? (
+        <p className="dk-operator-said" role="status">
+          Task #{pending.id}, “{pending.title}”, is {pending.state === "running" ? "with the workstation now" : pending.stage === "crawl" ? "waiting for its crawl" : `queued${pending.ahead ? `, behind ${pending.ahead}` : ""}`}. Its answer appears here when it is done.
+        </p>
+      ) : null}
       {answer && look ? (
         <>
           <div className="dk-operator-said-row">
@@ -90,7 +95,7 @@ export function Response({ answer, cards, specimen }: { answer: TaskResult | nul
             </ul>
           ) : null}
         </>
-      ) : (
+      ) : pending ? null : (
         <Empty icon="sparkles" title="No answer yet">
           Ask a question or start a task. The workstation answers from the desk&apos;s own data when it is on, and the answer appears here with the data it was given.
         </Empty>

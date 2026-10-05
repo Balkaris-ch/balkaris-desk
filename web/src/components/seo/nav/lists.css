@@ -1,0 +1,387 @@
+/*
+ * The SEO section's own lists (components/seo/nav/Tasks.tsx, Audits.tsx):
+ * every SEO task and every full audit. Panels from ui/Card, tables from
+ * ui/table.css; this file lays out what is inside them. Every value is a
+ * token; the class names all begin dk-seo-lists-.
+ */
+:root {
+  --dk-seo-lists-note-w: 64ch;  /* a task's step, why and note: a readable line */
+  --dk-seo-lists-search-w: 260px;
+  --dk-seo-lists-step-mark: 8px; /* the dot before an audit's step */
+  --dk-seo-lists-said-w: 40ch;  /* the desk's answer under a button */
+  --dk-seo-lists-col: 320px;    /* the narrowest column of an audit's parts */
+  --dk-seo-lists-found-col: 360px;
+}
+
+.dk-seo-lists {
+  display: grid;
+  gap: var(--gap);
+}
+
+.dk-seo-lists-opened {
+  box-shadow: inset 0 0 0 var(--x1) var(--line-2);
+}
+
+/* ---------- the task list ---------- */
+.dk-seo-lists-tabs {
+  margin-bottom: var(--x12);
+}
+
+.dk-seo-lists-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-bottom: var(--x12);
+}
+
+.dk-seo-lists-search {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  width: var(--dk-seo-lists-search-w);
+  max-width: 100%;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-lists-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-lists-search:focus-within {
+  border-color: var(--focus);
+}
+
+.dk-seo-lists-rows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-lists-rows > li {
+  padding: var(--x14) 0;
+  border-top: var(--x1) solid var(--line);
+  scroll-margin-top: calc(var(--top) + var(--x16));
+}
+
+.dk-seo-lists-rows > li:first-child {
+  border-top: 0;
+  padding-top: var(--x4);
+}
+
+.dk-seo-lists-row--on {
+  background: var(--card-2);
+}
+
+.dk-seo-lists-task {
+  display: grid;
+  gap: var(--x6);
+}
+
+.dk-seo-lists-task-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x6) var(--x12);
+}
+
+.dk-seo-lists-task-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-lists-task-title a:hover {
+  color: var(--green);
+}
+
+.dk-seo-lists-task--done .dk-seo-lists-task-title {
+  color: var(--ink-3);
+}
+
+.dk-seo-lists-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--x6);
+}
+
+.dk-seo-lists-task-step,
+.dk-seo-lists-task-why,
+.dk-seo-lists-task-note {
+  max-width: var(--dk-seo-lists-note-w);
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-lists-task-note {
+  color: var(--ink);
+}
+
+.dk-seo-lists-k {
+  margin-right: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-lists-task-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+}
+
+.dk-seo-lists-from {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-from a,
+.dk-seo-lists-found-list a,
+.dk-seo-lists-table a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-color: var(--line-2);
+  text-underline-offset: var(--x2);
+}
+
+.dk-seo-lists-from a:hover,
+.dk-seo-lists-found-list a:hover,
+.dk-seo-lists-table a:hover {
+  color: var(--green);
+}
+
+.dk-seo-lists-buttons {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x6);
+}
+
+.dk-seo-lists-act {
+  display: inline-grid;
+  justify-items: start;
+  gap: var(--x4);
+}
+
+.dk-seo-lists-only {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-said {
+  max-width: var(--dk-seo-lists-said-w);
+  margin: 0;
+  color: var(--green);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-lists-said--bad {
+  color: var(--amber);
+}
+
+/* The note's own small form, in place of its button. */
+.dk-seo-lists-note {
+  display: grid;
+  gap: var(--x8);
+  width: min(100%, var(--dk-seo-lists-note-w));
+}
+
+/* ---------- adding a task ---------- */
+.dk-seo-lists-add {
+  display: grid;
+  gap: var(--x12);
+  max-width: var(--dk-seo-lists-note-w);
+}
+
+.dk-seo-lists-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--x12);
+}
+
+.dk-seo-lists-add-go {
+  margin-left: auto;
+}
+
+/* ---------- the audits ---------- */
+.dk-seo-lists-deep {
+  margin-left: var(--x8);
+}
+
+.dk-seo-lists-table td,
+.dk-seo-lists-table th {
+  white-space: nowrap;
+}
+
+.dk-seo-lists-plan,
+.dk-seo-lists-audit {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--dk-seo-lists-col)), 1fr));
+  gap: var(--x24);
+}
+
+.dk-seo-lists-plan-head {
+  margin: 0 0 var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-seo-lists-plan-list {
+  display: grid;
+  gap: var(--x4);
+  margin: 0 0 var(--x10);
+  padding-left: var(--x20);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-plan-note {
+  max-width: var(--dk-seo-lists-note-w);
+  margin: 0 0 var(--x10);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-lists-steps {
+  display: grid;
+  gap: var(--x8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-lists-step {
+  display: grid;
+  grid-template-columns: var(--dk-seo-lists-step-mark) minmax(0, 1fr) auto;
+  align-items: baseline;
+  column-gap: var(--x8);
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-step::before {
+  content: "";
+  width: var(--dk-seo-lists-step-mark);
+  height: var(--dk-seo-lists-step-mark);
+  border-radius: var(--r-pill);
+  background: var(--track);
+}
+
+.dk-seo-lists-step--running::before {
+  background: var(--blue);
+}
+
+.dk-seo-lists-step--done::before {
+  background: var(--green);
+}
+
+.dk-seo-lists-step--failed::before {
+  background: var(--amber);
+}
+
+.dk-seo-lists-step--skipped::before {
+  background: var(--ink-4);
+}
+
+.dk-seo-lists-step-title {
+  color: var(--ink);
+}
+
+.dk-seo-lists-step-state {
+  color: var(--ink-3);
+  white-space: nowrap;
+}
+
+.dk-seo-lists-step--failed .dk-seo-lists-step-state {
+  color: var(--amber);
+}
+
+.dk-seo-lists-step-note {
+  grid-column: 2 / -1;
+  color: var(--ink-3);
+  line-height: var(--lh-snug);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-lists-live {
+  margin-bottom: var(--x16);
+}
+
+.dk-seo-lists-live-line {
+  margin: 0 0 var(--x8);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-counts {
+  width: 100%;
+  margin-bottom: var(--x10);
+}
+
+.dk-seo-lists-counts th[scope="row"] {
+  color: var(--ink-2);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-lists-found {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--dk-seo-lists-found-col)), 1fr));
+  gap: var(--gap);
+}
+
+.dk-seo-lists-found-list {
+  display: grid;
+  gap: var(--x8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-small);
+}
+
+.dk-seo-lists-found-list li {
+  display: grid;
+  gap: var(--x2);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-lists-found-sub {
+  color: var(--ink-3);
+}
+
+@media (max-width: 760px) {
+  .dk-seo-lists-search {
+    width: 100%;
+  }
+
+  .dk-seo-lists-add-go {
+    margin-left: 0;
+  }
+}

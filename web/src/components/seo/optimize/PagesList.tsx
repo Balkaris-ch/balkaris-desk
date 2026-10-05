@@ -144,7 +144,7 @@ export function PagesList({ list, selected, range, tab }: { list: OptimizeList; 
         {rows.length === 0 ? <li className="dk-seo-optimize-rows-empty">No page matches{q ? ` “${q}”` : ""}.</li> : null}
       </ul>
       <p className="dk-seo-optimize-list-foot">
-        {num(rows.length)} of {num(list.rows.length)} · {list.order} The figure on the right is the crawl’s score.
+        {num(rows.length)} of {num(list.rows.length)} · {sort === "priority" ? list.order : `By ${(SORTS.find((s) => s.value === sort)?.label ?? sort).toLowerCase()}.`} The figure on the right is the crawl’s score.
       </p>
     </section>
   );

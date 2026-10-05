@@ -329,7 +329,8 @@ export function importAll(dir: string, o: { audit?: string } = {}): ImportResult
 
   const auditFile = o.audit ?? file("audit.json");
   if (existsSync(auditFile)) lines.push(importAudit(JSON.parse(readFileSync(auditFile, "utf8")), dayOf(auditFile)));
-  else lines.push(`tasks: ${auditFile} is not there`);
+  /* The file's own name, like the lines beside it: the answer reaches the interface, the machine's folders need not. */
+  else lines.push(`tasks: ${o.audit ? path.basename(auditFile) : "audit.json"} is not there`);
 
   const ai = read("chrome/ai-checks.json");
   lines.push(ai ? importAiChecks(JSON.parse(ai)) : "AI checks: chrome/ai-checks.json is not there");

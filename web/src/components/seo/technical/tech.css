@@ -1280,3 +1280,134 @@ details[open] > summary .dk-seo-technical-cov-chev {
     display: none;
   }
 }
+
+/* ---------- added with the Google panel and the filters (5 October 2026) ---------- */
+
+/* The last daily index check failed: its own sentence, under the figures. */
+.dk-seo-technical-index-failed {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin: 0;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-field);
+  background: var(--amber-ground);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-technical-index-failed > svg {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--amber);
+}
+
+.dk-seo-technical-index-groups .dk-seo-technical-h3-n {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+}
+
+.dk-seo-technical-index-groups .dk-seo-technical-h3-n:hover {
+  color: var(--ink);
+}
+
+/* One search box over the findings and the pages, and the lists as files. */
+.dk-seo-technical-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8) var(--x16);
+}
+
+.dk-seo-technical-filters-form {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--x8);
+  max-width: var(--search-w);
+  min-width: 0;
+}
+
+.dk-seo-technical-filters-form .dk-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-technical-filters-files {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-filters-files a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: var(--x3);
+}
+
+.dk-seo-technical-filters-files a:hover {
+  color: var(--ink);
+}
+
+/* A panel head with a filter and a button side by side. */
+.dk-seo-technical-head-tools {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x8);
+}
+
+.dk-seo-technical-issue-new {
+  margin-left: var(--x6);
+}
+
+/* Every address the sitemap lists, under the counts. */
+.dk-seo-technical-entries {
+  display: flex;
+  flex-direction: column;
+  max-height: var(--dk-seo-technical-list-h);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dk-seo-technical-entries li {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x8);
+  min-height: var(--ctl-sm);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-technical-entries-date {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-seo-technical-sitemap-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x12);
+  margin: var(--x8) 0 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-technical-sitemap-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-2);
+}

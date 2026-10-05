@@ -709,6 +709,8 @@ export async function dailyRead(progress: (done: number, of: number, what?: stri
 /* ---------- Search Console's Links export ------------------------------------------------------ */
 
 const IMPORTED = "seo:bl:gsc:";
+/** The day the desk first had each site from a "Top linking sites" export: { host: day }. */
+const SITES_FIRST = "seo:bl:gsc-first:sites";
 const KINDS: GscLinksKind[] = ["sites", "pages", "texts", "links"];
 const KIND_NAME: Record<GscLinksKind, string> = { sites: "Top linking sites", pages: "Top linked pages", texts: "Top linking text", links: "Latest links (or More sample links)" };
 
@@ -801,6 +803,12 @@ export function importGscLinks(csv: string, by: string): { kind: GscLinksKind; r
     throw e;
   }
   if (!rows) throw new Said(`The file reads as Search Console's ${KIND_NAME[kind]}, but none of its rows could be kept.`);
+  if (kind === "sites") {
+    /* The export replaces its table each time; the day the desk first had each site from it is kept beside it, so a site is "new" once. */
+    const first = json<Record<string, string>>(state(SITES_FIRST), {});
+    for (const r of db.prepare("SELECT key FROM cc_seo_gsc_links WHERE kind = 'sites'").all() as { key: string }[]) first[r.key] ??= today();
+    setState(SITES_FIRST, JSON.stringify(first));
+  }
   setState(`${IMPORTED}${kind}`, JSON.stringify({ at: now(), by, rows }));
   note("seo-import", `Imported Search Console's ${KIND_NAME[kind]}`, { tone: "info", actor: by, detail: `${rows.toLocaleString("en-GB")} row${rows === 1 ? "" : "s"}`, href: "/seo/backlinks", dedupe: `seo:bl:gsc:${kind}:${now()}` });
   const what: Record<GscLinksKind, string> = { sites: "site", pages: "page", texts: "link text", links: "linking page" };
@@ -816,9 +824,10 @@ export function googleLinks(): GoogleLinks | null {
   const imported = Object.fromEntries(KINDS.map((k) => [k, json<{ at: string; by: string; rows: number } | null>(state(`${IMPORTED}${k}`), null)])) as GoogleLinks["imported"];
   if (!KINDS.some((k) => imported[k])) return null;
   const of = (kind: string) => db.prepare("SELECT key, n1, n2 FROM cc_seo_gsc_links WHERE kind = ?").all(kind) as { key: string; n1: number | null; n2: number | null }[];
+  const first = json<Record<string, string>>(state(SITES_FIRST), {});
   return {
     sites: of("sites")
-      .map((r) => ({ host: r.key, pages: r.n1 ?? 0, targets: r.n2 ?? 0 }))
+      .map((r) => ({ host: r.key, pages: r.n1 ?? 0, targets: r.n2 ?? 0, firstSeen: first[r.key] ?? null }))
       .sort((a, b) => b.pages - a.pages || a.host.localeCompare(b.host)),
     pages: of("pages")
       .map((r) => ({ path: r.key, links: r.n1 ?? 0, sites: r.n2 ?? 0 }))

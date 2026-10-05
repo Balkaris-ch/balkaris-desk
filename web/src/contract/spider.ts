@@ -9,9 +9,15 @@
  *   POST   /extract/:id/toggle      owner   { enabled?: boolean } (no body: flip)  ExtractRule
  *   DELETE /extract/:id             owner   remove it and what it found        { ok: true }
  *   GET    /extract/:id/results     owner   what it found, page by page        ExtractResults
+ *   POST   /extract/try             owner   { kind, expression, attribute?, path? }  ExtractTry | ApiError (400 the rule refused,
+ *                                                                              409 the page did not answer 200): tried now, nothing kept
  *   GET    /duplicates              anyone signed in                           Reading<SpiderDuplicates>
- *   POST   /audit                   anyone signed in   { url }                 SpiderAudit | ApiError (400 refused, 429 too many
- *                                                                              this hour: 30 for the desk, 10 a person; 504 given up after 90 s)
+ *   POST   /audit                   anyone signed in   { url, fresh? }         SpiderAudit | ApiError (400 refused, 429 too many
+ *                                                                              this hour: 30 for the desk, 10 a person; 504 given up after 90 s).
+ *                                                                              fresh: true fetches again instead of answering from the day's
+ *                                                                              kept audit (and counts against the hour)
+ *   GET    /audits                  anyone signed in                           SpiderAuditListed[]: the audits kept (a day), newest first
+ *   GET    /audits?url=             anyone signed in                           SpiderAudit (cached: true) | ApiError (400 not an address, 404 none kept)
  *
  * The server's implementation is src/cc/routes/spider.ts, src/cc/site/extract.ts
  * (rules), src/cc/site/rules.ts (duplicates) and src/cc/site/audit.ts (audit).
@@ -75,6 +81,20 @@ export interface ExtractResultRow {
   /** ISO, the crawl that ran it. */
   at: string;
   /** Milliseconds it took on this page; null when it was not run there. */
+  ms: number | null;
+}
+
+/** A rule tried now on one page of the site (POST /extract/try): nothing is kept. */
+export interface ExtractTry {
+  /** The page it ran on. */
+  path: string;
+  /** ISO, when the page was read. */
+  at: string;
+  /** The first 20 values, as a crawl would keep them. */
+  matches: string[];
+  count: number;
+  /** Why it could not run there, or null. */
+  error: string | null;
   ms: number | null;
 }
 
@@ -186,5 +206,19 @@ export interface SpiderAudit {
   /** 100 minus each fired rule's cost, as the crawl scores a page; null when the page was not read. */
   score: number | null;
   /** Why nothing could be read at all (DNS, TLS, timeout), when that happened. */
+  error: string | null;
+}
+
+/** One audit as the list of recent ones shows it (GET /api/v1/spider/audits). */
+export interface SpiderAuditListed {
+  /** The address as asked, tidied: what GET /audits?url= and the page's ?audit= take. */
+  url: string;
+  finalUrl: string;
+  /** ISO, when the page was fetched. */
+  at: string;
+  status: number;
+  score: number | null;
+  /** How many of the crawl's page rules it broke. */
+  issues: number;
   error: string | null;
 }

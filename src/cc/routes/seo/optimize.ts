@@ -34,7 +34,15 @@ import type {
   QuickAction,
   SearchFrom,
   SeoPageViewPayload,
+  AiDraft,
+  PagePhrase,
+  PageSettings,
+  SettingField,
+  SettingGroup,
+  SettingKey,
+  SettingSide,
 } from "../../../../web/src/contract/seo/page-view.ts";
+import { refusal as siteRefusal } from "../../operator/changes.ts";
 import type { Serp } from "../../../../web/src/contract/seo/opportunities.ts";
 import { competitorPages, sightings } from "../../seo/competitors.ts";
 import { curve, potential as estimate, TARGET_POSITION } from "../../seo/ctr.ts";
@@ -54,6 +62,12 @@ import { head, HISTORY_NOTE, historyAbsent, historyAt, operatorPanel, rangeFrom,
  *   POST /act      { id }                take one of the page's opportunities' action
  *   POST /propose  { path, title?, description?, why? }
  *                                        a person's own title or description, for approval
+ *
+ * THE PAGE'S SETTINGS (`settings`): title and description, share card,
+ * index and canonical, structured data, each as the live page says it, as
+ * the desk has had it approved, and as it waits. The screen changes them
+ * through the operator's door (/api/v1/operator/proposals, /pictures,
+ * /tasks), which holds the rules; this file only reads.
  *
  * WHERE EACH PART COMES FROM, each a reading of its own so one failing
  * source costs one panel:
@@ -106,11 +120,20 @@ function addressOf(raw: string | undefined): string | null {
   if (!t) return null;
   const refuse = (): never => fail(400, "Name the page by its address, for example ?path=/logistics.");
   let p = t;
-  try {
-    p = t.startsWith("/") ? t : new URL(t).pathname;
-  } catch {
-    refuse();
-  }
+  if (t.startsWith("/")) p = t;
+  else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t)) {
+    /* A whole address is this site's page only when its host is the site's: a competitor's /web-design is not ours. */
+    let u: URL | null = null;
+    try {
+      u = new URL(t);
+    } catch {
+      refuse();
+    }
+    const own = OWN();
+    const host = u!.host.replace(/^www\./, "");
+    if (host !== own) fail(400, `${u!.host} is another site: this screen shows the pages of ${own}. Name the page by its address, for example ?path=/logistics.`);
+    p = u!.pathname;
+  } else p = `/${t}`; /* "logistics" was meant as "/logistics" */
   p = p.split(/[?#]/)[0]!.replace(/\/+$/, "") || "/";
   if (!p.startsWith("/") || p.length > 400 || /\s/.test(p)) refuse();
   return p;
@@ -374,7 +397,7 @@ function siteTiles(range: SeoRange, v: SiteView, search: Reading<Search>, opps: 
           clicksPerMonth: round(clicks, 1),
           queries: count,
           impressionsPerMonth: shown,
-          line: `Our estimate: ${count} quer${count === 1 ? "y" : "ies"} at position 4 to 20, ${n(shown)} impressions a month, brought to position ${TARGET_POSITION} by our CTR curve.`,
+          line: `Our estimate: ${count} quer${count === 1 ? "y" : "ies"} at position 4 to 20, ${n(shown)} impression${shown === 1 ? "" : "s"} a month, brought to position ${TARGET_POSITION} by our CTR curve.`,
         },
         "gsc",
         s.asOf,
@@ -453,7 +476,8 @@ function statusOf(findings: Finding[], score: number | null, inSitemap: boolean,
     seen.add(f.rule);
     fired.push(f);
   }
-  const areas: PageStatusArea[] = AREAS.map((a) => {
+  /* An unscored page has no area scores either: six lines of 100 beside "Not scored" would claim checks that never ran. */
+  const areas: PageStatusArea[] = score === null ? [] : AREAS.map((a) => {
     const rules = fired.filter((f) => a.areas.includes(f.area)).map((f) => ({ rule: f.rule, title: f.title, severity: f.severity, cost: f.cost, text: f.text }));
     const lost = rules.reduce((s, r) => s + r.cost, 0);
     return { key: a.key, label: a.label, score: Math.max(0, 100 - lost), lost, rules };
@@ -528,12 +552,19 @@ const kept = (task: NewTask): string => {
   return task.kind === "brief" ? s.slice(0, 300) : s;
 };
 
+/** The operator's kinds that work on one page named by `path` (OPERATOR-API.md): their prompt is optional, so they are matched by page. */
+const PAGE_KINDS = new Set<NewTask["kind"]>(["og", "schema", "links", "alt"]);
+
 /** The open operator task that already does what `task` asks for this page, or null. */
 function sameTask(task: NewTask, path: string, h: InHand): OpenTask | null {
   for (const t of h.tasks) {
     if (t.kind !== task.kind) continue;
+    const o = taskJson<TaskOptions>(t.options, {});
     if (task.kind === "metadata") {
-      if ((taskJson<TaskOptions>(t.options, {}).paths ?? []).includes(path)) return t;
+      if ((o.paths ?? []).includes(path)) return t;
+    } else if (PAGE_KINDS.has(task.kind)) {
+      /* One page's share card, block, links or alt texts: the same page (and block type) is the same task, whatever its title says. */
+      if (o.path === path && (task.kind !== "schema" || (o.schemaType ?? null) === (task.schemaType ?? null))) return t;
     } else if (t.prompt === kept(task)) return t;
   }
   return null;
@@ -613,7 +644,7 @@ function fromFinding(f: Finding, path: string, title: string | null): PageSugges
           ...base,
           queueable: true,
           label: "Expand the content",
-          act: { kind: "task", task: { kind: "brief", prompt: `Expand ${named}, ${f.measured ?? "few"} words of its own: what a client needs answered there, the sections to add, the proof and the links. Use only what the page and the studio can stand behind.`, depth: "deep" } },
+          act: { kind: "task", task: { kind: "brief", path, prompt: `Expand ${named}, ${f.measured ?? "few"} words of its own: what a client needs answered there, the sections to add, the proof and the links. Use only what the page and the studio can stand behind.`, depth: "deep" } },
           button: "Brief",
           step: "The operator writes a brief: the questions the page must answer, its sections and links. A person writes and publishes the words.",
         };
@@ -623,36 +654,54 @@ function fromFinding(f: Finding, path: string, title: string | null): PageSugges
     case "schema":
       return {
         ...base,
-        queueable: true,
-        label: f.rule === "schema.unreadable" ? "Repair the structured data" : f.rule === "schema.incomplete" ? "Complete the structured data" : "Add structured data for this page",
-        act: {
-          kind: "task",
-          task: {
-            kind: "ask",
-            path,
-            context: "pages",
-            depth: "deep",
-            prompt: `Write the JSON-LD structured data ${path} should carry for what it is (a Service, an Article, an FAQPage…), using only facts the page states. The crawl says: ${f.text}`.slice(0, 990),
-          },
-        },
-        button: "Generate",
-        step: "The operator writes the JSON-LD from the page's own facts; a person adds it to the website's code. Google's Rich Results Test has the last word on it.",
+        /* An unreadable block is in the website's code: the desk can add a block of its own, not repair one it did not write. */
+        ...(f.rule === "schema.unreadable"
+          ? {
+              queueable: false,
+              label: "Repair the structured data",
+              act: { kind: "todo" as const, title: `Repair the structured data: ${path}`.slice(0, TODO_TITLE_MOST), note: `${f.text} (the desk's crawl, rule ${f.rule})`.slice(0, 1900) },
+              button: "Add to to-do",
+              step: "The block that does not read is in the website's code; it goes on the operator's to-do list.",
+            }
+          : {
+              queueable: true,
+              label: f.rule === "schema.incomplete" ? "Draft a fuller structured-data block" : "Add structured data for this page",
+              /* No type named: the operator drafts an FAQPage, or a Service where the page prints an FAQPage already. */
+              act: { kind: "task" as const, task: { kind: "schema" as const, path } },
+              button: "Draft",
+              step: "The operator drafts a structured-data block from the page's own words on the studio workstation; it waits in AI Operator › Approvals and goes live only when a person approves it.",
+            }),
       };
     case "links":
       if (f.rule === "links.orphan")
         return {
           ...base,
           queueable: true,
-          label: "Add internal links to it",
-          act: { kind: "task", task: { kind: "ask", path, context: "pages", depth: "deep", prompt: `Which pages of the site should link to ${path} from their own text, and with what words? Name only addresses the desk knows.` } },
-          button: "Ask",
-          step: "The operator names the pages that should link here and the words to use; a person adds the links in the website's content.",
+          label: "Find pages that should link here",
+          act: { kind: "task", task: { kind: "links", path } },
+          button: "Suggest",
+          step: "The operator picks, from the crawl's link graph, the pages that should link here and the words to use; they come back as to-dos for the website's content.",
         };
       return todo(f.rule === "links.broken" ? "Fix the broken links" : f.rule === "links.redirected" ? "Link the final addresses" : "Fix the failing outside links", "Change the links in the page's content or code.");
     case "images":
-      return todo("Name the pictures", "Write alt text for each picture that has none (alt=\"\" for decoration).");
+      return {
+        ...base,
+        queueable: true,
+        label: "Write alt texts for the pictures",
+        act: { kind: "task", task: { kind: "alt", path } },
+        button: "Draft",
+        step: "The operator drafts an alt text for each picture that has none; they come back as to-dos for the website's code.",
+      };
     case "share":
-      return todo(f.rule === "share.missing" ? "Give it a share card" : f.rule === "share.no-card" ? "Add a Twitter card" : "Give it a share picture of its own", "Set og:title, og:image and twitter:card for the page.");
+      if (f.rule === "share.no-card") return todo("Add a Twitter card", "Set twitter:card for the page in the website's code.");
+      return {
+        ...base,
+        queueable: true,
+        label: "Draft a share card",
+        act: { kind: "task", task: { kind: "og", path } },
+        button: "Draft",
+        step: "The operator drafts a share title and text from the page's own words; they wait in AI Operator › Approvals. A share picture is uploaded on the Optimize tab.",
+      };
     case "canonical":
       return todo("Fix the canonical link", "Point the canonical at the page's own address.");
     case "status":
@@ -680,11 +729,14 @@ function fromReadiness(c: { key: string; label: string; state: string; detail: s
     queueable: false,
   };
   const fix = c.fix ?? "";
-  if (c.who === "owner") return { ...base, label: c.label, act: { kind: "person" }, button: null, step: `Needs you: ${fix}` };
-  if (c.who === "code")
+  /* A check's label is what passing reads like ("States a price"); on a failing line it would read as true. */
+  const failing = `Not yet: ${c.label.charAt(0).toLowerCase()}${c.label.slice(1)}`;
+  if (c.who === "owner") return { ...base, label: failing, act: { kind: "person" }, button: null, step: `Needs you: ${fix}` };
+  /* The German version is content to write, whoever the check names for its code: brief it (a person adds the route). */
+  if (c.who === "code" && c.key !== "german")
     return {
       ...base,
-      label: c.label,
+      label: failing,
       act: { kind: "todo", title: `${c.label}: ${path}`.slice(0, TODO_TITLE_MOST), note: `${c.detail} Fix: ${fix}`.slice(0, 1900) },
       button: "Add to to-do",
       step: `${fix} In the website's code; it goes on the operator's to-do list.`,
@@ -698,8 +750,9 @@ function fromReadiness(c: { key: string; label: string; state: string; detail: s
   return {
     ...base,
     queueable: true,
-    label: c.key === "answer" || c.key === "faq" ? "Write the answer and FAQ" : c.key === "german" ? "Brief a German version" : c.label,
-    act: { kind: "task", task: { kind: "brief", prompt: prompt.slice(0, 990), depth: "deep" } },
+    label: c.key === "answer" || c.key === "faq" ? "Write the answer and FAQ" : c.key === "german" ? "Brief a German version" : failing,
+    /* With the path the brief is given the page in depth (its searches, headings, text), not only the site's list of pages. */
+    act: { kind: "task", task: { kind: "brief", path, prompt: prompt.slice(0, 990), depth: "deep" } },
     button: "Brief",
     step: "The operator writes the brief on the studio workstation; a person writes and publishes the page's words.",
   };
@@ -717,7 +770,8 @@ function whyOf(o: OpportunityRow): string {
   return more ? `${title}. ${more.label}: ${bare(more.value)}.` : title;
 }
 
-const ENGINE_BUTTON: Record<OpportunityRow["action"]["kind"], string | null> = { owner: null, proposal: "Apply", brief: "Brief", chrome: "Mark requested", code: "Hand to code" };
+/* "Propose", not "Apply": the button queues a task whose answer waits for approval; nothing is applied by it. */
+const ENGINE_BUTTON: Record<OpportunityRow["action"]["kind"], string | null> = { owner: null, proposal: "Propose", brief: "Brief", chrome: "Mark requested", code: "Hand to code" };
 
 /** The operator column: the engine's opportunities for this page, then what the crawl and the readiness check found that none carries. */
 function suggestionsFor(
@@ -793,48 +847,48 @@ function suggestionsFor(
   return out.sort((a, b) => order(a) - order(b)).slice(0, SUGGEST_MOST);
 }
 
-function quickFor(path: string, title: string | null, words: number | null, schemaTypes: string[], answers200: boolean, h: InHand = NOTHING_IN_HAND): QuickAction[] {
+/**
+ * The quick actions, each the operator's own kind for what its label says
+ * (OPERATOR-API.md): a review is an answer in words, a title and description
+ * or a share card or a block is a proposal that waits for approval, links and
+ * alt texts are to-dos for the website's code, a brief is a brief. Named for
+ * what they give, so no button promises more than its task does.
+ */
+function quickFor(path: string, title: string | null, words: number | null, schemaTypes: string[], answers200: boolean, h: InHand = NOTHING_IN_HAND, altAbsent: number | null = null): QuickAction[] {
   const named = `${path}${title ? ` (“${title}”)` : ""}`;
   const no = answers200 ? null : "The crawl has no page answering 200 at this address.";
   const q = (key: QuickAction["key"], label: string, task: NewTask, step: string): QuickAction => {
     if (!answers200) return { key, label, task, step, available: false, unavailable: no, pending: null };
+    if (key === "alt" && altAbsent === 0) return { key, label, task, step, available: false, unavailable: "Every picture on the page has an alt text or is marked as decoration.", pending: null };
     /* Asked already, from here or from a suggestion: the button waits for that task. */
     const t = sameTask(task, path, h);
     if (t) return { key, label, task, step, available: false, unavailable: taskNote(t), pending: { id: t.id, running: t.state === "running", href: `/operator?result=${t.id}#response` } };
     if (task.kind === "metadata" && h.waitingMeta) return { key, label, task, step, available: false, unavailable: metaWaiting(h.waitingMeta), pending: null };
     return { key, label, task, step, available: true, unavailable: null, pending: null };
   };
+  /* FAQPage first; a page that prints one already gets a Service block; one that prints both gets none (the rule refuses a second). */
+  const schemaQuick = (): QuickAction => {
+    const type = schemaTypes.includes("FAQPage") ? "Service" : "FAQPage";
+    const a = q("schema", "Draft schema", { kind: "schema", path, schemaType: type }, `The local model drafts ${type === "Service" ? "a Service" : "an FAQPage"} block from the page's own words. It waits for approval and is checked again before it goes live.`);
+    return a.available && schemaTypes.includes(type) ? { ...a, available: false, unavailable: "The page prints an FAQPage and a Service block already: the desk drafts neither again." } : a;
+  };
   return [
     q(
       "optimize",
-      "Optimize with AI",
+      "Review with AI",
       { kind: "ask", path, context: "pages", depth: "deep", prompt: `Review ${path} for search: what should change in its title, description, headings, content, internal links and structured data to win the searches it is shown for? Use only the page's facts and findings.` },
-      "Asks the operator for a review of this page. It runs on the studio workstation's model; the answer appears in AI Operator.",
+      "The local model reviews this page with its searches, headings, structured data, links and text, and answers in words in AI Operator. It changes nothing by itself.",
     ),
-    q("meta", "Improve title & meta", { kind: "metadata", paths: [path], depth: "deep" }, "The operator writes a new title and description. They wait in AI Operator › Approvals; nothing on the live site changes until a person approves."),
+    q("meta", "Improve title & meta", { kind: "metadata", paths: [path], depth: "deep" }, "The local model writes a new title and description. They wait in AI Operator › Approvals; nothing on the live site changes until a person approves."),
+    q("og", "Draft share card", { kind: "og", path }, "The local model drafts the share title and text from the page's own words. They wait for approval; a share picture is uploaded on the Optimize tab."),
+    schemaQuick(),
+    q("links", "Suggest internal links", { kind: "links", path }, "The local model picks the pages that should link here and the words to use, from the crawl's link graph. They come back as to-dos for the website's content."),
+    q("alt", "Write alt texts", { kind: "alt", path }, "The local model drafts an alt text for each picture without one. They come back as to-dos for the website's code."),
     q(
       "expand",
-      "Expand content",
-      { kind: "brief", prompt: `Expand ${named}${words !== null ? `, ${words} words of its own` : ""}: what a client needs answered there, the sections to add, the proof and the links. Use only what the page and the studio can stand behind.`, depth: "deep" },
-      "The operator writes a brief for more content; a person writes and publishes it.",
-    ),
-    q(
-      "links",
-      "Add internal links",
-      { kind: "ask", path, context: "pages", depth: "deep", prompt: `Which pages of the site should link to ${path} from their own text, and with what words? Name only addresses the desk knows.` },
-      "The operator names the pages that should link here and the words to use; a person adds the links.",
-    ),
-    q(
-      "schema",
-      "Generate schema",
-      {
-        kind: "ask",
-        path,
-        context: "pages",
-        depth: "deep",
-        prompt: `Write the JSON-LD structured data ${path} should carry for what it is, using only facts the page states.${schemaTypes.length ? ` It carries ${schemaTypes.join(", ")} now.` : " It carries none now."}`,
-      },
-      "The operator writes the JSON-LD from the page's facts; a person adds it to the website's code.",
+      "Brief more content",
+      { kind: "brief", path, prompt: `Expand ${named}${words !== null ? `, ${words} words of its own` : ""}: what a client needs answered there, the sections to add, the proof and the links. Use only what the page and the studio can stand behind.`, depth: "deep" },
+      "The local model writes a brief with the page in depth: the questions to answer, the sections to add, the proof and the links. A person writes and publishes the words.",
     ),
   ];
 }
@@ -950,6 +1004,216 @@ function competitorsOf(keys: string[], queries: Set<string>): SeoPageViewPayload
     })
     .sort((a, b) => (a.position ?? 999) - (b.position ?? 999) || a.domain.localeCompare(b.domain))
     .slice(0, 8);
+}
+
+/* ---------- the page's settings: live, approved, waiting ------------------------------------------- */
+
+type Crawled = Extract<ReturnType<typeof crawlPage>, { state: "ok" }>["value"];
+
+const KIND_GROUP: Record<string, SettingGroup["key"]> = { meta: "search", og: "sharing", index: "index", canonical: "index", schema: "schema" };
+const FIELD_GROUP: Record<SettingKey, SettingGroup["key"]> = { title: "search", description: "search", ogTitle: "sharing", ogDescription: "sharing", ogImage: "sharing", noindex: "index", canonical: "index" };
+
+/** The proposals for a page that wait, are approved or are live, newest first, by settings group. */
+function settingProposals(path: string): Map<SettingGroup["key"], ProposalRow[]> {
+  const out = new Map<SettingGroup["key"], ProposalRow[]>();
+  const ids = db.prepare("SELECT id FROM cc_proposals WHERE address = ? AND kind != 'redirect' AND state IN ('waiting', 'approved', 'applied') ORDER BY id DESC LIMIT 60").all(path) as { id: number }[];
+  for (const { id } of ids) {
+    const p = proposalRow(id);
+    const g = p ? KIND_GROUP[p.kind] : undefined;
+    if (p && g) out.set(g, [...(out.get(g) ?? []), p]);
+  }
+  return out;
+}
+
+/** A field's value in a proposal's after, as a person reads it; undefined when the proposal does not set it. */
+function sideValue(key: SettingKey, p: ProposalRow): string | undefined {
+  const a = p.after;
+  switch (key) {
+    case "title":
+      return a.title === undefined ? undefined : shownTitle(a.title);
+    case "noindex":
+      return a.noindex === undefined ? undefined : a.noindex ? "Out of search (noindex)" : "In search";
+    default:
+      return a[key];
+  }
+}
+
+function sides(key: SettingKey, rows: ProposalRow[]): Pick<SettingField, "approved" | "waiting"> {
+  const pick = (states: ProposalRow["state"][]): SettingSide | null => {
+    for (const p of rows) {
+      if (!states.includes(p.state)) continue;
+      const value = sideValue(key, p);
+      if (value === undefined) continue;
+      const picture = key === "ogImage" ? (p.picture?.url ?? (p.after.ogImage ? abs(p.after.ogImage) : null)) : null;
+      return { value, id: p.id, picture, by: p.source === "operator" ? `the operator (task #${p.taskId ?? "?"})` : p.proposedBy, at: p.appliedAt ?? p.createdAt };
+    }
+    return null;
+  };
+  /* "Approved" is what the site carries: applied. One approved but not yet committed (it failed or was cut off) still waits. */
+  return { approved: pick(["applied"]), waiting: pick(["waiting", "approved"]) };
+}
+
+/**
+ * The page's four settings groups. Each field says what the live page says,
+ * what the desk has had approved (committed to the overrides file) and what
+ * waits; each group names the local model's draft for it and whether one is
+ * already asked. Rules are the operator's (src/cc/operator/changes.ts): a
+ * waiting block is asked again here so a reason it would now be refused is
+ * shown before anyone presses Approve.
+ */
+function settingsFor(path: string, d: Crawled, defaultShare: string | null, h: InHand, inspected: Reading<IndexHistory>): PageSettings {
+  const f = d.facts;
+  const by = settingProposals(path);
+  const rows = (g: SettingGroup["key"]) => by.get(g) ?? [];
+  const field = (key: SettingKey, label: string, live: string | null, limit: number | null, livePicture: string | null = null): SettingField => ({
+    key,
+    label,
+    live,
+    livePicture,
+    limit,
+    ...sides(key, rows(FIELD_GROUP[key])),
+  });
+  const draft = (label: string, task: NewTask, gives: AiDraft["gives"], step: string): AiDraft => {
+    if (d.status !== 200) return { label, task, gives, step, available: false, unavailable: "The page does not answer 200 at the last crawl.", pending: null };
+    const t = sameTask(task, path, h);
+    if (t) return { label, task, gives, step, available: false, unavailable: taskNote(t), pending: { id: t.id, running: t.state === "running", href: `/operator?result=${t.id}#response` } };
+    if (task.kind === "metadata" && h.waitingMeta) return { label, task, gives, step, available: false, unavailable: metaWaiting(h.waitingMeta), pending: null };
+    return { label, task, gives, step, available: true, unavailable: null, pending: null };
+  };
+  const robots = f?.robots ?? d.fetched?.robotsTag ?? null;
+  const noindexNow = /noindex/i.test(robots ?? "");
+  const schemaRows = rows("schema");
+  const schemaTypes = d.schemaTypes ?? [];
+  const uploaded = new Map<string, { label: string; sitePath: string; url: string }>();
+  const ownPicture = pictureOf(f?.og.image ?? null);
+  const def = pictureOf(defaultShare);
+  if (defaultShare && def) uploaded.set(defaultShare, { label: "The site's default picture", sitePath: defaultShare, url: def });
+  if (f?.og.image && ownPicture) {
+    let site: string | null = null;
+    try {
+      const u = new URL(ownPicture);
+      site = u.host.replace(/^www\./, "") === OWN() ? u.pathname : null;
+    } catch {
+      site = null;
+    }
+    if (site && !uploaded.has(site)) uploaded.set(site, { label: "The picture the page shares now", sitePath: site, url: ownPicture });
+  }
+  for (const p of rows("sharing")) {
+    if (p.after.ogImage && !uploaded.has(p.after.ogImage)) uploaded.set(p.after.ogImage, { label: `From proposal #${p.id}`, sitePath: p.after.ogImage, url: p.picture?.url ?? abs(p.after.ogImage) });
+  }
+  return {
+    locked: d.status === 200 ? null : `${path} does not answer 200 at the last crawl, so the desk proposes no change to it.`,
+    ownTitle: ownOf(d.title),
+    search: {
+      key: "search",
+      fields: [field("title", "Title", d.title, LIMITS.title), field("description", "Description", d.description, LIMITS.description)],
+      proposals: rows("search"),
+      ai: [draft("Ask the AI", { kind: "metadata", paths: [path], depth: "deep" }, "proposal", "The local model writes a title and description from the page and its searches; they wait for approval.")],
+    },
+    sharing: {
+      key: "sharing",
+      fields: [
+        field("ogTitle", "Share title", f?.og.title ?? null, 70),
+        field("ogDescription", "Share text", f?.og.description ?? null, 200),
+        field("ogImage", "Share picture", f?.og.image ?? null, null, ownPicture),
+      ],
+      proposals: rows("sharing"),
+      ai: [draft("Ask the AI", { kind: "og", path }, "proposal", "The local model drafts the share title and text from the page's own words; they wait for approval. The picture is yours to upload or pick.")],
+    },
+    index: {
+      key: "index",
+      fields: [field("noindex", "In Google's index", noindexNow ? "Out of search (noindex)" : "In search", null), field("canonical", "Canonical", f?.canonical ?? null, null)],
+      proposals: rows("index"),
+      /* No operator kind proposes an index or canonical change: the model can only advise, and says so. */
+      ai: [
+        draft(
+          "Ask the AI",
+          {
+            kind: "ask",
+            path,
+            context: "pages",
+            depth: "deep",
+            prompt: `Should ${path} be in Google's index, and is its canonical right? Say why from the page's own facts, its searches and Google's URL Inspection${inspected.state === "ok" ? ` (${inspected.value.now.coverage ?? (inspected.value.now.indexed ? "indexed" : "not indexed")})` : ""}.`.slice(0, 990),
+          },
+          "advice",
+          "The local model answers in words in AI Operator; an index or canonical change is proposed by a person here.",
+        ),
+      ],
+    },
+    schema: {
+      key: "schema",
+      fields: [],
+      proposals: schemaRows,
+      ai: (["FAQPage", "Service"] as const).map((type) => {
+        const a = draft(
+          `Draft ${type} with AI`,
+          { kind: "schema", path, schemaType: type },
+          "proposal",
+          `The local model drafts ${type === "FAQPage" ? "an FAQPage" : "a Service"} block from the page's own words; every figure and name must be in the page's text. It waits for approval.`,
+        );
+        /* The operator's rule refuses a type the page prints already: say so before the model spends a run on it. */
+        return a.available && schemaTypes.includes(type) ? { ...a, available: false, unavailable: `The page prints ${type === "FAQPage" ? "an FAQPage" : "a Service"} block already; the desk adds no second one.` } : a;
+      }),
+    },
+    sharePictures: [...uploaded.values()],
+    defaultPicture: def,
+    twitterCard: f?.twitter.card ?? null,
+    schemaTypes,
+    schemaProblems: (d.findings as Finding[]).filter((x) => x.area === "schema").map((x) => x.text),
+    schemaBlocks: schemaRows
+      .filter((p) => p.after.jsonLd)
+      .map((p) => ({
+        id: p.id,
+        type: String(p.after.jsonLd!["@type"]),
+        state: p.state,
+        json: JSON.stringify(p.after.jsonLd, null, 2),
+        problem: p.state === "waiting" ? safeRefusal("schema", path, p.after, [p.id]) : null,
+      })),
+    noindexRefused: path === "/" ? "The home page is never taken out of search: every other page would lose the way in." : null,
+  };
+}
+
+/** The operator's own rule, asked again; a rule that cannot be asked costs only its line. */
+function safeRefusal(kind: "schema", path: string, after: ProposalRow["after"], except: number[]): string | null {
+  try {
+    return siteRefusal(kind, path, after, except);
+  } catch (e) {
+    return `The desk could not check it again: ${e instanceof Error ? e.message : String(e)}`.slice(0, 300);
+  }
+}
+
+/** The keyword store's phrases mapped to the page, with where the page carries each and its Search Console figures. */
+function phrasesOf(path: string, d: Crawled | null, pairs: { query: string; impressions: number; position: number | null }[]): PagePhrase[] {
+  const fold = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const carries = (text: string | null | undefined, phrase: string): boolean => {
+    if (!text) return false;
+    const hay = fold(text);
+    const words = fold(phrase).split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 3);
+    return words.length > 0 && words.every((w) => hay.includes(w));
+  };
+  const byQuery = new Map(pairs.map((p) => [p.query, p]));
+  const h1 = (d?.facts?.h1 ?? []).join(" ");
+  const rank: Record<string, number> = { relevant: 0, unjudged: 1, weak: 2, irrelevant: 3 };
+  return allKeywords()
+    .filter((k) => k.page === path)
+    .map((k) => {
+      const g = byQuery.get(k.phrase);
+      return {
+        id: k.id,
+        phrase: k.phrase,
+        lang: k.lang,
+        status: k.status,
+        sources: k.sources,
+        inTitle: carries(d?.title, k.phrase),
+        inH1: carries(h1, k.phrase),
+        inDescription: carries(d?.description, k.phrase),
+        inAddress: carries(path.replace(/[-/]/g, " "), k.phrase),
+        impressions: g ? g.impressions : null,
+        position: g ? g.position : null,
+      };
+    })
+    .sort((a, b) => (rank[a.status] ?? 4) - (rank[b.status] ?? 4) || (b.impressions ?? -1) - (a.impressions ?? -1) || a.phrase.localeCompare(b.phrase))
+    .slice(0, 60);
 }
 
 /* ---------- the answer ------------------------------------------------------------------------- */
@@ -1122,7 +1386,7 @@ routes.get("/", async (c) => {
         impressionsPerMonth: shown,
         queries: parts.slice(0, 6),
         days: series && series.state === "ok" ? series.value.map((x) => ({ date: x.date, impressions: x.impressions })) : [],
-        basis: `Our estimate: ${parts.length} quer${parts.length === 1 ? "y" : "ies"} at position 4 to 20, ${n(shown)} impressions a month, each brought to position ${TARGET_POSITION} by our CTR curve (impressions × (curve at ${TARGET_POSITION} − CTR now)).`,
+        basis: `Our estimate: ${parts.length} quer${parts.length === 1 ? "y" : "ies"} at position 4 to 20, ${n(shown)} impression${shown === 1 ? "" : "s"} a month, each brought to position ${TARGET_POSITION} by our CTR curve (impressions × (curve at ${TARGET_POSITION} − CTR now)).`,
       },
       "gsc",
       s.asOf,
@@ -1151,7 +1415,9 @@ routes.get("/", async (c) => {
       })()
     : NOTHING_IN_HAND;
   const suggestions = path && d ? suggestionsFor(path, pageOpps, findings, readiness, ownTitle, shownInGoogle, hand) : [];
-  const quick = path ? quickFor(path, ownTitle, d?.words ?? null, d?.schemaTypes ?? [], d?.status === 200, hand) : [];
+  const quick = path
+    ? quickFor(path, ownTitle, d?.words ?? null, d?.schemaTypes ?? [], d?.status === 200, hand, d?.facts ? (d.facts.images ?? []).filter((i) => !i.hidden && i.alt === "absent").length : null)
+    : [];
 
   const defaultShare = await structure()
     .then((s) => s?.defaultShare ?? null)
@@ -1265,6 +1531,33 @@ routes.get("/", async (c) => {
         })();
 
   const asked2: Reading<AskedTask[]> = path ? await reading("desk", () => ok(askedAbout(path), "desk", new Date().toISOString())) : none(noPage);
+  const indexNow: Reading<IndexHistory> = path ? indexFor(path) : none(noPage);
+
+  /* The settings and the phrases: each a reading of its own, so a failing part costs its panel only. */
+  const settings: Reading<PageSettings> = !path
+    ? none(noPage)
+    : !d
+      ? detail && detail.state !== "ok"
+        ? absent(detail)
+        : off("crawl", noPage)
+      : await reading("crawl", () =>
+          ok(
+            settingsFor(path, d, defaultShare, hand, indexNow),
+            "crawl",
+            detail!.state === "ok" ? detail!.asOf : new Date().toISOString(),
+            "Live: the desk's crawl of the page. Approved: what the desk has committed to the website's overrides file. Waiting: proposals in AI Operator › Approvals.",
+          ),
+        );
+  const phrases: Reading<PagePhrase[]> = !path
+    ? none(noPage)
+    : await reading("desk", () =>
+        ok(
+          phrasesOf(path, d, pairs),
+          "desk",
+          new Date().toISOString(),
+          "The keyword store's phrases mapped to this page (SEO › Keywords). A phrase is carried when every word of it, of three letters or more, is there.",
+        ),
+      );
 
   return c.json<SeoPageViewPayload>({
     head: head(range),
@@ -1284,7 +1577,7 @@ routes.get("/", async (c) => {
     tiles,
     performance: !path ? none(noPage) : series ? (series.state === "ok" ? ok({ days: series.value }, "gsc", series.asOf, series.note) : absent(series)) : absent(search),
     queries,
-    index: path ? indexFor(path) : none(noPage),
+    index: indexNow,
     crawl: crawlReading,
     readiness: !path
       ? none(noPage)
@@ -1297,6 +1590,8 @@ routes.get("/", async (c) => {
     clusters: clusterList,
     competitors,
     operator: operatorPanel(quick.map((q) => ({ label: q.label, task: q.task }))),
+    settings,
+    phrases,
   });
 });
 
@@ -1346,4 +1641,4 @@ routes.post("/propose", async (c) => {
 });
 
 /* Kept for the check script: the parts that are pure. */
-export const parts = { addressOf, pageRegex, bandOf, fromFinding, fromReadiness, statusOf, suggestionsFor, quickFor, whyOf, sameTask };
+export const parts = { addressOf, pageRegex, bandOf, fromFinding, fromReadiness, statusOf, suggestionsFor, quickFor, whyOf, sameTask, settingsFor, phrasesOf, sideValue };

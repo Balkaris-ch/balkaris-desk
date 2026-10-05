@@ -11,6 +11,10 @@
  *   ?type=studios       studios | platforms | all
  *   ?sort=position      seen (most sightings) | position (best Google position) | ai (most AI mentions) | name
  *   ?offset=15&limit=15 the list's page
+ *   ?look=<domain>      a looked-up site beside Balkaris (`lookup`)
+ *   ?serp=<phrase>&serpLang=de  a "who ranks" check shown (`serp`)
+ *   ?search=<query>     the list narrowed to one captured search, and its result page shown (`searches`)
+ *   ?shown=ignored      active (default) | ignored | all
  *   ?range=30d          the head's window: only the clusters' Search Console figures read it;
  *                       an observation is dated and shown with its day, whatever the window
  *
@@ -23,7 +27,7 @@
 import type { Reading, Stat } from "../common";
 import type { NewTask } from "../operator";
 import type { ProfileState } from "./backlinks";
-import type { PageRef, Priority, Rate, SeoHead } from "./common";
+import type { GoogleLane, PageRef, PaidDomainFacts, Priority, Rate, SeoHead, SerpCheck, SerpLocalRow, WebAllowance, WebLang } from "./common";
 
 export interface SeoCompetitorsPayload {
   head: SeoHead;
@@ -40,6 +44,13 @@ export interface SeoCompetitorsPayload {
     limit: number;
     types: { key: string; label: string; count: number }[];
     clusters: { key: string; name: string; count: number }[];
+    /* Added for the web build. */
+    /** Competitors, ignored ones, all: with counts. */
+    shown?: { key: string; label: string; count: number }[];
+    /** Nothing matched what was typed and it is an address: the site to look up. */
+    lookFor?: string | null;
+    /** Nothing matched and it reads as a search: the phrase to check who ranks for. */
+    checkFor?: string | null;
   }>;
   selected: Reading<CompetitorDetail> | null;
   /** What the competitors' pages and listings show that Balkaris's do not, measured the same way on both sides (added for the page). */
@@ -55,7 +66,16 @@ export interface SeoCompetitorsPayload {
    * run may find nothing due); `newestRead` is when the desk last read one of
    * their pages (added for the page).
    */
-  refresh: { lastRun: string | null; lastNote: string | null; nextRun: string | null; pages: number; fetched: number; registered?: boolean; running?: boolean; newestRead?: string | null };
+  refresh: { lastRun: string | null; lastNote: string | null; nextRun: string | null; pages: number; fetched: number; registered?: boolean; running?: boolean; newestRead?: string | null; due?: number; failed?: number };
+  /* Added for the page (the web build). */
+  /** Whether the person asking is the owner: hand records and the audit import are his. */
+  owner?: boolean;
+  /** A looked-up site beside Balkaris (?look=); null when none is asked. */
+  lookup?: Reading<LookupCard> | null;
+  /** "Who ranks for…": the Google lane, the check shown (?serp=), the recent checks. */
+  serp?: Reading<SerpPanel>;
+  /** Every captured search with its cluster, our place in it, and the result page of the one chosen (?search=). */
+  searches?: Reading<SearchPanel>;
 }
 
 /* ---------- added for the page (additive: nothing above was taken away) ------------------- */
@@ -81,6 +101,142 @@ export interface CompetitorsAsked {
   offset: number;
   limit: number;
   open: string | null;
+  /* Added for the web build. */
+  /** A domain looked up (?look=), as typed. */
+  look?: string | null;
+  /** A phrase whose result-page checks are shown, and its language. */
+  serp?: string | null;
+  serpLang?: WebLang | null;
+  /** The list narrowed to the sites seen for one captured search. */
+  search?: string | null;
+  /** active: ignored ones hidden (the default); ignored: only them; all. */
+  shown?: CompetitorShown;
+}
+
+export type CompetitorShown = "active" | "ignored" | "all";
+
+/** A person's word on a row (added for the web build). */
+export interface CompetitorDecision {
+  watch: boolean;
+  ignore: boolean;
+  /** Over the platform list; null = the list decides. */
+  kind: "platform" | "studio" | null;
+  /** Counted as this other key. */
+  mergedInto: string | null;
+  by: string;
+  at: string;
+}
+
+/** One cell of a looked-up fact: the words, who said it and when; or why it could not be had, and the step. */
+export interface LookupCell {
+  state: "ok" | "waiting" | "off";
+  text: string;
+  from: string;
+  at: string | null;
+  step: string | null;
+}
+
+export interface LookupRow {
+  key: string;
+  label: string;
+  them: LookupCell;
+  /** Balkaris's own, from a lookup of balkaris.ch or the desk's crawl; null when nothing of ours is kept. */
+  us: LookupCell | null;
+}
+
+/** A site looked up, beside Balkaris (?look=). */
+export interface LookupCard {
+  /** What was typed. */
+  asked: string;
+  domain: string;
+  /** Its home page as read. */
+  home: string;
+  asOf: string;
+  line: string;
+  /** Facts still being read in the background: reload to see them. */
+  pending: boolean;
+  rows: LookupRow[];
+  /** Its row in the list when it is one, with the person's word on it. */
+  known: { key: string; name: string | null; sightings: number; decision: CompetitorDecision | null } | null;
+  /** Its pages on the weekly read. */
+  pages: number;
+  allowance: WebAllowance;
+  /** DataForSEO: what it ranks for on google.ch, its visibility and links; off with the owner's step while there is no account. */
+  paid: PaidDomainFacts & { configured: boolean; step: string | null };
+  brief: { task: NewTask; label: string; step: string };
+}
+
+/** One organic result of a check, with where it leads on this page. */
+export interface SerpRowView {
+  position: number;
+  title: string;
+  url: string;
+  host: string;
+  /** The key it has in the list (a host without www.). */
+  key: string;
+  /** On the list (open it) or not (look it up). */
+  known: boolean;
+  ours: boolean;
+}
+
+/** Who came, went or moved between this capture and the one before it for the same phrase and engine. */
+export interface SerpChange {
+  since: string;
+  newcomers: string[];
+  gone: string[];
+  moved: { host: string; from: number; to: number }[];
+}
+
+export interface SerpView {
+  check: Omit<SerpCheck, "page">;
+  rows: SerpRowView[];
+  local: SerpLocalRow[];
+  related: string[];
+  questions: string[];
+  ads: number;
+  changes: SerpChange | null;
+}
+
+export interface SerpPanel {
+  lane: GoogleLane;
+  dataforseo: { configured: boolean; step: string | null };
+  /** The phrase shown, or null. */
+  phrase: string | null;
+  lang: WebLang | null;
+  google: SerpView | null;
+  duckduckgo: SerpView | null;
+  recent: { id: number; phrase: string; lang: WebLang; engine: SerpCheck["engine"]; state: SerpCheck["state"]; label: string; requestedAt: string; doneAt: string | null; ownPosition: number | null; requestedBy: string; line: string }[];
+  langs: WebLang[];
+}
+
+/** One captured search: its cluster, the newest page captured for it, and our place. */
+export interface CapturedSearch {
+  query: string;
+  lang: string | null;
+  cluster: { key: string; name: string } | null;
+  /** audit: the keyword table or the capture; words: the page's rule; hand: a person; null: unfiled. */
+  filed: "audit" | "words" | "hand" | null;
+  /** Days it was captured, newest first, and who captured the newest. */
+  days: string[];
+  by: string;
+  sites: number;
+  /** Balkaris's place: from a capture, else Search Console's average over the head's window (labelled), else nothing. */
+  ours: { position: number | null; how: "capture" | "search-console" | null; line: string };
+  /** The newest capture's results (filled for the chosen search only). */
+  organic?: { position: number; key: string; name: string; url: string | null; title: string | null; ours: boolean }[];
+  mapPack?: { position: number; name: string }[];
+  /** Who came, went or moved since the capture before (chosen search only). */
+  changes?: SerpChange | null;
+}
+
+export interface SearchPanel {
+  rows: CapturedSearch[];
+  /** Searches under no cluster. */
+  unfiled: number;
+  /** Our clusters, to file a search under by hand. */
+  clusters: { key: string; name: string; lang: string }[];
+  /** The chosen search (?search=), with its result page. */
+  chosen: CapturedSearch | null;
 }
 
 /** Counts, each from the desk's own record of what was observed; no earlier period exists to compare with. */
@@ -194,7 +350,7 @@ export interface OurPage {
 export interface ClusterCompare {
   cluster: { key: string; name: string; lang: string; priority: Priority; rank: number | null };
   /** The searches captured for it, and how each was filed: by the audit's keyword table, or by the page's words rule. */
-  queries: { query: string; filed: "audit" | "words"; engines: string[] }[];
+  queries: { query: string; filed: "audit" | "words" | "hand"; engines: string[] }[];
   /** Who ranks: the best organic position per site across its searches, best first, at most six. Balkaris is never among them: see `ourSeen`. */
   organic: RivalPage[];
   /**
@@ -234,7 +390,7 @@ export interface Sighting {
   by: string;
   cluster: { key: string; name: string } | null;
   /** How the cluster was filed: the audit's keyword table, or the page's words rule (`rules.filing`); null with no cluster. Added for the page. */
-  filed?: "audit" | "words" | null;
+  filed?: "audit" | "words" | "hand" | null;
 }
 
 export interface CompetitorRow {
@@ -265,6 +421,8 @@ export interface CompetitorRow {
   has: CompetitorHas | null;
   /** The clusters it was seen for. */
   clusters: { key: string; name: string }[];
+  /** A person's word on it (added for the web build); null when nobody said anything. */
+  decision?: CompetitorDecision | null;
 }
 
 export interface CompetitorPage {
@@ -272,9 +430,10 @@ export interface CompetitorPage {
   /**
    * "ranking": the address the observation captured for the query. "home":
    * the observation named only the domain, so its home page was read instead;
-   * it is not necessarily the page that ranks.
+   * it is not necessarily the page that ranks. "topic": the page of its
+   * sitemap whose address fits one of our clusters (added for the web build).
    */
-  address: "ranking" | "home";
+  address: "ranking" | "home" | "topic";
   /** The cluster or query it was captured for. */
   cluster: { key: string; name: string } | null;
   query: string | null;
@@ -306,4 +465,11 @@ export interface CompetitorDetail {
   against: { cluster: { key: string; name: string } | null; page: PageRef | null; line: string };
   /** What it shows beside what Balkaris shows, line by line. */
   beside: BesideRow[];
+  /* Added for the web build. */
+  /** Its pages read, by our clusters: what it targets in our terms (a page's cluster, else its title filed by the rule). */
+  topics?: { cluster: { key: string; name: string }; pages: { url: string; title: string | null }[] }[];
+  /** Other rows that could be the same company, to merge by hand. */
+  mergeWith?: { key: string; name: string }[];
+  /** Rows a person merged into this one, each to undo. */
+  merged?: { key: string; name: string; by: string }[];
 }

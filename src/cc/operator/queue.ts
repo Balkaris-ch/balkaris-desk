@@ -1,7 +1,7 @@
 import { HTTPException } from "hono/http-exception";
 import { db, lastBeat } from "../../db.ts";
 import type { Person } from "../../people.ts";
-import type { ContextChoice, Depth, Given, NewTask, Opportunity, Brief, ResultCard, RunnerState, TaskKind, TaskResult, TaskRow, TaskState } from "../../../web/src/contract/operator.ts";
+import type { ContextChoice, Depth, Given, KeywordJudgement, NewTask, Opportunity, Brief, ResultCard, RunnerState, SerpBrief, SuggestedTodo, TaskKind, TaskResult, TaskRow, TaskState } from "../../../web/src/contract/operator.ts";
 import { gaRange, type GaRange } from "../ga4.ts";
 import { runNow, status as jobStatus } from "../scheduler.ts";
 import { crawledAt, inventory } from "../site/index.ts";
@@ -17,6 +17,7 @@ import {
   META_MOST,
   metaBlock,
   metaTargets,
+  pageBlock,
   pagesBlock,
   redirectBlock,
   redirectTargets,
@@ -24,6 +25,7 @@ import {
   trafficBlock,
   type Pack,
 } from "./packs.ts";
+import { altPack, keywordsPack, KEYWORDS_MOST, linksPack, ogPack, schemaPack, serpPack } from "./sitepacks.ts";
 import { isKind, json, KIND_LABEL, now, taskById, toTaskRow, type TaskDb, type TaskOptions } from "./tables.ts";
 
 /**
@@ -118,7 +120,28 @@ async function packFor(kind: TaskKind, o: TaskOptions, range: GaRange, depth: De
       pack.blocks = [issuesBlock(Math.floor(room * 0.45)), await searchBlock(range, Math.floor(room * 0.25)), await trafficBlock(range, Math.floor(room * 0.3))];
       break;
     case "brief":
-      pack.blocks = [pagesBlock(Math.floor(room * 0.55)), await insightsBlock(range, Math.floor(room * 0.45))];
+      /* A brief about one page (Expand content, a page's own brief) is given the page in depth, as a question about it is. */
+      pack.blocks = o.path
+        ? [await pageBlock(o.path, range, Math.floor(room * 0.45)), pagesBlock(Math.floor(room * 0.3)), await insightsBlock(range, Math.floor(room * 0.25))]
+        : [pagesBlock(Math.floor(room * 0.55)), await insightsBlock(range, Math.floor(room * 0.45))];
+      break;
+    case "og":
+      Object.assign(pack, await ogPack(o.path!));
+      break;
+    case "schema":
+      Object.assign(pack, await schemaPack(o.path!, o.schemaType));
+      break;
+    case "links":
+      Object.assign(pack, await linksPack(o.path!));
+      break;
+    case "alt":
+      Object.assign(pack, await altPack(o.path!));
+      break;
+    case "keywords":
+      Object.assign(pack, keywordsPack(o.ids));
+      break;
+    case "serp":
+      Object.assign(pack, await serpPack(o.serpId, o.path));
       break;
     case "audit":
       pack.blocks = [issuesBlock(room)];
@@ -168,6 +191,18 @@ function titleFor(kind: TaskKind, input: NewTask, o: TaskOptions, range: GaRange
       return "Propose redirects for addresses that no longer answer";
     case "audit":
       return "Run a full SEO audit";
+    case "og":
+      return `Write a share card for ${o.path}`;
+    case "schema":
+      return `Draft ${o.schemaType ?? "structured data"} for ${o.path}`;
+    case "links":
+      return `Find pages that should link to ${o.path}`;
+    case "alt":
+      return `Write alt texts for the pictures on ${o.path}`;
+    case "keywords":
+      return o.ids?.length ? `Sort ${o.ids.length} search ${o.ids.length === 1 ? "phrase" : "phrases"}` : "Sort the searches that wait for a judgement";
+    case "serp":
+      return said ? said.slice(0, 300) : `Compare our page with the first results${o.serpId ? ` (result page #${o.serpId})` : ""}`;
     default:
       return KIND_LABEL[kind];
   }
@@ -191,7 +226,21 @@ export async function createTask(input: NewTask, by: Person): Promise<TaskRow> {
   const paths = (input.paths ?? []).map((p) => String(p).trim()).filter(Boolean).slice(0, META_MOST);
   const path = input.path ? String(input.path).trim() : undefined;
   if (path && !known.has(path)) fail(400, `The crawl knows no page at ${path}.`);
-  const o: TaskOptions = { depth, range, ...(kind === "ask" ? { context } : {}), ...(paths.length ? { paths } : {}), ...(path ? { path } : {}) };
+  if (!path && (kind === "og" || kind === "schema" || kind === "links" || kind === "alt")) fail(400, "Say which page: this task works on one page.");
+  const ids = [...new Set((input.ids ?? []).map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+  if (ids.length > KEYWORDS_MOST) fail(400, `At most ${KEYWORDS_MOST} phrases at once: the workstation's model judges that many well.`);
+  const serpId = Number.isInteger(input.serpId) && (input.serpId ?? 0) > 0 ? input.serpId : undefined;
+  const schemaType = input.schemaType === "Service" || input.schemaType === "FAQPage" ? input.schemaType : undefined;
+  const o: TaskOptions = {
+    depth,
+    range,
+    ...(kind === "ask" ? { context } : {}),
+    ...(paths.length ? { paths } : {}),
+    ...(path ? { path } : {}),
+    ...(kind === "keywords" && ids.length ? { ids } : {}),
+    ...(kind === "serp" && serpId ? { serpId } : {}),
+    ...(kind === "schema" && schemaType ? { schemaType } : {}),
+  };
 
   let pack: Pack | null = null;
   let stage: string | null = null;
@@ -358,6 +407,11 @@ export interface Returned {
 interface ResultData {
   opportunities?: Opportunity[];
   brief?: Brief;
+  keywords?: KeywordJudgement[];
+  serp?: SerpBrief;
+  todos?: SuggestedTodo[];
+  /** When its to-dos were put on the to-do list, and by whom. */
+  todosAdded?: { at: string; by: string };
   proposals: number[];
   flags: string[];
   sub: string;
@@ -383,7 +437,7 @@ function finish(id: number, state: "done" | "failed" | "cancelled", o: { text?: 
 const short = (s: string, n: number): string => (s.length > n ? `${s.slice(0, n - 1).trimEnd()}…` : s);
 
 /** One line, as the activity feed and the result cards say what a task produced. */
-function said(t: TaskDb, kept: { text: string; opportunities?: Opportunity[]; brief?: Brief }, proposals: number, pack: Pack): { text: string; detail: string; sub: string } {
+function said(t: TaskDb, kept: { text: string; opportunities?: Opportunity[]; brief?: Brief; keywords?: KeywordJudgement[]; serp?: SerpBrief; todos?: SuggestedTodo[] }, proposals: number, pack: Pack): { text: string; detail: string; sub: string } {
   const from = pack.blocks.filter((b) => b.state === "ok").map((b) => b.label);
   const fromLine = from.length ? `From ${from.join(", ")}` : "No data was attached";
   switch (t.kind) {
@@ -401,6 +455,20 @@ function said(t: TaskDb, kept: { text: string; opportunities?: Opportunity[]; br
       return { text: `Wrote a brief: ${short(kept.brief?.title ?? t.prompt, 60)}`, detail: short(t.prompt, 80), sub: short(kept.brief?.title ?? t.prompt, 48) };
     case "audit":
       return { text: "Summarised the SEO audit", detail: fromLine, sub: `The crawl of ${pack.blocks[0]?.asOf?.slice(0, 10) ?? "today"}` };
+    case "og":
+    case "schema":
+      return { text: `Proposed ${t.kind === "og" ? "a share card" : "structured data"} for ${pack.page?.path ?? "a page"}`, detail: "From the page's own text", sub: `${proposals} ${proposals === 1 ? "proposal" : "proposals"} for approval` };
+    case "links":
+    case "alt": {
+      const n = kept.todos?.length ?? 0;
+      return { text: `${t.kind === "links" ? "Suggested links to" : "Wrote alt texts for"} ${pack.page?.path ?? "a page"}`, detail: `${n} to-do${n === 1 ? "" : "s"} for the website's code`, sub: `${n} to-do${n === 1 ? "" : "s"}` };
+    }
+    case "keywords": {
+      const n = kept.keywords?.length ?? 0;
+      return { text: `Judged ${n} search ${n === 1 ? "phrase" : "phrases"}`, detail: "Waiting to be applied on Keywords", sub: `${n} judgements` };
+    }
+    case "serp":
+      return { text: `Compared the first results for “${short(kept.serp?.phrase ?? "", 40)}”`, detail: fromLine, sub: short(kept.serp?.phrase ?? t.prompt, 48) };
     default:
       return { text: `Answered: ${short(t.prompt, 60)}`, detail: fromLine, sub: short(t.prompt, 48) };
   }
@@ -458,7 +526,12 @@ export async function takeResult(id: number, body: Returned): Promise<{ ok: true
   }
   flags.push(...(pack.skipped ?? []));
   const line = said(task, kept, ids.length, pack);
-  finish(id, "done", { text: kept.text, data: { opportunities: kept.opportunities, brief: kept.brief, proposals: ids, flags, sub: line.sub }, model: body.model ?? null, ms: body.ms ?? null });
+  finish(id, "done", {
+    text: kept.text,
+    data: { opportunities: kept.opportunities, brief: kept.brief, keywords: kept.keywords, serp: kept.serp, todos: kept.todos, proposals: ids, flags, sub: line.sub },
+    model: body.model ?? null,
+    ms: body.ms ?? null,
+  });
   note("operator", line.text, { tone: "good", detail: line.detail, href: `/operator?result=${id}#response`, actor: "operator", dedupe: `op:task:${id}:done` });
   if (ids.length) {
     note("operator-proposal", `${ids.length} ${ids.length === 1 ? "change waits" : "changes wait"} for approval`, {
@@ -574,12 +647,36 @@ export function result(id: number): TaskResult | null {
     text: t.result_text ?? "",
     ...(data?.opportunities ? { opportunities: data.opportunities } : {}),
     ...(data?.brief ? { brief: data.brief } : {}),
+    ...(data?.keywords ? { keywords: data.keywords } : {}),
+    ...(data?.serp ? { serp: data.serp } : {}),
+    ...(data?.todos ? { todos: data.todos, todosAdded: !!data.todosAdded } : {}),
     proposals: (data?.proposals ?? []).map(proposalRow).filter((p) => p !== null),
     given: given(json<Pack | null>(t.pack, null)),
     flags: data?.flags ?? [],
     model: t.model,
     ms: t.ms,
   };
+}
+
+/**
+ * Put a finished task's suggested to-dos (links, alt texts) on the to-do
+ * list, once: the desk cannot edit a page's body, so these are the website
+ * code's work, and the list is where the studio keeps it.
+ */
+export function addTodos(id: number, by: Person): { added: number; line: string } {
+  const t = taskById(id) ?? fail(404, `There is no task #${id}.`);
+  const data = json<ResultData | null>(t.result_data, null);
+  if (t.state !== "done" || !data?.todos?.length) return fail(409, "That task suggested nothing for the to-do list.");
+  if (data.todosAdded) return fail(409, `Its to-dos were put on the list already, by ${data.todosAdded.by}.`);
+  const have = new Set((db.prepare("SELECT title FROM cc_todos WHERE done = 0").all() as { title: string }[]).map((r) => r.title));
+  let added = 0;
+  for (const todo of data.todos) {
+    if (have.has(todo.title)) continue;
+    db.prepare("INSERT INTO cc_todos (title, note, who, created_at) VALUES (?, ?, ?, ?)").run(todo.title.slice(0, 400), todo.note.slice(0, 2000), by.name, now());
+    added++;
+  }
+  db.prepare("UPDATE cc_ai_tasks SET result_data = ? WHERE id = ?").run(JSON.stringify({ ...data, todosAdded: { at: now(), by: by.name } }), id);
+  return { added, line: added ? `Put ${added} ${added === 1 ? "to-do" : "to-dos"} on the list, under Current tasks.` : "They are on the list already." };
 }
 
 /** The newest finished answer. */

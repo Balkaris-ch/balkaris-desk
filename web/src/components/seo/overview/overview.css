@@ -1575,3 +1575,385 @@
     display: none;
   }
 }
+
+/* ---------- the bar over the tiles: look a keyword up, narrow the search figures ---------- */
+
+.dk-seo-overview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x10) var(--x16);
+  min-width: 0;
+}
+
+.dk-seo-overview-find {
+  display: flex;
+  flex: 1 1 calc(var(--x56) * 5);
+  align-items: center;
+  gap: var(--x8);
+  max-width: calc(var(--x56) * 8);
+  min-width: 0;
+  min-height: var(--ctl-sm);
+  padding: 0 var(--x4) 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  transition:
+    border-color var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+
+.dk-seo-overview-find:hover {
+  border-color: var(--pop-edge);
+}
+
+.dk-seo-overview-find:focus-within {
+  border-color: var(--green-2);
+  box-shadow: 0 0 0 var(--x3) var(--green-glow);
+}
+
+.dk-seo-overview-find-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-find-input {
+  flex: 1;
+  min-width: 0;
+  padding: var(--x6) 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-find-input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-overview-find-input:focus-visible {
+  outline: none;
+}
+
+.dk-seo-overview-find-go {
+  flex: none;
+  padding: var(--x4) var(--x10);
+  border-radius: var(--r-ctl);
+  color: var(--green);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+}
+
+.dk-seo-overview-find-go:hover {
+  background: var(--hover);
+}
+
+.dk-seo-overview-find-go:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-seo-overview-where {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-overview-where-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-where-space {
+  display: inline-block;
+  width: calc(var(--x56) * 5);
+  height: var(--ctl-sm);
+}
+
+.dk-seo-overview-where-on {
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+/* ---------- a tile's way to its page ---------- */
+
+.dk-seo-overview-tilego {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x24);
+  height: var(--x24);
+  border-radius: var(--r-ctl);
+  color: var(--ink-4);
+  transition:
+    color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
+
+.dk-seo-overview-tilego:hover {
+  background: var(--hover);
+  color: var(--green);
+}
+
+.dk-seo-overview-tilego:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+/* ---------- Priority Opportunities: the rows sent beyond five ---------- */
+
+.dk-seo-overview-prio-more {
+  align-self: flex-start;
+  margin: var(--x4) var(--pad) 0;
+}
+
+/* ---------- Top Performing Pages: when the page history holds part of the clicks ---------- */
+
+.dk-seo-overview-short {
+  padding: var(--x8) var(--pad);
+  border-bottom: var(--x1) solid var(--line);
+  color: var(--amber);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- Technical SEO: what the crawl found under each family, the clean ones folded ---------- */
+
+.dk-seo-overview-check-words {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+  padding: var(--x4) 0;
+}
+
+.dk-seo-overview-check-found {
+  overflow: hidden;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-clean {
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-overview-clean-sum {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-height: calc(var(--table-row) - var(--x2));
+  padding: var(--x2) var(--pad);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  list-style: none;
+  cursor: pointer;
+}
+
+.dk-seo-overview-clean-sum::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-overview-clean-sum:hover {
+  color: var(--ink-2);
+}
+
+.dk-seo-overview-clean-sum:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: calc(var(--x2) * -1);
+}
+
+/* ---------- keyword and topic names that open their page ---------- */
+
+.dk-seo-overview-topic-link {
+  color: inherit;
+}
+
+.dk-seo-overview-topic-link:hover {
+  color: var(--green);
+  text-decoration: underline;
+  text-decoration-color: var(--green-4);
+  text-underline-offset: var(--x2);
+}
+
+/* ---------- the operator's box: characters left, or why it is shut ---------- */
+
+.dk-seo-overview-op-left {
+  margin-top: var(--x4);
+  font-size: var(--t-label);
+}
+
+/* ---------- the Automations strip: Run now, and Retry after a failed run ---------- */
+
+.dk-seo-overview-auto--failed {
+  border-color: var(--amber-edge);
+}
+
+.dk-seo-overview-runnow {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.dk-seo-overview-runnow--failed {
+  color: var(--amber);
+}
+
+.dk-seo-overview-runnow-said {
+  max-width: calc(var(--x56) * 3);
+  margin-top: var(--x4);
+  font-size: var(--t-label);
+  text-align: right;
+}
+
+/* ---------- What moved ---------- */
+
+.dk-seo-overview-movements {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-seo-overview-spread {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x8);
+}
+
+.dk-seo-overview-spread-band {
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-seo-overview-spread-band dt {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-overview-spread-band dd {
+  margin-top: var(--x2);
+  color: var(--ink);
+  font-size: var(--t-title);
+  font-weight: var(--w-semi);
+  line-height: var(--lh-figure);
+}
+
+.dk-seo-overview-spread-was {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-overview-moved-why {
+  margin-top: var(--x12);
+}
+
+.dk-seo-overview-moved-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--x4) var(--x16);
+  min-width: 0;
+}
+
+.dk-seo-overview-moved-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dk-seo-overview-moved {
+  min-width: 0;
+}
+
+.dk-seo-overview-moved-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-seo-overview-moved-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--x8);
+  min-height: var(--x24);
+  font-size: var(--t-small);
+}
+
+.dk-seo-overview-moved-q {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-seo-overview-moved-q:hover {
+  color: var(--green);
+}
+
+.dk-seo-overview-moved-n {
+  flex: none;
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--x6);
+  color: var(--ink-3);
+}
+
+.dk-seo-overview-moved-pos {
+  flex: none;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-overview-moved-stamp {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--x12);
+}
+
+/* ---------- From search ---------- */
+
+.dk-seo-overview-organic {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-overview-figs--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dk-seo-overview-organic b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+@container (max-width: 520px) {
+  .dk-seo-overview-spread,
+  .dk-seo-overview-moved-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dk-seo-overview-find {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+
+@container (max-width: 360px) {
+  .dk-seo-overview-moved-grid,
+  .dk-seo-overview-moved-grid--two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

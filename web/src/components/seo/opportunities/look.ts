@@ -107,18 +107,27 @@ export function actionEffect(a: Pick<OpportunityRow["action"], "kind" | "href">)
 /** A step from the audit that a person marks done with its task (POST …/owner-task), not with the action route. */
 export const ownerStep = (a: OpportunityRow["action"]): string | null => (a.ownerTaskId && (a.kind === "owner" || (a.kind === "chrome" && !a.href)) ? a.ownerTaskId : null);
 
+/** A query as the page quotes it: the searcher's own quotation marks left out ("“content marketing”", not "“"content marketing"”"). */
+export const quoted = (q: string): string => `“${q.replace(/^["'“”]+|["'“”]+$/g, "").trim() || q}”`;
+
+/** Every state, as the state select's "Every state" asks for them. */
+export const EVERY_STATE = "open,queued,in-progress,done,dismissed";
+
 /** The page's search params as the server applied them, as a flat record for links. */
 export function paramsOf(asked: OpportunityQuery, extra: Record<string, string | undefined> = {}): Record<string, string> {
   const out: Record<string, string> = {};
   if (asked.range !== "30d") out.range = asked.range;
+  if (asked.country !== "all") out.country = asked.country;
   if (asked.types.length) out.type = asked.types.join(",");
   if (asked.priority) out.priority = asked.priority;
   const defaultStates = ["open", "queued", "in-progress"];
   if (asked.states.join(",") !== defaultStates.join(",")) out.state = asked.states.join(",");
-  if (asked.active !== "1") out.active = asked.active;
+  /* Left out when it is what the states imply (still found for to-do, found or not once done or dismissed is asked). */
+  if (asked.active !== asked.activeDefault) out.active = asked.active;
   if (asked.action) out.action = asked.action;
   if (asked.page) out.page = asked.page;
   if (asked.cluster) out.cluster = asked.cluster;
+  if (asked.keyword) out.keyword = asked.keyword;
   if (asked.q) out.q = asked.q;
   if (asked.sort !== "priority") out.sort = asked.sort;
   if (asked.offset) out.offset = String(asked.offset);
@@ -134,7 +143,7 @@ export function paramsOf(asked: OpportunityQuery, extra: Record<string, string |
  */
 export function hrefWith(base: Record<string, string>, change: Record<string, string | undefined | null>): string {
   const next = new URLSearchParams(base);
-  const filters = ["type", "priority", "state", "active", "action", "page", "cluster", "q", "sort", "limit"];
+  const filters = ["type", "priority", "state", "active", "action", "page", "cluster", "keyword", "q", "sort", "limit"];
   if (Object.keys(change).some((k) => filters.includes(k))) {
     next.delete("offset");
     next.delete("open");
@@ -146,6 +155,26 @@ export function hrefWith(base: Record<string, string>, change: Record<string, st
   }
   const q = next.toString();
   return q ? `${BASE}?${q}` : BASE;
+}
+
+/**
+ * The list as the page shows it, every matching row, as CSV (GET …/export.csv
+ * with the same filters and order; the paging and the one in detail left out).
+ */
+export function exportHref(asked: OpportunityQuery): string {
+  const p = new URLSearchParams(paramsOf(asked));
+  p.delete("offset");
+  p.delete("limit");
+  const s = p.toString();
+  return `/api/v1/seo/opportunities/export.csv${s ? `?${s}` : ""}`;
+}
+
+/** Only the period and the country: where a tile's count is the list's (to do, still found, no other filter). */
+export function viewOf(asked: OpportunityQuery): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (asked.range !== "30d") out.range = asked.range;
+  if (asked.country !== "all") out.country = asked.country;
+  return out;
 }
 
 /** The kinds the engine estimates a gain for (src/cc/seo/engine.ts): a search Google shows, or a topic gap with impressions. */

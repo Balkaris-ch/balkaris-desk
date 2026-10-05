@@ -1,3 +1,4 @@
+import type { SerpLocalRow, SerpOrganicRow, SerpPage } from "../../../../web/src/contract/seo/common.ts";
 import { decode } from "../html.ts";
 
 /**
@@ -24,41 +25,29 @@ import { decode } from "../html.ts";
  * engine (html.ts explains), and these pages are small.
  */
 
-export interface SerpOrganic {
-  /** 1 for the first organic result on the page. Ads and the map pack are not counted. */
-  position: number;
-  title: string;
-  url: string;
-  /** The result's host, lower case, as written (with its "www." when it has one). */
-  host: string;
-  snippet: string;
-}
-
-export interface SerpLocal {
-  name: string;
-  rating: number | null;
-  reviews: number | null;
-  category: string | null;
-  address: string | null;
-}
-
-export interface SerpResult {
-  organic: SerpOrganic[];
-  /** The map pack, in its order. Google places it by where the asker is: the studio's line, or the location given to DataForSEO. */
-  localPack: SerpLocal[];
-  /** How many ads the page carried. */
-  ads: number;
-  /** Who advertised, by host, when the page says. */
-  adHosts: string[];
-  /** "People also search for", as the engine lists it. */
-  related: string[];
-  /** "People also ask". Only a paid result API returns these; the basic page never does. */
-  questions: string[];
-}
+/**
+ * The shapes are the contract's (web/src/contract/seo/common.ts): an organic
+ * row (position 1 is the first organic result, ads and the map pack not
+ * counted; the host lower case as written, "www." kept), a map-pack row, and
+ * the page (organic, map pack, ads and who advertised, "also searched for",
+ * and "people also ask", which only a paid result API returns).
+ */
+export type SerpOrganic = SerpOrganicRow;
+export type SerpLocal = SerpLocalRow;
+export type SerpResult = SerpPage;
 
 export const emptyResult = (): SerpResult => ({ organic: [], localPack: [], ads: 0, adHosts: [], related: [], questions: [] });
 
-const text = (html: string): string => decode(html.replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+/* A slice that ends inside a tag (a block's start is found by one of its attributes) leaves "<div data-x=…" with no ">": cut that too. */
+const text = (html: string): string =>
+  decode(
+    html
+      .replace(/<br\s*\/?>/gi, " ")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/<[^>]*$/, " "),
+  )
+    .replace(/\s+/g, " ")
+    .trim();
 const unamp = (s: string): string => s.replace(/&amp;/g, "&");
 const bodyOf = (html: string): string => html.replace(/<script\b[\s\S]*?<\/script>/gi, " ").replace(/<style\b[\s\S]*?<\/style>/gi, " ");
 

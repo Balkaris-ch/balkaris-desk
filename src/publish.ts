@@ -485,13 +485,20 @@ ${count} generated article${count === 1 ? "" : "s"} in content/posts after this.
  * content/posts/ is refused here, whatever the caller asks.
  */
 const DESK_DIR = "content/desk";
+/**
+ * Share pictures the desk commits beside an approved override (the website's
+ * overrides v2, public/desk/og/...). Only pictures, only the three formats the
+ * site reads, and never more than the 5 MiB the site accepts.
+ */
+const PICTURE_DIR = "public/desk";
+const PICTURE_MOST = 5_242_880;
 
 const deskFile = (rel: string): string => {
   const clean = path.posix.normalize(rel.replace(/\\/g, "/"));
-  if (!clean.startsWith(`${DESK_DIR}/`) || clean.includes("..") || !/^[a-z0-9/_.-]+$/i.test(clean)) {
-    throw new Error(`the desk may only write under ${DESK_DIR}/, not ${rel}`);
-  }
-  return clean;
+  if (clean.includes("..") || !/^[a-z0-9/_.-]+$/i.test(clean)) throw new Error(`the desk may only write under ${DESK_DIR}/ and ${PICTURE_DIR}/, not ${rel}`);
+  if (clean.startsWith(`${DESK_DIR}/`)) return clean;
+  if (clean.startsWith(`${PICTURE_DIR}/`) && /^[a-z0-9/_.-]+\.(?:png|jpe?g|webp)$/.test(clean)) return clean;
+  throw new Error(`the desk may only write under ${DESK_DIR}/, and pictures (.png, .jpg, .jpeg, .webp, lower case) under ${PICTURE_DIR}/, not ${rel}`);
 };
 
 /** A file under content/desk/ as it is on the branch right now, or null. */
@@ -513,7 +520,8 @@ export async function readSiteFile(rel: string): Promise<string | null> {
  * false when the files already said this, and then nothing was committed.
  */
 export async function commitSiteFiles(
-  files: { path: string; content: string }[],
+  /* A string is text; bytes are a picture; null removes the file (a withdrawn share picture). */
+  files: { path: string; content: string | Uint8Array | null }[],
   subject: string,
   body: string,
   by: Person,
@@ -524,17 +532,32 @@ export async function commitSiteFiles(
     );
   }
   const paths = files.map((f) => deskFile(f.path));
+  files.forEach((f, i) => {
+    if (paths[i]!.startsWith(`${PICTURE_DIR}/`) && f.content !== null && (typeof f.content === "string" || f.content.byteLength < 1 || f.content.byteLength > PICTURE_MOST)) {
+      throw new Error(`${paths[i]} must be a picture of 1 byte to 5 MiB`);
+    }
+  });
   return serialise(async () => {
     await ensureRepo();
+    /* Only the paths named here are staged: a picture left behind by a failed attempt is never swept into a commit. */
+    const touched: string[] = [];
     for (let i = 0; i < files.length; i++) {
       const f = path.join(REPO, paths[i]!);
+      const content = files[i]!.content;
+      if (content === null) {
+        const tracked = !!(await git(["ls-files", "--", paths[i]!], by));
+        if (existsSync(f)) await rm(f);
+        if (tracked) touched.push(paths[i]!);
+        continue;
+      }
       await mkdir(path.dirname(f), { recursive: true });
-      await writeFile(f, files[i]!.content, "utf8");
+      await writeFile(f, content, typeof content === "string" ? "utf8" : undefined);
+      touched.push(paths[i]!);
     }
-    const dirty = await git(["status", "--porcelain", "--", DESK_DIR], by);
+    const dirty = touched.length ? await git(["status", "--porcelain", "--", ...touched], by) : "";
     if (!dirty) return { sha: await git(["rev-parse", "--short", "HEAD"], by), changed: false };
 
-    await git(["add", "--", DESK_DIR], by);
+    await git(["add", "-A", "--", ...touched], by);
     await git(["commit", "-m", subject, "-m", body], by);
     const sha = await git(["rev-parse", "--short", "HEAD"], by);
     await git(["push", "origin", `HEAD:${BRANCH}`], by);

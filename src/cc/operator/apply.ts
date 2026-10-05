@@ -10,10 +10,12 @@ import { commitSiteFiles, readSiteFile } from "../../publish.ts";
 import { abs, get, pathOf } from "../site/http.ts";
 import { commitUrl, inventory, lastSitemap } from "../site/index.ts";
 import { note } from "../store.ts";
+import { applyTo, beforeOf, holds, isSiteKind, liveRefusal as liveChangeRefusal, readBack as readBackOf, refusal as changeRefusal, undo, verbOf } from "./changes.ts";
 import type { NewProposal } from "./kinds.ts";
 import { BRAND, ownTitle, PLAIN, shownTitle } from "./packs.ts";
-import { now, proposalById, stuck, toProposalRow, type ProposalDb } from "./tables.ts";
-import type { ProposalRow } from "../../../web/src/contract/operator.ts";
+import { entryProblems, serialise, type OverridesFile } from "./rules.ts";
+import { changesOf, now, proposalById, stuck, toProposalRow, uploadedPicture, type ProposalDb } from "./tables.ts";
+import type { NewProposalBody, ProposalKind, ProposalRow } from "../../../web/src/contract/operator.ts";
 
 /**
  * A proposal becomes a line in the website, and a commit, when a person who
@@ -135,19 +137,50 @@ export function metaRefusal(address: string, after: { title?: string; descriptio
 /* ---------- making one ---------------------------------------------------------- */
 
 /**
- * Keep a proposal. One from the operator replaces an older one still waiting
- * for the same address (it is the newer reading of the same page); a person's
- * must pass the rules first. A redirect is also asked of the live site.
- * Returns the new row, or the reason it was not made.
+ * Proposals of one kind for one address that take each other's place: one
+ * title-and-description, one share card, one in-or-out-of-search, one
+ * canonical, and one structured-data block per type.
+ */
+const slotOf = (kind: ProposalKind, after: ProposalRow["after"]): string =>
+  kind === "schema"
+    ? `schema:${String(after.jsonLd?.["@type"] ?? "")}`
+    : /* A share picture and a share title proposed apart are two changes; the same fields again are the newer one. */
+      kind === "og"
+      ? `og:${Object.keys(after).sort().join(",")}`
+      : kind;
+
+/** The rules a proposal must pass, by kind, against the desk's own records. */
+const rulesFor = (kind: ProposalKind, address: string, after: ProposalRow["after"], except: number[]): string | null =>
+  kind === "redirect" ? redirectRefusal(address, after.to ?? "", except) : kind === "meta" ? metaRefusal(address, after) : isSiteKind(kind) ? changeRefusal(kind, address, after, except) : "That is not a change the desk can make.";
+
+/**
+ * Keep a proposal. A newer one replaces an older one still waiting for the
+ * same address and the same thing (it is the newer reading of the same page,
+ * or a person's newer intent); a person's that repeats one already waiting is
+ * refused, so a second press never makes a twin. Every kind passes its rules
+ * first; a redirect, a share picture and a structured-data block are also
+ * asked of the live site. Returns the new row, or the reason it was not made.
  */
 export async function propose(p: NewProposal, from: { source: "operator"; taskId: number } | { source: "person"; by: Person }): Promise<{ id: number } | { refused: string }> {
   const address = key(p.address);
-  const olderOf = () =>
-    from.source === "operator" ? (db.prepare("SELECT id FROM cc_proposals WHERE kind = ? AND address = ? AND state = 'waiting'").all(p.kind, address) as { id: number }[]).map((r) => r.id) : [];
-  const why = p.kind === "redirect" ? redirectRefusal(address, p.after.to ?? "", olderOf()) : metaRefusal(address, p.after);
+  const slot = slotOf(p.kind, p.after);
+  const waiting = () =>
+    (db.prepare("SELECT id, after_json FROM cc_proposals WHERE kind = ? AND address = ? AND state = 'waiting'").all(p.kind, address) as { id: number; after_json: string }[]).filter(
+      (r) => slotOf(p.kind, JSON.parse(r.after_json) as ProposalRow["after"]) === slot,
+    );
+  if (from.source === "person") {
+    const twin = waiting().find((r) => r.after_json === JSON.stringify(p.after));
+    if (twin) return { refused: `The same change already waits for approval (#${twin.id}).` };
+  }
+  /* A person's redirect never replaces another's: two people proposing different targets is a question for a person. */
+  const olderOf = () => (p.kind === "redirect" && from.source === "person" ? [] : waiting().map((r) => r.id));
+  const why = rulesFor(p.kind, address, p.after, olderOf());
   if (why) return { refused: why };
   if (p.kind === "redirect") {
     const live = await liveRefusal(address, p.after.to ?? "");
+    if (live) return { refused: live };
+  } else if (isSiteKind(p.kind)) {
+    const live = await liveChangeRefusal(p.kind, address, p.after, "propose");
     if (live) return { refused: live };
   }
   /* Asked again after the wait: another proposal may have been made meanwhile. */
@@ -155,7 +188,12 @@ export async function propose(p: NewProposal, from: { source: "operator"; taskId
   const again = p.kind === "redirect" ? redirectRefusal(address, p.after.to ?? "", older) : null;
   if (again) return { refused: again };
   for (const o of older) {
-    db.prepare("UPDATE cc_proposals SET state = 'rejected', decided_by = 'the operator', decided_at = ?, note = ? WHERE id = ?").run(now(), "Replaced by a newer proposal for the same address.", o);
+    db.prepare("UPDATE cc_proposals SET state = 'rejected', decided_by = ?, decided_at = ?, note = ? WHERE id = ?").run(
+      from.source === "operator" ? "the operator" : from.by.name,
+      now(),
+      "Replaced by a newer proposal for the same address.",
+      o,
+    );
   }
   const r = db
     .prepare(
@@ -167,11 +205,10 @@ export async function propose(p: NewProposal, from: { source: "operator"; taskId
 
 /* ---------- the site's file ------------------------------------------------------------ */
 
-interface Overrides {
-  meta: Record<string, Record<string, unknown>>;
-  redirects: { from: string; to: string }[];
-  [other: string]: unknown;
-}
+type Overrides = OverridesFile;
+
+/** A file committed beside the overrides: a share picture, or null to remove one. */
+type Extra = { path: string; content: Uint8Array | null };
 
 /** One change to the file at a time, read to write: two approvals at once must not overwrite each other. */
 let chain: Promise<unknown> = Promise.resolve();
@@ -222,7 +259,14 @@ async function realRemote(): Promise<string | null> {
 const DEV_REFUSAL =
   "This is a development copy of the desk, and its site folder pushes to the website's own repository: approving here would change balkaris.ch. A development copy only pushes to a scratch repository under work/. Approve on desk.balkaris.ch instead.";
 
-async function change(mutate: (o: Overrides) => void, subject: string, body: string, by: Person): Promise<{ sha: string; changed: boolean }> {
+/**
+ * Read the site's file as it is on the branch, change it, check the one entry
+ * it touched against the website's own rules ON THE FILE AS IT WILL BE
+ * WRITTEN (`check`, null for a withdrawal, which only removes), and commit it
+ * with any picture beside it. A field the website would ignore is refused
+ * here, with nothing committed: the website itself would say nothing.
+ */
+async function change(mutate: (o: Overrides) => Extra[] | void, subject: string, body: string, by: Person, check: string | null = null): Promise<{ sha: string; changed: boolean }> {
   if (await realRemote()) fail(409, DEV_REFUSAL);
   return locked(async () => {
     const raw = await readSiteFile(FILE);
@@ -230,13 +274,17 @@ async function change(mutate: (o: Overrides) => void, subject: string, body: str
     if (raw !== null) {
       try {
         const parsed = JSON.parse(raw) as Partial<Overrides>;
-        file = { ...parsed, meta: parsed.meta && typeof parsed.meta === "object" ? parsed.meta : {}, redirects: Array.isArray(parsed.redirects) ? parsed.redirects : [] };
+        file = { ...parsed, meta: parsed.meta && typeof parsed.meta === "object" && !Array.isArray(parsed.meta) ? parsed.meta : {}, redirects: Array.isArray(parsed.redirects) ? parsed.redirects : [] };
       } catch {
         fail(409, `${FILE} on the website is not valid JSON, so nothing was changed. It has to be repaired in the website's repository first.`);
       }
     }
-    mutate(file);
-    return commitSiteFiles([{ path: FILE, content: `${JSON.stringify(file, null, 2)}\n` }], subject, body, by);
+    const extra = mutate(file) ?? [];
+    if (check !== null) {
+      const problems = entryProblems(check, file);
+      if (problems.length) fail(409, `The website would ignore this, so nothing was committed: ${problems.join(" ")}`);
+    }
+    return commitSiteFiles([{ path: FILE, content: serialise(file) }, ...extra], subject, body, by);
   });
 }
 
@@ -249,6 +297,33 @@ function origin(p: ProposalDb): string {
 
 const what = (after: { title?: string; description?: string }): string =>
   after.title !== undefined && after.description !== undefined ? "title and description" : after.title !== undefined ? "title" : "description";
+
+/** The commit's subject and its lines about what changed, for every kind. */
+function described(p: ProposalDb, after: ProposalRow["after"], before: ProposalRow["before"]): { subject: string; lines: string[]; reads: string } {
+  const reads = "The website reads this file when it builds (lib/desk.ts); the page's own source is unchanged.";
+  if (p.kind === "redirect") return { subject: `Desk: redirect ${p.address} to ${after.to}`, lines: [`${p.address} now redirects to ${after.to}: added to ${FILE}.`], reads: "The website reads this file when it builds (next.config.ts, deskRedirects); no page's source is changed." };
+  if (p.kind === "meta") {
+    return {
+      subject: `Desk: new ${what(after)} for ${p.address}`,
+      lines: [
+        `${p.address}: changed in ${FILE}.`,
+        ...(after.title !== undefined ? [`Title: ${quote(before.title)} → ${quote(after.title)} (shown as ${quote(shownTitle(after.title))}: the website adds the brand where it fits)`] : []),
+        ...(after.description !== undefined ? [`Description: ${quote(before.description)} → ${quote(after.description)}`] : []),
+      ],
+      reads,
+    };
+  }
+  const changes = changesOf(p.kind, p.address, before, after, null).map((c) => `${c.label}: ${c.look === "code" ? "(the block, as JSON in the file)" : `${quote(c.before)} → ${quote(c.after)}`}`);
+  const subject =
+    p.kind === "og"
+      ? `Desk: new share card for ${p.address}`
+      : p.kind === "index"
+        ? `Desk: ${after.noindex ? "take" : "put"} ${p.address} ${after.noindex ? "out of" : "back in"} search`
+        : p.kind === "canonical"
+          ? `Desk: canonical of ${p.address} is ${after.canonical}`
+          : `Desk: ${after.jsonLd?.["@type"] ?? "structured data"} for ${p.address}`;
+  return { subject, lines: [`${p.address}: changed in ${FILE}.`, ...changes], reads };
+}
 
 /* ---------- reading proposals ----------------------------------------------------------- */
 
@@ -270,7 +345,10 @@ function driftOf(r: ProposalRow, live: Live): ProposalRow["drift"] {
   const now = live.get(r.address);
   if (!now) return null;
   const out: NonNullable<ProposalRow["drift"]> = {};
-  if (r.after.title !== undefined && now.title !== (r.before.title ?? null) && now.title !== r.shownTitle) out.title = now.title;
+  /* Compared by the page's own part: the website adds " | Balkaris" only where the whole fits in 60
+     (since 3 October 2026), so the same words with and without the brand are the same title. */
+  const own = ownTitle(now.title);
+  if (r.after.title !== undefined && own !== ownTitle(r.before.title ?? null) && own !== r.after.title.trim()) out.title = now.title;
   if (r.after.description !== undefined && now.description !== (r.before.description ?? null) && now.description !== r.after.description) out.description = now.description;
   return Object.keys(out).length ? out : null;
 }
@@ -311,16 +389,19 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
   const p = proposalById(id) ?? fail(404, `There is no proposal #${id}.`);
   if (p.state === "applied") fail(409, "That proposal is already live on the site.");
   if (!open(p)) fail(409, `That proposal is ${p.state}; only a waiting one can be approved.`);
-  const after = JSON.parse(p.after_json) as { title?: string; description?: string; to?: string };
-  const before = JSON.parse(p.before_json) as { title?: string | null; description?: string | null };
-  const refusal = p.kind === "redirect" ? redirectRefusal(p.address, after.to ?? "", [p.id]) : metaRefusal(p.address, after);
+  const after = JSON.parse(p.after_json) as ProposalRow["after"];
+  const before = JSON.parse(p.before_json) as ProposalRow["before"];
+  const refusal = rulesFor(p.kind, p.address, after, [p.id]);
   if (refusal) fail(409, refusal);
   if (await realRemote()) fail(409, DEV_REFUSAL);
   if (p.kind === "meta") {
     const drift = driftOf(toProposalRow(p), liveWords());
     if (drift) fail(409, `${p.address} changed since this was proposed: at the last crawl it shows ${driftWords(drift)}. Approving would replace newer words; ask the operator again.`);
-  } else {
+  } else if (p.kind === "redirect") {
     const live = await liveRefusal(p.address, after.to ?? "");
+    if (live) fail(409, live);
+  } else if (isSiteKind(p.kind)) {
+    const live = await liveChangeRefusal(p.kind, p.address, after, "approve");
     if (live) fail(409, live);
   }
   /* The live site was asked: somebody may have approved it meanwhile. */
@@ -329,24 +410,8 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
 
   db.prepare("UPDATE cc_proposals SET state = 'approved', decided_by = ?, decided_at = ?, error = NULL WHERE id = ?").run(by.name, now(), id);
 
-  const subject = p.kind === "redirect" ? `Desk: redirect ${p.address} to ${after.to}` : `Desk: new ${what(after)} for ${p.address}`;
-  const lines =
-    p.kind === "redirect"
-      ? [`${p.address} now redirects to ${after.to}: added to ${FILE}.`]
-      : [
-          `${p.address}: changed in ${FILE}.`,
-          ...(after.title !== undefined ? [`Title: ${quote(before.title)} → ${quote(after.title)} (shown as ${quote(shownTitle(after.title))}: the website adds the brand where it fits)`] : []),
-          ...(after.description !== undefined ? [`Description: ${quote(before.description)} → ${quote(after.description)}`] : []),
-        ];
-  const body = [
-    ...lines,
-    "",
-    `${origin(p)}, approved by ${by.name}.`,
-    p.kind === "redirect"
-      ? "The website reads this file when it builds (next.config.ts, deskRedirects); no page's source is changed."
-      : "The website reads this file when it builds (lib/desk.ts); the page's own source is unchanged.",
-    `Desk: ${process.env.DESK_URL ?? "https://desk.balkaris.ch"}/operator?ap=approved`,
-  ].join("\n");
+  const { subject, lines, reads } = described(p, after, before);
+  const body = [...lines, "", `${origin(p)}, approved by ${by.name}.`, reads, `Desk: ${process.env.DESK_URL ?? "https://desk.balkaris.ch"}/operator?ap=approved`].join("\n");
 
   try {
     const done = await change(
@@ -354,16 +419,20 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
         if (p.kind === "redirect") {
           o.redirects = o.redirects.filter((r) => r?.from !== p.address);
           o.redirects.push({ from: p.address, to: after.to as string });
-        } else {
+        } else if (p.kind === "meta") {
           const entry = { ...(o.meta[p.address] ?? {}) };
           if (after.title !== undefined) entry.title = after.title;
           if (after.description !== undefined) entry.description = after.description;
           o.meta[p.address] = entry;
+        } else if (isSiteKind(p.kind)) {
+          const extra = applyTo(o, p.kind, p.address, after);
+          return extra ? [extra] : [];
         }
       },
       subject,
       body,
       by,
+      p.kind === "redirect" ? null : p.address,
     );
     db.prepare("UPDATE cc_proposals SET state = 'applied', applied_at = ?, sha = ?, error = NULL, note = ? WHERE id = ?").run(
       now(),
@@ -372,11 +441,14 @@ export async function approve(id: number, by: Person): Promise<ProposalRow> {
       id,
     );
     /* An older change to the same address that this one replaces is no longer what the site says. */
-    const older = db.prepare("SELECT id FROM cc_proposals WHERE kind = ? AND address = ? AND state = 'applied' AND id <> ?").all(p.kind, p.address, id) as { id: number }[];
+    const slot = slotOf(p.kind, after);
+    const older = (db.prepare("SELECT id, after_json FROM cc_proposals WHERE kind = ? AND address = ? AND state = 'applied' AND id <> ?").all(p.kind, p.address, id) as { id: number; after_json: string }[]).filter(
+      (r) => slotOf(p.kind, JSON.parse(r.after_json) as ProposalRow["after"]) === slot,
+    );
     for (const o of older) {
       db.prepare("UPDATE cc_proposals SET state = 'withdrawn', withdrawn_by = ?, withdrawn_at = ?, note = ? WHERE id = ?").run(by.name, now(), `Replaced by #${id}.`, o.id);
     }
-    note("operator-change", p.kind === "redirect" ? `Applied a redirect from ${p.address}` : `Applied a new ${what(after)} for ${p.address}`, {
+    note("operator-change", p.kind === "meta" ? `Applied a new ${what(after)} for ${p.address}` : verbOf(p.kind, p.address, after).applied, {
       tone: "good",
       detail: `${p.kind === "redirect" ? `To ${after.to}. ` : ""}Approved by ${by.name}${done.changed ? `, commit ${done.sha}` : "; the site already said this"}`,
       href: "/operator?ap=approved#approvals",
@@ -401,10 +473,16 @@ export async function withdraw(id: number, by: Person): Promise<ProposalRow> {
   if (blocked) fail(403, blocked);
   const p = proposalById(id) ?? fail(404, `There is no proposal #${id}.`);
   if (p.state !== "applied") fail(409, `That proposal is ${p.state}; only one that is live can be withdrawn.`);
-  const after = JSON.parse(p.after_json) as { title?: string; description?: string; to?: string };
-  const subject = p.kind === "redirect" ? `Desk: withdraw the redirect from ${p.address}` : `Desk: withdraw the ${what(after)} for ${p.address}`;
+  const after = JSON.parse(p.after_json) as ProposalRow["after"];
+  const verb = verbOf(p.kind, p.address, after);
+  const subject =
+    p.kind === "redirect" ? `Desk: withdraw the redirect from ${p.address}` : p.kind === "meta" ? `Desk: withdraw the ${what(after)} for ${p.address}` : `Desk: ${verb.withdrawn.charAt(0).toLowerCase()}${verb.withdrawn.slice(1)}`;
   const body = [
-    p.kind === "redirect" ? `${p.address} no longer redirects to ${after.to}: removed from ${FILE}.` : `${p.address}: the ${what(after)} the desk applied is removed from ${FILE}; the page says what its source says again.`,
+    p.kind === "redirect"
+      ? `${p.address} no longer redirects to ${after.to}: removed from ${FILE}.`
+      : p.kind === "meta"
+        ? `${p.address}: the ${what(after)} the desk applied is removed from ${FILE}; the page says what its source says again.`
+        : `${p.address}: what the desk applied is taken out of ${FILE} again${p.kind === "og" && uploadedPicture(after.ogImage) ? ", with its share picture" : ""}.`,
     "",
     `${origin(p)}, approved by ${p.decided_by ?? "a person"}${p.sha ? ` (commit ${p.sha})` : ""}, withdrawn by ${by.name}.`,
   ].join("\n");
@@ -416,7 +494,7 @@ export async function withdraw(id: number, by: Person): Promise<ProposalRow> {
           const before = o.redirects.length;
           o.redirects = o.redirects.filter((r) => !(r?.from === p.address && r?.to === after.to));
           untouched = o.redirects.length === before;
-        } else {
+        } else if (p.kind === "meta") {
           const entry = { ...(o.meta[p.address] ?? {}) };
           let removed = 0;
           for (const k of ["title", "description"] as const) {
@@ -428,6 +506,10 @@ export async function withdraw(id: number, by: Person): Promise<ProposalRow> {
           untouched = removed === 0;
           if (Object.keys(entry).length) o.meta[p.address] = entry;
           else delete o.meta[p.address];
+        } else if (isSiteKind(p.kind)) {
+          const u = undo(o, p.kind, p.address, after);
+          untouched = !u.removed;
+          return u.dropPicture ? [{ path: u.dropPicture, content: null }] : [];
         }
       },
       subject,
@@ -441,7 +523,7 @@ export async function withdraw(id: number, by: Person): Promise<ProposalRow> {
       untouched ? "The site's file no longer held this change, so there was nothing to remove." : null,
       id,
     );
-    note("operator-change", p.kind === "redirect" ? `Withdrew the redirect from ${p.address}` : `Withdrew the ${what(after)} for ${p.address}`, {
+    note("operator-change", p.kind === "meta" ? `Withdrew the ${what(after)} for ${p.address}` : verb.withdrawn, {
       tone: "warn",
       detail: `By ${by.name}${done.changed ? `, commit ${done.sha}` : ""}`,
       href: "/operator?ap=completed#approvals",
@@ -467,8 +549,9 @@ async function onSite(p: ProposalDb): Promise<boolean> {
   } catch {
     return false;
   }
-  const after = JSON.parse(p.after_json) as { title?: string; description?: string; to?: string };
+  const after = JSON.parse(p.after_json) as ProposalRow["after"];
   if (p.kind === "redirect") return Array.isArray(file.redirects) && file.redirects.some((r) => r?.from === p.address && r?.to === after.to);
+  if (isSiteKind(p.kind)) return holds(file, p.kind, p.address, after);
   const entry = file.meta && typeof file.meta === "object" ? file.meta[p.address] : undefined;
   if (!entry) return false;
   return (after.title === undefined || entry.title === after.title) && (after.description === undefined || entry.description === after.description);
@@ -507,6 +590,78 @@ export async function proposeRedirect(fromRaw: string, toRaw: string, by: Person
   if ("refused" in made) return fail(409, made.refused);
   note("operator-proposal", `Proposed a redirect from ${from}`, { tone: "info", detail: `To ${to}, by ${by.name}`, href: "/operator?ap=waiting#approvals", actor: by.name, dedupe: `op:proposed:${made.id}` });
   return row(made.id);
+}
+
+/**
+ * A change a person writes by hand, of any kind: no model involved. The
+ * "before" is what the crawl read on the live page, as for the operator's,
+ * and the same rules apply; then it waits for a person who can publish.
+ */
+export async function proposeByHand(asked: NewProposalBody, by: Person): Promise<{ proposal: ProposalRow; line: string }> {
+  if (asked.kind === undefined || asked.kind === "redirect") {
+    const red = asked as Extract<NewProposalBody, { from: string }>;
+    const r = await proposeRedirect(red.from, red.to, by);
+    return { proposal: r, line: `Proposed: ${r.address} → ${r.after.to}. It waits for a person who can publish.` };
+  }
+  const body = asked as Exclude<NewProposalBody, { from: string }>;
+  const address = key(body.address);
+  const why = body.why?.trim() ? body.why.trim().slice(0, 400) : null;
+  let after: ProposalRow["after"];
+  switch (body.kind) {
+    case "meta":
+      after = { ...(body.title !== undefined ? { title: body.title.trim() } : {}), ...(body.description !== undefined ? { description: body.description.trim() } : {}) };
+      break;
+    case "og":
+      after = {
+        ...(body.ogTitle?.trim() ? { ogTitle: body.ogTitle.trim() } : {}),
+        ...(body.ogDescription?.trim() ? { ogDescription: body.ogDescription.trim() } : {}),
+        ...(body.ogImage?.trim() ? { ogImage: body.ogImage.trim() } : {}),
+      };
+      break;
+    case "index":
+      after = { noindex: body.noindex };
+      break;
+    case "canonical":
+      after = { canonical: key(body.canonical) };
+      break;
+    case "schema": {
+      let block: unknown = body.jsonLd;
+      if (typeof block === "string") {
+        try {
+          block = JSON.parse(block);
+        } catch (e) {
+          return fail(400, `The structured data is not valid JSON: ${(e instanceof Error ? e.message : String(e)).slice(0, 160)}.`);
+        }
+      }
+      after = { jsonLd: block as ProposalRow["after"]["jsonLd"] };
+      break;
+    }
+    default:
+      return fail(400, "That is not a change the desk can make: meta, redirect, og, index, canonical or schema.");
+  }
+  const made = await propose({ kind: body.kind, address, before: beforeOf(body.kind, address), after, why }, { source: "person", by });
+  if ("refused" in made) return fail(409, made.refused);
+  const verb = body.kind === "meta" ? `Proposed new metadata for ${address}` : verbOf(body.kind, address, after).proposed;
+  note("operator-proposal", verb, { tone: "info", detail: `By ${by.name}`, href: "/operator?ap=waiting#approvals", actor: by.name, dedupe: `op:proposed:${made.id}` });
+  return { proposal: row(made.id), line: `${verb}. It waits for a person who can publish; nothing changes on the site until one approves it.` };
+}
+
+/**
+ * Read the live page back after the deploy and keep what it shows. The
+ * website ignores a field that breaks a rule without a word, so an applied
+ * change is only known to show once the page itself says it.
+ */
+export async function readBack(id: number, by: Person): Promise<{ proposal: ProposalRow; line: string }> {
+  const p = proposalById(id) ?? fail(404, `There is no proposal #${id}.`);
+  if (p.state !== "applied") fail(409, `That proposal is ${p.state}; only one that is live can be read back.`);
+  const after = JSON.parse(p.after_json) as ProposalRow["after"];
+  const got = await readBackOf(p.kind, p.address, after);
+  const at = now();
+  db.prepare("UPDATE cc_proposals SET read_json = ? WHERE id = ?").run(JSON.stringify({ at, ...got }), id);
+  if (!got.ok && !got.missing.includes("page")) {
+    note("operator-change", `The live page does not show the change to ${p.address}`, { tone: "bad", detail: got.line.slice(0, 200), href: "/operator?ap=approved#approvals", actor: by.name, dedupe: `op:readback:${id}:${at.slice(0, 13)}` });
+  }
+  return { proposal: row(id), line: got.line };
 }
 
 /** Proposals by state, newest first, at most `limit`. */

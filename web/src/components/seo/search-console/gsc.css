@@ -15,6 +15,8 @@
   --dk-seo-gsc-istate-w: 230px;    /* Google's words for its state */
   --dk-seo-gsc-pos-h: 200px;       /* the position plot, labels included */
   --dk-seo-gsc-side-w: 380px;      /* the sitemaps and the copy beside the inspection */
+  --dk-seo-gsc-part-w: 200px;      /* "Address contains…" */
+  --dk-seo-gsc-said-w: 420px;      /* a line said beside a button, before it wraps */
 }
 
 .dk-seo-gsc {
@@ -729,11 +731,229 @@ a.dk-seo-gsc-pg:hover {
   color: var(--ink-3);
 }
 
+/* ---------- the filters' second line: part of an address, brand, the days -------------------- */
+.dk-seo-gsc-search--part {
+  flex-basis: var(--dk-seo-gsc-part-w);
+  max-width: var(--dk-seo-gsc-part-w);
+}
+
+.dk-seo-gsc-dates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-gsc-dates-icon {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.dk-seo-gsc-date {
+  display: inline-flex;
+}
+
+.dk-seo-gsc-date-input {
+  height: var(--ctl);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+  color-scheme: inherit;
+  font: inherit;
+  font-size: var(--t-body);
+  transition: border-color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-date-input:hover {
+  border-color: var(--pop-edge);
+}
+
+.dk-seo-gsc-date-input:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-seo-gsc-dates-to {
+  color: var(--ink-4);
+}
+
+.dk-seo-gsc-dates-go {
+  height: var(--ctl);
+  padding: 0 var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--card);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+  cursor: pointer;
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-dates-go:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-dates-go:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x1);
+}
+
+.dk-seo-gsc-dates-said {
+  max-width: var(--dk-seo-gsc-said-w);
+  color: var(--amber);
+  font-size: var(--t-small);
+}
+
+/* ---------- a row's ways out, and what the website has at an address ---------------------- */
+.dk-seo-gsc-key-tools {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--x2);
+}
+
+.dk-seo-gsc-standing {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* ---------- the inspection table's state chips, search, order and its check ---------------- */
+a.dk-seo-gsc-states-item {
+  padding: var(--x2) var(--x6);
+  margin: calc(var(--x2) * -1) calc(var(--x6) * -1);
+  border-radius: var(--r-chip);
+  color: var(--ink-2);
+  transition: background-color var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+a.dk-seo-gsc-states-item:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-states-item--on,
+a.dk-seo-gsc-states-item--on:hover {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.dk-seo-gsc-itools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-gsc-iaddr-in {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-seo-gsc-iday {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-seo-gsc-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6) var(--x12);
+  padding: 0 var(--pad) var(--x12);
+}
+
+.dk-seo-gsc-check-said {
+  flex: 1 1 var(--dk-seo-gsc-top-w);
+  min-width: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-check-bad {
+  color: var(--amber);
+}
+
+.dk-seo-gsc-again {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x4);
+}
+
+.dk-seo-gsc-again-said {
+  max-width: var(--dk-seo-gsc-said-w);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-seo-gsc-again-said--bad {
+  color: var(--red);
+}
+
+/* ---------- the sitemaps: what Google cannot say, and the desk's own read ------------------ */
+.dk-seo-gsc-map-said,
+.dk-seo-gsc-own-said {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-seo-gsc-map-said a,
+.dk-seo-gsc-own-link {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-decoration-color: var(--ink-4);
+  text-underline-offset: var(--x2);
+  transition: color var(--fast) var(--ease);
+}
+
+.dk-seo-gsc-map-said a:hover,
+.dk-seo-gsc-own-link:hover {
+  color: var(--green);
+}
+
+.dk-seo-gsc-own {
+  padding-top: var(--x12);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-gsc-own-issues {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  padding-left: var(--x16);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  list-style: disc;
+}
+
+.dk-seo-gsc-own-link {
+  align-self: flex-start;
+  font-size: var(--t-small);
+}
+
 /* ---------- a phone ------------------------------------------------------------------------ */
 @container dk-seo-gsc (max-width: 560px) {
-  .dk-seo-gsc-search {
+  .dk-seo-gsc-search,
+  .dk-seo-gsc-search--part {
     flex-basis: 100%;
     max-width: none;
+  }
+
+  .dk-seo-gsc-date,
+  .dk-seo-gsc-date-input {
+    flex: 1 1 0;
+    min-width: 0;
   }
 
   .dk-seo-gsc-filters-row > .dk-select,

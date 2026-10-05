@@ -30,7 +30,19 @@ export type TaskKind =
   /** A page or article brief for a topic or query. */
   | "brief"
   /** The crawl is run, then its findings are summarised. */
-  | "audit";
+  | "audit"
+  /** A share title and description for one page, from what the page says; becomes an "og" proposal. */
+  | "og"
+  /** A FAQPage or Service block for one page, from its own text; becomes a "schema" proposal. */
+  | "schema"
+  /** Which pages should link to one page, and with what words, from the crawl's link graph: to-dos for the website's code. */
+  | "links"
+  /** Alt texts for a page's pictures that have none: to-dos for the website's code. */
+  | "alt"
+  /** Sort tracked search phrases: relevant, weak or irrelevant, their topic and intent. */
+  | "keywords"
+  /** What the first results for a kept search have that our page lacks, as a brief. */
+  | "serp";
 
 export type TaskState = "queued" | "running" | "done" | "failed" | "cancelled";
 
@@ -119,6 +131,44 @@ export interface Brief {
   notes: string;
 }
 
+/** One phrase as the "keywords" task judged it, checked against the phrases and topics it was given. */
+export interface KeywordJudgement {
+  /** cc_seo_keywords id: what POST /api/v1/seo/keywords/bulk takes. */
+  id: number;
+  phrase: string;
+  judgement: "relevant" | "weak" | "irrelevant";
+  /** One of the given topics, by name, or a new topic's name when `newTopic`. */
+  topic: string | null;
+  /** The given topic's key (cc_seo_clusters), what POST /api/v1/seo/keywords/:id/edit takes as `cluster`; null for a new topic. */
+  topicKey: string | null;
+  newTopic: boolean;
+  intent: "informational" | "commercial" | "transactional" | "navigational";
+  why: string;
+}
+
+/** What the first results for a kept search have that our page lacks: the "serp" task. */
+export interface SerpBrief {
+  phrase: string;
+  /** The kept result page it read (cc_seo_serp_checks id) and when that was read. */
+  checkId: number;
+  checkedAt: string | null;
+  /** Our page for the search, when there is one. */
+  page: string | null;
+  /** Each point names the result addresses, as kept, that show it. */
+  theyHave: { what: string; seenOn: string[] }[];
+  /** What to add or change on our page, in order. */
+  outline: string[];
+  notes: string;
+}
+
+/** A to-do for the website's code (the desk cannot edit a page's body): from the "links" and "alt" tasks. */
+export interface SuggestedTodo {
+  title: string;
+  note: string;
+  /** The page whose source changes. */
+  page: string;
+}
+
 /** A finished task, with what it was given. */
 export interface TaskResult {
   task: TaskRow;
@@ -127,6 +177,14 @@ export interface TaskResult {
   /** Opportunities, for that kind. */
   opportunities?: Opportunity[];
   brief?: Brief;
+  /** For "keywords". */
+  keywords?: KeywordJudgement[];
+  /** For "serp". */
+  serp?: SerpBrief;
+  /** For "links" and "alt": what the website's code should change. */
+  todos?: SuggestedTodo[];
+  /** True once its to-dos were put on the to-do list (POST /tasks/:id/todos). */
+  todosAdded?: boolean;
   /** The proposals this task created. */
   proposals: ProposalRow[];
   given: Given[];
@@ -150,20 +208,98 @@ export interface ResultCard {
 
 export type ProposalState = "waiting" | "approved" | "applied" | "rejected" | "withdrawn";
 
+/**
+ * What a proposal changes on the website, each a field of
+ * content/desk/overrides.json (work/audit/OVERRIDES-V2.md):
+ *   meta       title and/or description
+ *   redirect   a permanent redirect from an address that no longer answers
+ *   og         share title, share description and/or share picture
+ *   index      noindex: true takes a page out of search; false puts it back
+ *   canonical  the page tells search engines to count another address instead
+ *   schema     one structured-data block printed on the page
+ */
+export type ProposalKind = "meta" | "redirect" | "og" | "index" | "canonical" | "schema";
+
+/** The schema.org types the website prints from the desk's file (its lib/desk.ts). */
+export type DeskJsonLdType = "FAQPage" | "Service" | "BreadcrumbList" | "Article" | "HowTo" | "LocalBusiness" | "Organization" | "Product" | "VideoObject" | "WebPage";
+
+export interface DeskJsonLdBlock {
+  "@context": "https://schema.org";
+  "@type": DeskJsonLdType;
+  [property: string]: unknown;
+}
+
+/** One line of "what approving changes", before and after, in the words a person reads. */
+export interface ProposalChange {
+  label: string;
+  /** "text": words; "picture": both values are picture addresses, drawn as pictures; "code": structured data, drawn as code. */
+  look: "text" | "picture" | "code";
+  before: string | null;
+  after: string | null;
+}
+
+/** A share picture a person uploaded, kept by the desk until an approval commits it under public/desk/og/. */
+export interface UploadedPicture {
+  /** "seo-1a2b3c4d.jpg": the file's name on the site. */
+  name: string;
+  /** Where the desk serves it meanwhile: /api/v1/operator/pictures/<name>. */
+  url: string;
+  /** What the overrides file names: /desk/og/<name>. */
+  sitePath: string;
+  width: number;
+  height: number;
+  bytes: number;
+  format: "png" | "jpeg" | "webp";
+}
+
 /** A change to the website the operator (or a person) proposes, waiting for a person who can publish. */
 export interface ProposalRow {
   id: number;
-  kind: "meta" | "redirect";
+  kind: ProposalKind;
   /** The page whose title and description change, or the address a redirect leaves from. */
   address: string;
   /** What the site said when it was proposed, as the crawl read the live page (a title with the brand the site appends). A field that is null was not set. */
-  before: { title?: string | null; description?: string | null; to?: string | null };
+  before: {
+    title?: string | null;
+    description?: string | null;
+    to?: string | null;
+    ogTitle?: string | null;
+    ogDescription?: string | null;
+    /** The share picture the live page named when it was proposed, absolute, as the crawl read it. */
+    ogImage?: string | null;
+    noindex?: boolean;
+    canonical?: string | null;
+    /** The structured-data types the page printed when it was proposed. */
+    schemaTypes?: string[];
+  };
   /**
    * What it would say. Only the fields that change. A title is the page's own
    * part, as content/desk/overrides.json stores it: the website's root layout
    * appends " | Balkaris" to it (see `shownTitle`).
    */
-  after: { title?: string; description?: string; to?: string };
+  after: {
+    title?: string;
+    description?: string;
+    to?: string;
+    ogTitle?: string;
+    ogDescription?: string;
+    /** Site-relative, as the overrides file names it: "/desk/og/seo-1a2b3c4d.jpg" or "/og/about.jpg". */
+    ogImage?: string;
+    /** true: out of search; false: back in (the desk's own noindex removed). */
+    noindex?: boolean;
+    canonical?: string;
+    jsonLd?: DeskJsonLdBlock;
+  };
+  /** Field by field, what approving changes on the live site, before and after. */
+  changes: ProposalChange[];
+  /** The picture this proposal uploads with it, while the desk keeps it. Null when it names none, or one already on the site. */
+  picture: UploadedPicture | null;
+  /**
+   * The live page read back after the deploy (POST /proposals/:id/check). The
+   * website ignores a field that breaks a rule without a word, so this is how
+   * an applied change is known to show. Null until it was read.
+   */
+  readBack: { at: string; ok: boolean; line: string; missing: string[] } | null;
   /** The title the live page would show after approval, the brand included. Null when the title does not change. */
   shownTitle: string | null;
   /**
@@ -298,6 +434,10 @@ export interface OperatorPayload {
   context: OperatorContext;
   /** The answer to show: the one asked for with ?result=, else the latest finished. */
   answer: TaskResult | null;
+  /** ?result=<id> names a task that has not finished: it, so the screen says so instead of showing another task's answer. */
+  pending: TaskRow | null;
+  /** Kept result pages a "serp" task can read, newest first. */
+  serps: SerpChoice[];
   /** The newest task to finish, fail or be stopped: what the page compares its polls with. */
   latest: OperatorLive["latest"];
   /** The latest result of each kind, newest first. */
@@ -349,9 +489,50 @@ export interface NewTask {
   depth?: Depth;
   /** Pages, for "metadata": at most five. Left out, the pages whose title or description breaks a rule. */
   paths?: string[];
-  /** One page in depth, for "ask". */
+  /** One page in depth, for "ask" and "brief"; the page, for "og", "schema", "links" and "alt"; our page, for "serp". */
   path?: string;
   range?: Range;
+  /** "keywords": cc_seo_keywords ids, at most 30. Left out, the unjudged phrases, newest first. */
+  ids?: number[];
+  /** "serp": the kept result page (cc_seo_serp_checks id). Left out, the newest that is done. */
+  serpId?: number;
+  /** "schema": which block to draft. Left out, FAQPage, or Service when the page prints FAQPage already. */
+  schemaType?: "FAQPage" | "Service";
+}
+
+/** A kept result page a "serp" task can read. */
+export interface SerpChoice {
+  id: number;
+  phrase: string;
+  doneAt: string | null;
+  ownPosition: number | null;
+}
+
+/**
+ * POST /api/v1/operator/proposals: a change a person writes by hand. No model
+ * is involved; the same rules apply as to the operator's, and it waits for a
+ * person who can publish like any other. A body without `kind` is a redirect.
+ */
+export type NewProposalBody =
+  | { kind?: "redirect"; from: string; to: string; why?: string }
+  | { kind: "meta"; address: string; title?: string; description?: string; why?: string }
+  | { kind: "og"; address: string; ogTitle?: string; ogDescription?: string; ogImage?: string; why?: string }
+  | { kind: "index"; address: string; noindex: boolean; why?: string }
+  | { kind: "canonical"; address: string; canonical: string; why?: string }
+  | { kind: "schema"; address: string; jsonLd: DeskJsonLdBlock | string; why?: string };
+
+/** POST /api/v1/operator/pictures { address, data: base64 of the file, filename? } */
+export interface PictureAnswer {
+  ok: true;
+  picture: UploadedPicture;
+  line: string;
+}
+
+/** POST /api/v1/operator/tasks/:id/todos */
+export interface TodosAdded {
+  ok: true;
+  added: number;
+  line: string;
 }
 
 /** What POST /tasks and the other changes answer. */
@@ -363,6 +544,8 @@ export interface TaskAnswer {
 export interface ProposalAnswer {
   ok: true;
   proposal: ProposalRow;
+  /** What happened, in a sentence. */
+  line?: string;
 }
 
 export interface TodoAnswer {

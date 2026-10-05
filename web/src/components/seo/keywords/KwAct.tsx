@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type FormEvent, type ReactNode, type RefObject } from "react";
 import type { BriefQueued, KeywordChanged, KeywordsActed, KeywordStatus, SitePageOption } from "@/contract/seo/keywords";
 import { useSend } from "@/components/operator/send";
@@ -35,6 +36,9 @@ interface KitValue {
 }
 
 const Kit = createContext<KitValue>({ pages: null, pagesWhy: null, clusters: [] });
+
+/** The topics a phrase may be filed under, for the dialogs that file phrases. */
+export const useClusters = () => useContext(Kit).clusters;
 
 /** Hands the page's lists to every menu once, instead of to every row. */
 export function KwKit({ pages, pagesWhy, clusters, children }: KitValue & { children: ReactNode }) {
@@ -89,7 +93,7 @@ export function BriefButton({
 }
 
 /** A sentence from the server, floating under the button that asked, gone after a while. */
-function Said({ message }: { message: { ok: boolean; text: string } | null }) {
+export function Said({ message }: { message: { ok: boolean; text: string } | null }) {
   if (!message) return null;
   return (
     <span className={cx("dk-seo-kw-said dk-seo-kw-said--float", !message.ok && "dk-seo-kw-said--bad")} role={message.ok ? "status" : "alert"}>
@@ -99,7 +103,7 @@ function Said({ message }: { message: { ok: boolean; text: string } | null }) {
 }
 
 /** Clears the server's sentence after a few seconds (a refusal stays longer). */
-function useFade(message: { ok: boolean; text: string } | null, setMessage: (m: null) => void) {
+export function useFade(message: { ok: boolean; text: string } | null, setMessage: (m: null) => void) {
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(null), message.ok ? 6_000 : 12_000);
@@ -146,6 +150,8 @@ function useFloating() {
 type Item =
   | { kind: "post"; label: string; icon: IconName; url: string; body: unknown; off?: boolean; title?: string }
   | { kind: "link"; label: string; icon: IconName; href: string; external?: boolean }
+  /* A post that then moves the address to what it asked for (a research, a result page). */
+  | { kind: "postgo"; label: string; icon: IconName; url: string; body: unknown; href: string; title?: string }
   | { kind: "map"; label: string; icon: IconName }
   | { kind: "head"; label: string };
 
@@ -153,10 +159,11 @@ type Item =
  * The menu itself: a native disclosure (opens with the keyboard, closes when a
  * choice is made), with one inline step for mapping to a page.
  */
-function Menu({ title, items, mapUrl, mapCurrent, mapLang, said }: { title: string; items: Item[]; mapUrl: string; mapCurrent: string | null; mapLang: string | null; said?: (v: unknown) => string | null }) {
+function Menu({ title, items, mapUrl, mapCurrent, mapLang, mapPerson, said }: { title: string; items: Item[]; mapUrl: string; mapCurrent: string | null; mapLang: string | null; mapPerson?: boolean; said?: (v: unknown) => string | null }) {
   const { box, list, at, setAt, place, close } = useFloating();
   const { go, busy, message, setMessage } = useSend();
   useFade(message, setMessage);
+  const router = useRouter();
   const { pages, pagesWhy } = useContext(Kit);
   const [mapping, setMapping] = useState(false);
   const [choice, setChoice] = useState<string>(mapCurrent ?? "");
@@ -200,6 +207,7 @@ function Menu({ title, items, mapUrl, mapCurrent, mapLang, said }: { title: stri
                     <select value={choice} onChange={(e) => setChoice(e.target.value)} aria-label="The page that answers it">
                       <option value="">Choose a page…</option>
                       <option value="-">No page answers it (a gap)</option>
+                      {mapPerson ? <option value="auto">Let the desk decide (the audit's or the rule's page)</option> : null}
                       {sorted.map((p) => (
                         <option key={p.path} value={p.path}>
                           {p.path}
@@ -210,7 +218,7 @@ function Menu({ title, items, mapUrl, mapCurrent, mapLang, said }: { title: stri
                     </select>
                     <Icon name="chevron-down" size={14} />
                   </span>
-                  <p className="dk-seo-kw-map-note">Your mapping is kept: no run or import changes it again.</p>
+                  <p className="dk-seo-kw-map-note">Your mapping is kept: no run or import changes it again, until you let the desk decide.</p>
                   <div className="dk-seo-kw-map-actions">
                     <Button size="xs" variant="ghost" onClick={() => setMapping(false)}>
                       Back
@@ -242,6 +250,27 @@ function Menu({ title, items, mapUrl, mapCurrent, mapLang, said }: { title: stri
                   </a>
                 );
               }
+              if (it.kind === "postgo") {
+                return (
+                  <button
+                    key={it.label}
+                    type="button"
+                    role="menuitem"
+                    disabled={busy}
+                    title={it.title}
+                    onClick={() => {
+                      close();
+                      void go<{ line?: string }>(it.url, it.body, (v) => {
+                        router.push(it.href, { scroll: false });
+                        return typeof v?.line === "string" ? v.line : null;
+                      });
+                    }}
+                  >
+                    <Icon name={it.icon} size={14} />
+                    {it.label}
+                  </button>
+                );
+              }
               if (it.kind === "map") {
                 return (
                   <button key={it.label} type="button" role="menuitem" onClick={() => setMapping(true)}>
@@ -265,7 +294,7 @@ function Menu({ title, items, mapUrl, mapCurrent, mapLang, said }: { title: stri
   );
 }
 
-const googleHref = (phrase: string, lang: string | null): string => `https://www.google.ch/search?q=${encodeURIComponent(phrase)}&hl=${lang === "de" ? "de" : "en"}&gl=ch`;
+const googleHref = (phrase: string, lang: string | null): string => `https://www.google.ch/search?q=${encodeURIComponent(phrase)}&hl=${lang === "de" || lang === "fr" || lang === "it" ? lang : "en"}&gl=ch`;
 
 /** A phrase's "⋯": a brief, a page, a target, a judgement; its opportunities; Google itself. */
 export function KeywordMenu({
@@ -277,6 +306,10 @@ export function KeywordMenu({
   page,
   opportunities,
   oppsHref,
+  mappedByPerson,
+  removable,
+  briefBusy,
+  hrefs,
 }: {
   id: number;
   phrase: string;
@@ -286,15 +319,42 @@ export function KeywordMenu({
   page: string | null;
   opportunities: number;
   oppsHref: string;
+  mappedByPerson: boolean;
+  removable: boolean;
+  /** A brief for it is on its way: the menu says which instead of offering a second. */
+  briefBusy: number | null;
+  /** Its own view and its research, written on the server by the page's href helpers. */
+  hrefs: { open: string; research: string };
 }) {
+  const webLang = lang === "de" || lang === "en" || lang === "fr" || lang === "it" ? lang : "de";
   const judge = (s: KeywordStatus, label: string, icon: IconName): Item => ({ kind: "post", label, icon, url: `${API}/${id}/status`, body: { status: s }, off: status === s, title: status === s ? "Judged so already." : undefined });
   const items: Item[] = [
+    { kind: "link", label: "Open its view", icon: "eye", href: hrefs.open },
+    {
+      kind: "postgo",
+      label: "Find related searches",
+      icon: "search",
+      url: `${API}/research`,
+      body: { seed: phrase, lang: webLang },
+      href: hrefs.research,
+      title: "Research it on the web: what people type around it, from Google's and Bing's suggestions.",
+    },
+    {
+      kind: "postgo",
+      label: "Check who ranks",
+      icon: "list",
+      url: `${API}/serp`,
+      body: { phrase, lang: webLang },
+      href: hrefs.open,
+      title: "Who is on Google's first page for it: fetched by the studio workstation; DuckDuckGo's page as a second opinion.",
+    },
     {
       kind: "post",
-      label: "Write a brief",
+      label: briefBusy ? `Brief #${briefBusy} on its way` : "Write a brief",
       icon: "sparkles",
       url: `${API}/${id}/brief`,
       body: {},
+      off: !!briefBusy,
       title: "The operator (the studio workstation's model) writes a brief for a page answering this search. A person writes and publishes; nothing reaches the site by itself.",
     },
     { kind: "map", label: page ? "Map to another page…" : "Map to a page…", icon: "link" },
@@ -307,13 +367,14 @@ export function KeywordMenu({
     judge("irrelevant", "Irrelevant", "x"),
     { kind: "head", label: "See" },
     ...(opportunities ? [{ kind: "link", label: `Its opportunities (${opportunities})`, icon: "lightbulb", href: oppsHref } as Item] : []),
-    { kind: "link", label: "What Google shows for it", icon: "search", href: googleHref(phrase, lang), external: true },
+    { kind: "link", label: "Google, in a new tab", icon: "external", href: googleHref(phrase, lang), external: true },
+    ...(removable ? [{ kind: "post", label: "Remove it", icon: "trash", url: `${API}/${id}/remove`, body: {}, title: "Only a person added it, so it can go: it leaves the table." } as Item] : []),
   ];
-  return <Menu title={`“${phrase}”`} items={items} mapUrl={`${API}/${id}/page`} mapCurrent={page} mapLang={lang} />;
+  return <Menu title={`“${phrase}”`} items={items} mapUrl={`${API}/${id}/page`} mapCurrent={page} mapLang={lang} mapPerson={mappedByPerson} />;
 }
 
 /** A cluster's "⋯": a page for the whole topic, its phrases, its opportunities. */
-export function ClusterMenu({ clusterKey, name, lang, page, phrasesHref, opportunities, oppsHref }: { clusterKey: string; name: string; lang: string; page: string | null; phrasesHref: string; opportunities: number; oppsHref: string }) {
+export function ClusterMenu({ clusterKey, name, lang, page, mappedByPerson, phrasesHref, opportunities, oppsHref }: { clusterKey: string; name: string; lang: string; page: string | null; mappedByPerson: boolean; phrasesHref: string; opportunities: number; oppsHref: string }) {
   const items: Item[] = [
     { kind: "map", label: page ? "Map to another page…" : "Map to a page…", icon: "link" },
     { kind: "link", label: "Its phrases", icon: "list", href: phrasesHref },
@@ -323,13 +384,10 @@ export function ClusterMenu({ clusterKey, name, lang, page, phrasesHref, opportu
     <Menu
       title={`“${name}”`}
       items={items}
-      mapUrl={`/api/v1/seo/clusters/${encodeURIComponent(clusterKey)}/page`}
+      mapUrl={`${API}/clusters/${encodeURIComponent(clusterKey)}/page`}
       mapCurrent={page}
       mapLang={lang}
-      said={(v) => {
-        const c = (v as { cluster?: { page?: string | null } } | null)?.cluster;
-        return c ? (c.page ? `Mapped to ${c.page}.` : "No page answers it (a gap).") : "Done.";
-      }}
+      mapPerson={mappedByPerson}
     />
   );
 }
@@ -375,6 +433,14 @@ export function KwBulk({ children, exportBase }: { children: ReactNode; exportBa
     if (!ids.length) return setMessage({ ok: false, text: "Tick the phrases first." });
     if (op === "export") {
       window.location.assign(`${exportBase}&${ids.map((id) => `id=${id}`).join("&")}`);
+      return;
+    }
+    if (op === "ai") {
+      void go<BriefQueued>(`${API}/ai-sort`, { ids: ids.slice(0, 30) }, (v) => (ids.length > 30 ? `The first 30: ${v.line}` : v.line));
+      return;
+    }
+    if (op === "volumes") {
+      void go<{ line: string }>(`${API}/volumes`, { ids }, (v) => v.line);
       return;
     }
     void go<KeywordsActed>(`${API}/bulk`, { ids, op }, (v) => {
@@ -438,6 +504,8 @@ export function KwBulkMenu() {
           {op("relevant", "Judge relevant", "check-circle")}
           {op("weak", "Judge weak", "minus")}
           {op("irrelevant", "Judge irrelevant", "x")}
+          {op("ai", "Ask the AI to sort them", "sparkles")}
+          {op("volumes", "Refresh volumes (DataForSEO)", "refresh")}
           {op("export", "Export the ticked (CSV)", "download")}
         </div>
       </details>

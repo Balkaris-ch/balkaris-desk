@@ -1190,3 +1190,270 @@ a.dk-seo-ai-search-path:hover {
     display: flex;
   }
 }
+
+/* ---------- the address: searches, chips as links, the head's buttons ---------- */
+
+/* A panel head's buttons side by side: Record a round, Record answers, CSV. */
+.dk-seo-ai-search-head-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--x6);
+}
+
+/* A search box with the selects beside it. */
+.dk-seo-ai-search-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-bottom: var(--x10);
+}
+
+.dk-seo-ai-search-find {
+  display: flex;
+  flex: 1 1 calc(var(--x56) * 4);
+  align-items: center;
+  gap: var(--x8);
+  min-width: 0;
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink-3);
+}
+
+.dk-seo-ai-search-find:focus-within {
+  border-color: var(--green-4);
+}
+
+.dk-seo-ai-search-find input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--t-small);
+  outline: none;
+}
+
+.dk-seo-ai-search-find input::placeholder {
+  color: var(--ink-4);
+}
+
+.dk-seo-ai-search-clear {
+  align-self: center;
+}
+
+.dk-seo-ai-search-page-toggle,
+.dk-seo-ai-search-qa-open {
+  text-decoration: none;
+}
+
+/* ---------- an answer in detail: what changed, its earlier answers, the owner's corrections ---------- */
+
+.dk-seo-ai-search-change {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x6);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-change .dk-icon {
+  flex: none;
+  margin-top: var(--x3);
+  color: var(--green);
+}
+
+.dk-seo-ai-search-said-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x6) var(--x12);
+}
+
+.dk-seo-ai-search-said-acts {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x6);
+}
+
+.dk-seo-ai-search-company:hover {
+  color: var(--green);
+}
+
+.dk-seo-ai-search-earlier,
+.dk-seo-ai-search-retired {
+  font-size: var(--t-small);
+}
+
+.dk-seo-ai-search-earlier > summary,
+.dk-seo-ai-search-retired > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-3);
+  cursor: pointer;
+  list-style: none;
+}
+
+.dk-seo-ai-search-earlier > summary::-webkit-details-marker,
+.dk-seo-ai-search-retired > summary::-webkit-details-marker {
+  display: none;
+}
+
+.dk-seo-ai-search-earlier > summary:hover,
+.dk-seo-ai-search-retired > summary:hover {
+  color: var(--ink);
+}
+
+.dk-seo-ai-search-earlier > summary:focus-visible,
+.dk-seo-ai-search-retired > summary:focus-visible {
+  outline: var(--x2) solid var(--focus);
+  outline-offset: var(--x2);
+}
+
+.dk-seo-ai-search-earlier[open] > summary .dk-icon,
+.dk-seo-ai-search-retired[open] > summary .dk-icon {
+  transform: rotate(180deg);
+}
+
+.dk-seo-ai-search-earlier ol,
+.dk-seo-ai-search-retired ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  margin-top: var(--x8);
+}
+
+.dk-seo-ai-search-earlier li,
+.dk-seo-ai-search-retired li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x4) var(--x10);
+}
+
+.dk-seo-ai-search-retired {
+  margin-top: var(--x14);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+/* The question's own buttons, and the operator's tasks for it. */
+.dk-seo-ai-search-detail-acts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--x8);
+}
+
+.dk-seo-ai-search-detail-tasks {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--x6);
+}
+
+.dk-seo-ai-search-detail-tasks .dk-seo-ai-search-sublabel {
+  margin-top: var(--x4);
+}
+
+/* ---------- what a run could not read ---------- */
+
+.dk-seo-ai-search-unread {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin-bottom: var(--x12);
+  padding: var(--x8) var(--x12);
+  border: var(--x1) solid var(--amber-edge);
+  border-radius: var(--r-ctl);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-ai-search-unread .dk-icon {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--amber);
+}
+
+.dk-seo-ai-search-pad-x.dk-seo-ai-search-unread {
+  margin-inline: var(--pad);
+}
+
+.dk-seo-ai-search-run {
+  display: inline-flex;
+  align-items: center;
+  max-width: calc(var(--x56) * 5);
+}
+
+/* ---------- questions people search ---------- */
+
+.dk-seo-ai-search-asked {
+  min-width: calc(var(--x56) * 4);
+}
+
+.dk-seo-ai-search .dk-table tbody td.dk-seo-ai-search-asked {
+  padding-top: var(--x6);
+  padding-bottom: var(--x6);
+}
+
+.dk-seo-ai-search-asked-phrase {
+  display: block;
+  color: var(--ink);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+/* ---------- a round, typed ---------- */
+
+.dk-seo-ai-search-round-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+}
+
+.dk-seo-ai-search-round-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-ai-search-round-line:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.dk-seo-ai-search-round-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.6fr) minmax(0, 1.6fr) minmax(0, 1.6fr);
+  gap: var(--x6);
+}
+
+@media (max-width: 560px) {
+  .dk-seo-ai-search-round-fields {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.dk-seo-ai-search-round-fields .dk-select select {
+  width: 100%;
+}
+
+/* A company named in an answer opens Competitors searched for it. */
+.dk-seo-ai-search-chips a.dk-seo-ai-search-name:hover {
+  border-color: var(--ink-4);
+  color: var(--ink);
+}

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import type { JobListed } from "@/contract/common";
-import type { AuditRun, SeoNav } from "@/contract/seo/common";
+import type { AuditRun, SeoNav, SeoTab } from "@/contract/seo/common";
 import { ask, askMe, type Answer } from "@/lib/api";
 import { isAuditJob } from "@/components/seo/nav/pages";
 import { SeoFrame } from "@/components/seo/nav/SeoFrame";
@@ -12,8 +12,9 @@ import type { RunningStep } from "@/components/seo/nav/AuditButton";
  * (components/shell/SideNav.tsx).
  *
  * It asks the desk two small things, together, and neither can take a page
- * down: how many opportunities are open (GET /api/v1/seo/nav, SeoNav in
- * contract/seo/common.ts: the count on the Opportunities tab, left out
+ * down: the tab strip's counts (GET /api/v1/seo/nav, SeoNav in
+ * contract/seo/common.ts: open opportunities, the owner's steps still open,
+ * phrases nobody has judged, pages waiting for Request indexing; left out
  * quietly while the desk has no answer), and whether a full audit is running
  * (GET /api/v1/seo/audit, the desk's own record of it), so a page drawn in
  * the middle of one follows it. Only a desk without that record is asked
@@ -28,26 +29,28 @@ export default async function SeoLayout({ children }: { children: ReactNode }) {
   const [nav, audit, who] = await Promise.all([ask<SeoNav>("/api/v1/seo/nav"), ask<{ audit: AuditRun | null }>("/api/v1/seo/audit"), askMe()]);
   const running = !audit.ok && audit.kind === "missing" ? runningAudit(await ask<JobListed[]>("/api/v1/jobs")) : [];
   return (
-    <SeoFrame opportunities={openCount(nav)} audit={auditRunning(audit)} running={running} pages={who.ok ? who.value.access?.pages : undefined}>
+    <SeoFrame tabs={tabsOf(nav)} audit={auditRunning(audit)} running={running} pages={who.ok ? who.value.access?.pages : undefined}>
       {children}
     </SeoFrame>
   );
 }
 
 /**
- * The open-opportunities count when the desk gave one (contract/seo/common.ts,
- * SeoNav: the Opportunities tab's own count, else `opportunities`), else null:
- * a desk without the route, a reading that is not ok, a shape it did not agree.
+ * The tabs with their counts when the desk gave them (contract/seo/common.ts,
+ * SeoNav), else null: a desk without the route, a reading that is not ok, a
+ * shape it did not agree. A desk older than the per-tab counts gets the
+ * Opportunities count from `opportunities`, as before.
  */
-function openCount(a: Answer<SeoNav>): number | null {
+function tabsOf(a: Answer<SeoNav>): SeoTab[] | null {
   if (!a.ok || typeof a.value !== "object" || a.value === null) return null;
-  /* Also read through a Reading wrapper, should the route send one: only an ok reading counts. */
+  /* Read through the Reading wrapper the route sends: only an ok reading counts. */
   const w = a.value as unknown as { state?: unknown; value?: unknown };
   const nav = (w.state === undefined ? a.value : w.state === "ok" ? w.value : null) as Partial<SeoNav> | null;
   if (!nav) return null;
-  const tab = Array.isArray(nav.tabs) ? nav.tabs.find((t) => t?.key === "opportunities") : undefined;
-  const n = tab && tab.count !== undefined ? tab.count : nav.opportunities;
-  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? n : null;
+  const tabs = Array.isArray(nav.tabs) ? nav.tabs.filter((t): t is SeoTab => !!t && typeof t.key === "string") : [];
+  if (tabs.length) return tabs;
+  const n = nav.opportunities;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 ? [{ key: "opportunities", label: "Opportunities", href: "/seo/opportunities", count: n, countSays: "open" }] : null;
 }
 
 /** The audit the desk is running now, when it has the agreed shape; else null (none running, or no record). */

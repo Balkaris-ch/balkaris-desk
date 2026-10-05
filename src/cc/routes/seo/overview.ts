@@ -1,7 +1,7 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { db } from "../../../db.ts";
-import { areaLevel } from "../../../grants.ts";
+import { areaLevel, mayRunJob } from "../../../grants.ts";
 import type { Person } from "../../../people.ts";
 import { me, type Vars } from "../../access.ts";
 import * as ga4 from "../../ga4.ts";
@@ -49,7 +49,7 @@ import { curve, TARGET_POSITION } from "../../seo/ctr.ts";
 import { act, allOpportunities, clusterNames, opportunityDb, rank, toRow } from "../../seo/engine.ts";
 import { seoJobs } from "../../seo/jobs.ts";
 import { budget, clusters, keywords } from "../../seo/keywords.ts";
-import { markOwnerTask, ownerTask, ownerTasks } from "../../seo/owner.ts";
+import { markOwnerTask, mayMark, ownerTask, ownerTasks } from "../../seo/owner.ts";
 import { profiles } from "../../seo/presence.ts";
 import { auditRun } from "../../seo/audit.ts";
 import { daySeries, daysOf, historyFacts, lastSnapDay, newAndLost, pageFigures, pageSeries, queryFigures, rate, tiles as rankTiles, totals as rankTotals, type Where } from "../../seo/rank.ts";
@@ -85,9 +85,10 @@ import { head, historyAbsent, HISTORY_NOTE, historyAt, indexFigures, keywordFigu
  * WHERE EACH PANEL COMES FROM. The SEO engine's own tables (src/cc/seo/*:
  * the Search Console history, the keyword table and clusters, the
  * opportunities, the owner tasks, the AI checks, the referrals, the profiles,
- * the competitors), the desk's crawl, Google's daily URL Inspection, the
- * PageSpeed runs, Bing Webmaster when it has a key, the scheduler and the
- * operator's queue. Nothing here asks Google or anybody else while the page
+ * the competitors, the backlinks it reads and Google's Links report as
+ * imported), the desk's crawl, Google's daily URL Inspection, the PageSpeed
+ * runs, Bing Webmaster when it has a key, the scheduler and the operator's
+ * queue. Nothing here asks Google or anybody else while the page
  * is drawn, with three kept reads that ask only when their kept answer has
  * aged: Bing's link count (no request when it is fresh or there is no key),
  * GA4's sessions by channel for "From search" (the read the Traffic screen
@@ -180,7 +181,20 @@ const dayWindow = (range: SeoRange): { start: string; end: string } => windowTo(
  * says so of SEO's AI buttons: the operator reads every area's figures to
  * answer); the owner's own steps are the owner's to mark.
  */
-const canOf = (who: Person): OverviewCan => ({ operate: areaLevel(who, "operator") === "edit", ownerSteps: !!who.owner });
+const canOf = (who: Person): OverviewCan => ({
+  operate: areaLevel(who, "operator") === "edit",
+  ownerSteps: !!who.owner,
+  /* The same rule the job door applies (POST /api/v1/jobs/:name/run), so the strip offers no Run now it would refuse. */
+  run: (() => {
+    try {
+      return seoJobs()
+        .filter((j) => mayRunJob(who, j.name))
+        .map((j) => j.name);
+    } catch {
+      return [];
+    }
+  })(),
+});
 
 const NEEDS_OPERATOR = "Queueing work for the AI Operator takes edit on the AI Operator as well as on SEO. The owner gives it on Team › Access & Roles.";
 
@@ -248,7 +262,7 @@ function indexStand(): IndexStand | null {
     cutShort:
       f.complete || f.of === null
         ? null
-        : `The check of ${shortDay(f.day)} was cut short: it reached ${fmt(reached)} of ${fmt(of)} addresses${f.carried ? `; ${fmt(f.carried)} keep their last earlier result` : ""}${missing ? `; ${fmt(missing)} have no result yet and are counted neither way` : ""}. Run "Inspect sitemap addresses in Google" again on Automations to finish it.`,
+        : `The check of ${shortDay(f.day)} was cut short: it reached ${fmt(reached)} of ${fmt(of)} addresses${f.carried ? `; ${fmt(f.carried)} keep their last earlier result` : ""}${missing ? `; ${fmt(missing)} have no result yet and are counted neither way` : ""}. Run full SEO audit finishes it (it runs the index check again while it is cut short), or Run now on the index check in the Automations strip.`,
   };
 }
 
@@ -593,10 +607,17 @@ function topPages(range: SeoRange, span: SeoSpan | null, view: SiteView, asked: 
     .filter((p) => p.impressions > 0)
     .sort(byClicks)
     .slice(0, TOP_PAGES);
-  if (!figures.length) return waiting("gsc", `Google showed no page of the site in a search in this window${whereWords(asked) ? ` (${whereWords(asked)})` : ""}.`);
   /* The same days, counted two ways: the page rows and the property's own total. Clicks by page can only add up to more, never to fewer. */
+  const totals = rankTotals(span.start, span.end, where);
+  if (!figures.length) {
+    const words = whereWords(asked) ? ` (${whereWords(asked)})` : "";
+    /* Google did show the site, but the page history kept no row of it: say that, never "no page was shown". */
+    return totals.impressions > 0
+      ? waiting("gsc", `The desk's day-by-day page history holds none of the ${fmt(totals.impressions)} impressions and ${fmt(totals.clicks)} clicks Google counts for the site in this window${words}, so no page can be named. Choose all countries and devices to read Google's own figure per page.`)
+      : waiting("gsc", `Google showed no page of the site in a search in this window${words}.`);
+  }
   const all = pageFigures(span.start, span.end, where).reduce((n, p) => n + p.clicks, 0);
-  const property = rankTotals(span.start, span.end, where).clicks;
+  const property = totals.clicks;
   const short = all < property ? { pageClicks: all, propertyClicks: property } : null;
   return ok(
     {
@@ -824,8 +845,45 @@ async function presencePanel(range: SeoRange): Promise<Reading<PresencePanel>> {
       unknown: p.filter((x) => x.state === "unknown" || x.state === "not-checked").length,
       of: p.length,
     },
+    known: await knownLinks(),
   };
   return ok(value, "desk", new Date().toISOString());
+}
+
+/**
+ * The links known without Bing, from the desk's own backlink tables
+ * (src/cc/seo/backlinks.ts): what Google's Links report said when the owner
+ * last imported it, and what the desk's own reading of each linking page
+ * found. Read from the tables only; nothing is fetched here. The library is
+ * loaded when the panel is drawn, so a fault in it costs this one line of the
+ * panel, not the Overview.
+ */
+async function knownLinks(): Promise<PresencePanel["known"]> {
+  try {
+    const backlinks = await import("../../seo/backlinks.ts");
+    const g = backlinks.googleLinks();
+    const rows = backlinks.knownLinks();
+    if (!g && !rows.length) {
+      return waiting(
+        "desk",
+        "No link is known yet besides Bing's. On SEO › Backlinks, import Search Console's Links report (Search Console › Links › Export), or name a page that links to the site, and the desk reads it once a week.",
+      );
+    }
+    const imports = g ? Object.values(g.imported).flatMap((i) => (i ? [i.at] : [])).sort() : [];
+    const live = rows.filter((r) => r.state === "live").length;
+    const lost = rows.filter((r) => r.state === "lost").length;
+    return ok(
+      {
+        google: g ? { sites: g.sites.length, pages: g.pages.length, importedAt: imports.at(-1) ?? null } : null,
+        read: { live, lost, other: rows.length - live - lost, all: rows.length },
+      },
+      "desk",
+      rows.map((r) => r.checkedAt ?? r.firstSeen).sort().at(-1) ?? imports.at(-1) ?? new Date().toISOString(),
+      "Google's Links report as the owner last imported it from Search Console, and the linking pages the desk reads itself: a link is live when its own reading found it on the page, lost when a later reading no longer did.",
+    );
+  } catch {
+    return waiting("desk", "The desk's backlink tables are not on this desk yet.");
+  }
 }
 
 /* ---------- Search Console ------------------------------------------------------------------------------ */
@@ -1245,7 +1303,7 @@ function engineParts(open: OpportunityRow[]): EnginePart[] {
  * out by a caller that is not a person: everything is then allowed, as for
  * the owner).
  */
-export async function overview(range: SeoRange, asked: OverviewAsked = ALL, can: OverviewCan = { operate: true, ownerSteps: true }): Promise<SeoOverviewPayload> {
+export async function overview(range: SeoRange, asked: OverviewAsked = ALL, can?: OverviewCan): Promise<SeoOverviewPayload> {
   const h = head(range);
   const span = h.span;
   const view = siteView();
@@ -1284,7 +1342,7 @@ export async function overview(range: SeoRange, asked: OverviewAsked = ALL, can:
   return {
     head: h,
     asked,
-    can,
+    can: can ?? { operate: true, ownerSteps: true, run: safe([], () => seoJobs().map((j) => j.name)) },
     tiles: safe(
       { brand: null, health: site.siteScore(daysOf(range)), indexed: waiting("gsc", "Could not be read."), clicks: historyAbsent(), impressions: historyAbsent(), position: historyAbsent(), ctr: historyAbsent(), ai: waiting("desk", "Could not be read.") },
       () => tilesOf(range, span, asked),
@@ -1422,7 +1480,8 @@ routes.post("/owner", async (c) => {
   const body = OwnerBody.parse(await c.req.json().catch(() => ({})));
   const had = ownerTask(body.id);
   if (!had) return c.json({ error: `There is no owner task ${body.id}.` }, 404);
-  if (had.whoAll === "owner" && !me(c).owner) return c.json({ error: "Only the owner can mark his own steps." }, 403);
+  /* The one rule every door that marks a task asks (owner.ts `mayMark`): the owner's own steps are his. */
+  if (!mayMark(had, me(c))) return c.json({ error: "Only the owner can mark his own steps." }, 403);
   const task = markOwnerTask(body.id, body.done, me(c).name, body.note ?? null);
   if (!task) return c.json({ error: `There is no owner task ${body.id}.` }, 404);
   const { whoAll: _w, ...row } = task;

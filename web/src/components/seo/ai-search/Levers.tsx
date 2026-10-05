@@ -7,9 +7,9 @@ import { Go } from "@/components/ui/Go";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
-import { OwnerMark } from "@/components/seo/overview/Act";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
+import { AiOwnerMark } from "./Act";
 import "./ai-search.css";
 
 const STATE: Record<AiLever["state"], { tone: ChipTone; icon: IconName; word: string }> = {
@@ -88,7 +88,7 @@ export function Levers({ reading }: { reading: Reading<AiLever[]> }) {
                 <div className="dk-seo-ai-search-lever-act">
                   <Chip tone={who.tone}>{who.word}</Chip>
                   {l.step.ownerTask ? (
-                    <OwnerMark id={l.step.ownerTask.id} done={l.step.ownerTask.done} />
+                    <AiOwnerMark id={l.step.ownerTask.id} done={l.step.ownerTask.done} />
                   ) : l.step.opportunities && l.step.opportunitiesHref ? (
                     <LinkButton href={l.step.opportunitiesHref} size="xs" variant="quiet">
                       {`${num(l.step.opportunities)} to do`}

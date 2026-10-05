@@ -3,6 +3,7 @@ import { Card } from "@/components/ui/Card";
 import { Go } from "@/components/ui/Go";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { StatusDot } from "@/components/ui/StatusDot";
+import { DEFAULT_RANGE, seoHref } from "./href";
 import "./overview.css";
 
 const ICON: Record<EnginePart["key"], IconName> = {
@@ -26,7 +27,7 @@ const STATE: Record<EnginePart["state"], { tone: "good" | "warn" | "quiet"; word
  * What the SEO tools are made of, each part with its real state in one line
  * of counts: the overview of every feature the owner asked to see.
  */
-export function Engine({ parts }: { parts: EnginePart[] }) {
+export function Engine({ parts, range = DEFAULT_RANGE }: { parts: EnginePart[]; range?: string }) {
   return (
     <Card
       title="What the SEO tools do"
@@ -38,7 +39,7 @@ export function Engine({ parts }: { parts: EnginePart[] }) {
       <ul className="dk-seo-overview-parts" aria-label="Parts of the SEO engine">
         {parts.map((p) => (
           <li key={p.key}>
-            <Go href={p.href} className="dk-seo-overview-part">
+            <Go href={seoHref(p.href, range)} className="dk-seo-overview-part">
               <span className="dk-seo-overview-part-icon" aria-hidden>
                 <Icon name={ICON[p.key]} size={16} />
               </span>

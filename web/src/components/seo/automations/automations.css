@@ -51,6 +51,19 @@
   color: var(--green);
 }
 
+/* A time that passed more than ten minutes ago without a start: amber, as the Late badge. */
+.dk-seo-automations-next--due.dk-seo-automations-next--late {
+  color: var(--amber);
+}
+
+/* "1 failing" and "2 late" side by side in a tile's badge slot. */
+.dk-seo-automations-badges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--x4);
+}
+
 .dk-seo-automations-budgets {
   display: flex;
   flex-direction: column;
@@ -880,4 +893,186 @@
 .dk-seo-automations-log-actor {
   color: var(--ink-3);
   white-space: nowrap;
+}
+
+/* ---- kept on time: the scheduler, the SEO watch's rules and its asks ---- */
+
+.dk-seo-automations-ontime {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-automations-ontime-state {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--tone-edge);
+  border-radius: var(--r-field);
+  background: var(--tone-ground);
+  color: var(--ink);
+}
+
+.dk-seo-automations-ontime-state > svg {
+  flex: none;
+  margin-top: var(--x2);
+  color: var(--tone);
+}
+
+.dk-seo-automations-ontime-rules {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  padding-left: var(--x16);
+  list-style: disc;
+}
+
+.dk-seo-automations-ontime-rules li::marker {
+  color: var(--ink-4);
+}
+
+.dk-seo-automations-ontime-rules b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+/* ---- the head's period: runs, what they brought in, failures ---- */
+
+.dk-seo-automations-period {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+  min-width: 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-automations-period-runs {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-automations-found {
+  grid-template-columns: minmax(0, 1fr) max-content;
+}
+
+.dk-seo-automations-found-row {
+  display: contents;
+}
+
+.dk-seo-automations-found dt a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--line);
+}
+
+.dk-seo-automations-found dt a:hover {
+  color: var(--green);
+}
+
+.dk-seo-automations-found dd {
+  color: var(--ink);
+  text-align: right;
+}
+
+/* ---- a step done by hand: where it is done, and its note ---- */
+
+.dk-seo-automations-steprow-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x4) var(--x12);
+  padding-left: calc(var(--x56) + var(--x10));
+  font-size: var(--t-small);
+}
+
+.dk-seo-automations-steprow-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  text-decoration: none;
+}
+
+.dk-seo-automations-steprow-link:hover {
+  color: var(--green);
+}
+
+.dk-seo-automations-steprow-note {
+  padding-left: calc(var(--x56) + var(--x10));
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-automations-step-note {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--x8);
+  margin-top: var(--x8);
+}
+
+.dk-seo-automations-step-note .dk-field {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 520px) {
+  .dk-seo-automations-steprow-links,
+  .dk-seo-automations-steprow-note {
+    padding-left: 0;
+  }
+
+  .dk-seo-automations-step-note {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ---- the week, in short ---- */
+
+.dk-seo-automations-digest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  min-width: 0;
+  font-size: var(--t-small);
+}
+
+.dk-seo-automations-digest-lines {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  line-height: var(--lh-body);
+}
+
+.dk-seo-automations-digest-lines li {
+  display: grid;
+  grid-template-columns: var(--x8) minmax(0, 1fr);
+  align-items: baseline;
+  gap: var(--x8);
+  color: var(--ink-2);
+}
+
+.dk-seo-automations-digest-lines .dk-dot {
+  align-self: center;
+}
+
+.dk-seo-automations-digest-older {
+  padding-left: 0;
+}
+
+.dk-seo-automations-digest-telegram {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  padding-top: var(--x10);
+  border-top: var(--x1) solid var(--line);
 }

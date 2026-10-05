@@ -916,10 +916,17 @@ export async function announce(what: { paths?: string[]; changed?: boolean }, by
 
 /* ---------- the panel ------------------------------------------------------------------------------- */
 
-/** The last few things done here, from the activity feed (every action above writes its line with a dedupe key that begins "google:"). */
+/**
+ * The last few things done here, from the activity feed: every action above
+ * writes its line with a dedupe key that begins "google:", and "Mark
+ * requested" is written by the engine's markSubmitted ("seo:submitted:"), the
+ * same line the Search Console tab's button writes, so it is read from there.
+ */
 function recent(limit = 6): GoogleDeed[] {
   try {
-    const rows = db.prepare("SELECT at, actor, text, detail, tone FROM cc_activity WHERE kind = 'seo-action' AND dedupe LIKE 'google:%' ORDER BY at DESC, id DESC LIMIT ?").all(limit) as {
+    const rows = db
+      .prepare("SELECT at, actor, text, detail, tone FROM cc_activity WHERE kind = 'seo-action' AND (dedupe LIKE 'google:%' OR dedupe LIKE 'seo:submitted:%') ORDER BY at DESC, id DESC LIMIT ?")
+      .all(limit) as {
       at: string;
       actor: string | null;
       text: string;

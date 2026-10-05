@@ -7,6 +7,7 @@ import { Delta } from "@/components/ui/Delta";
 import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { DASH, figure, num } from "@/lib/format";
+import { DEFAULT_RANGE, seoHref } from "./href";
 import "./overview.css";
 
 function Figure({ label, stat, downIsGood, digits }: { label: string; stat: Stat | null; downIsGood?: boolean; digits?: number }) {
@@ -26,17 +27,17 @@ function Figure({ label, stat, downIsGood, digits }: { label: string; stat: Stat
  * the period, with clicks as columns under impressions as a line, from the
  * desk's own daily copy. "Open" is Search Console's own performance report.
  */
-export function Console({ reading }: { reading: Reading<ConsolePanel> }) {
+export function Console({ reading, range = DEFAULT_RANGE }: { reading: Reading<ConsolePanel>; range?: string }) {
   const href = reading.state === "ok" ? reading.value.href : null;
   return (
     <Card
       title="Search Console"
       icon="line-chart"
       className="dk-seo-overview-panel dk-seo-overview-a-sc"
-      info="Google Search, web results, final days (two to three days behind), from the desk’s own daily copy of Search Console. Compared with the period before only when the copy covers it whole."
+      info={`Google Search, web results, final days (two to three days behind), from the desk’s own daily copy of Search Console. Compared with the period before only when the copy covers it whole.${reading.state === "ok" && reading.note ? ` ${reading.note}` : ""}`}
       right={
         <>
-          <LinkButton href="/seo/search-console" size="sm">
+          <LinkButton href={seoHref("/seo/search-console", range)} size="sm">
             View
           </LinkButton>
           {href ? (

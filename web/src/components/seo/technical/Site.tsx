@@ -50,7 +50,18 @@ function submittedLine(s: SubmittedSitemap): { tone: "good" | "warn" | "bad"; la
   return { tone: s.errors ? "bad" : s.warnings || !s.lastDownloaded ? "warn" : "good", label: `Google: ${name}`, detail: `${parts.join("; ")}.` };
 }
 
-export function SitemapCard({ sitemap, checks, submitted }: { sitemap: Reading<SitemapCheck>; checks: Reading<{ rows: ReadinessCheck[] }>; submitted: Reading<{ rows: SubmittedSitemap[] }> }) {
+export function SitemapCard({
+  sitemap,
+  checks,
+  submitted,
+  sitemapsHref,
+}: {
+  sitemap: Reading<SitemapCheck>;
+  checks: Reading<{ rows: ReadinessCheck[] }>;
+  submitted: Reading<{ rows: SubmittedSitemap[] }>;
+  /** Search Console's Sitemaps report, where Google says what an error is (its API gives the count only). */
+  sitemapsHref?: string | null;
+}) {
   const bing = checks.state === "ok" ? (checks.value.rows.find((c) => c.key === "bing") ?? null) : null;
   return (
     <Card
@@ -93,6 +104,22 @@ export function SitemapCard({ sitemap, checks, submitted }: { sitemap: Reading<S
                 </tbody>
               </table>
             ) : null}
+            {m.entries?.length ? (
+              <details className="dk-seo-technical-more">
+                <summary>Every address the file lists ({num(m.entries.length)}), newest first</summary>
+                <ul className="dk-seo-technical-entries">
+                  {m.entries.map((e) => (
+                    <li key={e.path}>
+                      <PathLink path={e.path} />
+                      <span className="dk-seo-technical-entries-date dk-num">{e.lastmod ? fullDate(e.lastmod) : "no lastmod"}</span>
+                      <span className="dk-seo-technical-entries-date dk-num" title="The sitemap’s priority: the site’s own ranking of its pages against each other">
+                        {e.priority !== null ? num(e.priority, 1) : ""}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
           </div>
         )}
       </Body>
@@ -103,6 +130,16 @@ export function SitemapCard({ sitemap, checks, submitted }: { sitemap: Reading<S
         ) : (
           <Lines rows={[{ key: "g", tone: "absent", label: "Google: Search Console’s record of the sitemap", detail: `${submitted.reason}${submitted.state === "off" && submitted.step ? ` ${submitted.step}` : ""}` }]} />
         )}
+        <p className="dk-seo-technical-sitemap-links">
+          <Go href="#google" className="dk-seo-technical-path--link">
+            Submit to Google, or tell Bing and the others
+          </Go>
+          {sitemapsHref && submitted.state === "ok" && submitted.value.rows.some((s) => s.errors || s.warnings) ? (
+            <Go href={sitemapsHref} className="dk-seo-technical-path--link">
+              What the errors are, in Search Console <Icon name="external" size={12} />
+            </Go>
+          ) : null}
+        </p>
         {bing ? <Lines rows={[{ key: "bing", tone: checkTone(bing), label: bing.label, detail: bing.state === "fail" && bing.fix ? `${bing.detail} ${bing.fix}` : bing.detail, who: bing.state === "fail" && bing.who ? WHO[bing.who] : null }]} /> : null}
         <div className="dk-seo-technical-stampline dk-seo-technical-stampline--flat">
           <Stamp reading={submitted.state === "ok" ? submitted : checks} />
@@ -149,6 +186,12 @@ export function RobotsCard({ robots, llms }: { robots: SeoTechnicalPayload["robo
               <Quiet className="dk-seo-technical-pad">Each crawler’s access is read by the AI-readiness check, which has not run yet.</Quiet>
             )}
             {r.agentsAt ? <Quiet className="dk-seo-technical-pad-x">Crawlers read {ago(r.agentsAt)}.</Quiet> : null}
+            {/* Allowed is not the same as visited: when Googlebot and the others really came is counted on AI Search, from the hosting's log. */}
+            <Quiet className="dk-seo-technical-pad-x">
+              <Go href="/seo/ai-search" className="dk-seo-technical-path--link">
+                When Googlebot, Bingbot and the AI crawlers came
+              </Go>
+            </Quiet>
           </div>
         )}
       </Body>
@@ -314,6 +357,12 @@ export function BrokenCard({ reading }: { reading: Reading<BrokenCheck> }) {
               </>
             ) : null}
             {b.outside.length ? <LinkList rows={b.outside} label="Broken links to other sites" /> : null}
+            {b.uncheckedRows?.length ? (
+              <details className="dk-seo-technical-more dk-seo-technical-pad-x">
+                <summary>The {num(b.uncheckedRows.length)} that could not be checked</summary>
+                <LinkList rows={b.uncheckedRows} label="Links to other sites that could not be checked" />
+              </details>
+            ) : null}
           </div>
         )}
       </Body>

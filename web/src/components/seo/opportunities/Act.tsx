@@ -5,6 +5,7 @@ import type { OpportunitiesActed, OpportunityAnswer, OpportunityState } from "@/
 import type { OwnerStepAnswer } from "@/contract/seo/opportunities";
 import { useSend } from "@/components/operator/send";
 import { Button, type ButtonSize, type ButtonVariant } from "@/components/ui/Button";
+import { Field, Input } from "@/components/ui/Field";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { cx } from "@/lib/cx";
 import { DONE_IT } from "./look";
@@ -80,20 +81,53 @@ export function ActButton({
   );
 }
 
-/** A person's decision on one opportunity: done, dismissed, open again. */
-export function StateButton({ id, state, label, icon, variant = "quiet", size = "sm" }: { id: string; state: OpportunityState; label: string; icon?: IconName; variant?: ButtonVariant; size?: ButtonSize }) {
+/**
+ * "Your decision" in the detail: done, dismissed, back to open, with an
+ * optional reason that is kept with the decision and shown in its history.
+ * A row that is queued or in progress (a to-do added, indexing requested, a
+ * task queued) can go back to open: a mistaken mark needs no detour.
+ */
+export function Decide({ id, state }: { id: string; state: OpportunityState }) {
   const { go, busy, message } = useSend();
+  const [why, setWhy] = useState("");
+  const closed = state === "done" || state === "dismissed";
+  const send = (to: OpportunityState) =>
+    void go<OpportunityAnswer>(STATE, why.trim() ? { id, state: to, note: why.trim() } : { id, state: to }, () => {
+      setWhy("");
+      return null;
+    });
   return (
-    <span className="dk-seo-opps-act dk-seo-opps-act--under">
-      <Button size={size} variant={variant} icon={icon} disabled={busy} aria-busy={busy} onClick={() => void go<OpportunityAnswer>(STATE, { id, state })}>
-        {label}
-      </Button>
+    <div className="dk-seo-opps-decide">
+      <Field label="Why (optional)" hint="Kept with the decision, and shown in its history.">
+        <Input value={why} maxLength={300} onChange={(e) => setWhy(e.target.value)} placeholder={closed ? "What changed" : "Not for us, done by hand, wrong page…"} disabled={busy} />
+      </Field>
+      <div className="dk-seo-opps-buttons">
+        {closed ? (
+          <Button size="sm" variant="quiet" icon="refresh" disabled={busy} aria-busy={busy} onClick={() => send("open")}>
+            Open again
+          </Button>
+        ) : (
+          <>
+            <Button size="sm" variant="good" icon="check-circle" disabled={busy} aria-busy={busy} onClick={() => send("done")}>
+              Mark done
+            </Button>
+            <Button size="sm" variant="quiet" icon="x-circle" disabled={busy} aria-busy={busy} onClick={() => send("dismissed")}>
+              Dismiss
+            </Button>
+            {state !== "open" ? (
+              <Button size="sm" variant="quiet" icon="refresh" disabled={busy} aria-busy={busy} title="Takes back the mark: it is open again. A to-do or an operator task it queued stays where it is." onClick={() => send("open")}>
+                Back to open
+              </Button>
+            ) : null}
+          </>
+        )}
+      </div>
       {message && !message.ok ? (
         <span className="dk-seo-opps-said dk-seo-opps-said--bad" role="alert">
           {message.text}
         </span>
       ) : null}
-    </span>
+    </div>
   );
 }
 
@@ -222,6 +256,13 @@ export function RowMenu({ id, state, byHand, ownerTask, title }: { id: string; s
               <Icon name="x-circle" size={14} />
               Dismiss
             </button>
+            {/* A mark taken by mistake (a to-do, "indexing requested") is taken back here, not by dismissing and opening again. */}
+            {state !== "open" ? (
+              <button type="button" role="menuitem" onClick={() => pick(STATE, { id, state: "open" })} title="Takes back the mark: it is open again. A to-do or an operator task it queued stays where it is.">
+                <Icon name="refresh" size={14} />
+                Back to open
+              </button>
+            ) : null}
           </>
         )}
       </div>
@@ -241,6 +282,10 @@ const BulkContext = createContext<Bulk>({ picked: 0, busy: false, said: null });
 
 /** At most this many actions are queued at once (the server's own limit). */
 const ACT_MOST = 10;
+/** A decision or "indexing requested" for at most this many (the server's own limit: a page of the list at its longest). */
+const STATE_MOST = 200;
+/** What each bulk choice reads as in its result line. */
+const DID: Record<string, string> = { act: "queued", requested: "marked requested", done: "marked done", dismissed: "dismissed", open: "open again" };
 
 /**
  * The list as a form: the table's checkboxes (named `ids`) are its fields and
@@ -266,13 +311,15 @@ export function BulkForm({ children, className }: { children: ReactNode; classNa
     const ids = new FormData(e.currentTarget).getAll("ids").map(String);
     if (!ids.length) return setMessage({ ok: false, text: "Tick the opportunities first." });
     if (op === "act" && ids.length > ACT_MOST) return setMessage({ ok: false, text: `At most ${ACT_MOST} actions are queued at once; ${ids.length} are ticked.` });
+    if (ids.length > STATE_MOST) return setMessage({ ok: false, text: `At most ${STATE_MOST} at once; ${ids.length} are ticked.` });
     const summary = (v: OpportunitiesActed): string => {
       const good = v.results.filter((r) => r.ok).length;
       const bad = v.results.filter((r) => !r.ok);
-      return `${good} of ${v.results.length} ${op === "act" ? "queued" : "marked"}${bad.length ? `; not ${bad.length}: ${bad[0]!.line}` : "."}`;
+      return `${good} of ${v.results.length} ${DID[op] ?? "marked"}${bad.length ? `; not ${bad.length}: ${bad[0]!.line}` : "."}`;
     };
     if (op === "act") void go<OpportunitiesActed>(ACT, { ids }, summary);
-    else if (op === "done" || op === "dismissed") void go<OpportunitiesActed>(STATE, { ids, state: op }, summary);
+    else if (op === "requested") void go<OpportunitiesActed>(ACT, { ids, requested: true }, summary);
+    else if (op === "done" || op === "dismissed" || op === "open") void go<OpportunitiesActed>(STATE, { ids, state: op }, summary);
   };
 
   return (
@@ -321,10 +368,21 @@ export function BulkMenu() {
             value="act"
             role="menuitem"
             disabled={!picked || busy}
-            title="Queues the operator task of each ticked opportunity whose action is a proposal or a brief; proposals still wait for approval. A person's step (Search Console, the website's code, the owner's logins) is not taken in bulk: mark it on its own row."
+            title="Queues the operator task of each ticked opportunity whose action is a proposal or a brief; proposals still wait for approval. A person's step is not queued here: an address waiting in Search Console has “Mark indexing requested”, and the website's code and the owner's logins are marked on their own row."
           >
             <Icon name="sparkles" size={14} />
             Queue operator tasks (up to {ACT_MOST})
+          </button>
+          <button
+            type="submit"
+            name="op"
+            value="requested"
+            role="menuitem"
+            disabled={!picked || busy}
+            title="Records that you pressed “Request indexing” in Search Console's URL Inspection for each ticked address that waits for it. Google offers no way to request it by machine: press it there first."
+          >
+            <Icon name="check" size={14} />
+            Mark indexing requested
           </button>
           <button type="submit" name="op" value="done" role="menuitem" disabled={!picked || busy}>
             <Icon name="check-circle" size={14} />
@@ -333,6 +391,10 @@ export function BulkMenu() {
           <button type="submit" name="op" value="dismissed" role="menuitem" disabled={!picked || busy}>
             <Icon name="x-circle" size={14} />
             Dismiss
+          </button>
+          <button type="submit" name="op" value="open" role="menuitem" disabled={!picked || busy} title="Takes back a mark: each ticked opportunity is open again. A to-do or an operator task it queued stays where it is.">
+            <Icon name="refresh" size={14} />
+            Back to open
           </button>
         </div>
       </details>

@@ -1,12 +1,12 @@
 import { db } from "../../db.ts";
 import { addDays, countOn, setCount } from "../search/shared.ts";
-import { UA } from "../site/http.ts";
 import { note, setState, state, today } from "../store.ts";
 import type { Intent, KeywordSource, KeywordStatus } from "../../../web/src/contract/seo/keywords.ts";
 import type { Priority } from "../../../web/src/contract/seo/common.ts";
 import { lastSnapDay, queryFigures, queryPageFigures } from "./rank.ts";
 import { siteView, type SiteView } from "./site.ts";
 import { json, now } from "./tables.ts";
+import { decodeAnswer, parseGoogleSuggest, wire as suggestWire } from "./web/suggest.ts";
 import { answers, flagsOf, langOf, normal, pageWords } from "./words.ts";
 
 /**
@@ -16,7 +16,9 @@ import { answers, flagsOf, langOf, normal, pageWords } from "./words.ts";
  *
  *   gsc           Search Console showed the site for it (flows in daily from
  *                 the desk's own history, rank.ts)
- *   autocomplete  the weekly research found it in Google Autocomplete
+ *   autocomplete  the research found it in the search engines' suggestions:
+ *                 the desk's daily run (with a weekly budget), or a person's
+ *                 research of a phrase on SEO › Keywords
  *   audit         the SEO audit's table (scripts/seo-import.ts)
  *   manual        a person added it
  *
@@ -73,10 +75,21 @@ interface KeywordDb {
   seed: string | null;
   first_seen: string;
   last_seen: string;
+  edited_by?: string | null;
 }
 
 /** Whether a decision was a person's (anything but the desk's own sources). */
 const byPerson = (by: string | null): boolean => !!by && !["audit", "rule", "research", "gsc"].includes(by);
+
+/*
+ * Who last changed a phrase's topic, language or intent by hand. Kept apart
+ * from status_by because a person may correct where a phrase is filed without
+ * judging it, and the audit's import must still leave that correction alone.
+ */
+{
+  const cols = db.prepare("PRAGMA table_info(cc_seo_keywords)").all() as { name: string }[];
+  if (cols.length && !cols.some((c) => c.name === "edited_by")) db.exec("ALTER TABLE cc_seo_keywords ADD COLUMN edited_by TEXT");
+}
 
 /**
  * Add a phrase or add a source to it. Returns "added", "changed" or
@@ -133,8 +146,9 @@ export function upsertKeyword(k: KeywordInput, at = now()): "added" | "changed" 
     next.page = k.page;
     next.mapped_by = k.page ? "audit" : null;
   }
-  if (k.by === "audit" && k.cluster && !byPerson(had.status_by)) next.cluster = k.cluster;
-  if (k.by === "audit" && k.intent && !byPerson(had.status_by)) next.intent = k.intent;
+  const handFiled = byPerson(had.status_by) || byPerson(had.edited_by ?? null);
+  if (k.by === "audit" && k.cluster && !handFiled) next.cluster = k.cluster;
+  if (k.by === "audit" && k.intent && !handFiled) next.intent = k.intent;
   const changed =
     sources !== had.sources ||
     next.lang !== had.lang ||
@@ -313,9 +327,199 @@ export function setKeywordStatus(id: number, status: KeywordStatus, by: string):
   return keywordById(id);
 }
 
+/**
+ * A person maps a cluster to a page, or says no page answers it. Both are the
+ * person's word: "no page" keeps their name too, or the next engine run (which
+ * remaps every cluster nobody decided) would map it straight back.
+ */
 export function setClusterPage(key: string, path: string | null, by: string): Cluster | null {
-  db.prepare("UPDATE cc_seo_clusters SET page = ?, mapped_by = ?, updated_at = ? WHERE key = ?").run(path, path ? by : null, now(), key);
+  db.prepare("UPDATE cc_seo_clusters SET page = ?, mapped_by = ?, updated_at = ? WHERE key = ?").run(path, by, now(), key);
   return clusters().find((c) => c.key === key) ?? null;
+}
+
+/** Give a cluster's page back to the desk: the audit's and the rule's mapping apply again, from now. */
+export function releaseClusterPage(key: string): Cluster | null {
+  db.prepare("UPDATE cc_seo_clusters SET page = NULL, mapped_by = NULL, updated_at = ? WHERE key = ?").run(now(), key);
+  remap();
+  return clusters().find((c) => c.key === key) ?? null;
+}
+
+/** Give a phrase's page back to the desk, the same way. */
+export function releaseKeywordPage(id: number): Keyword | null {
+  db.prepare("UPDATE cc_seo_keywords SET page = NULL, mapped_by = NULL WHERE id = ?").run(id);
+  remap();
+  return keywordById(id);
+}
+
+/* ---------- a person files phrases and topics ------------------------------------------------- */
+
+/** The languages the desk files phrases in: the four Switzerland searches in. */
+export const LANGS = ["de", "en", "fr", "it"] as const;
+export type Lang = (typeof LANGS)[number];
+export const isLang = (v: unknown): v is Lang => LANGS.includes(v as Lang);
+
+const FRENCH = new Set(["le", "la", "les", "des", "du", "une", "pour", "prix", "comment", "combien", "pourquoi", "quel", "quelle", "agence", "création", "entreprise", "meilleur", "près", "avec", "sans", "et", "au", "aux"]);
+const ITALIAN = new Set(["il", "lo", "gli", "della", "delle", "dei", "per", "prezzo", "prezzi", "come", "quanto", "costa", "perché", "agenzia", "creazione", "sito", "azienda", "migliore", "vicino", "con", "senza", "di", "nel"]);
+
+/**
+ * A phrase's language: German or English by the store's own word lists, else
+ * French or Italian by a few of their commonest words, else the language it
+ * was researched in. Research of a German phrase often brings English
+ * completions back; each is filed by its own words, not the seed's.
+ */
+export function langOfPhrase(phrase: string, fallback: string | null = null): string | null {
+  const own = langOf(phrase);
+  if (own) return own;
+  const words = phrase.toLowerCase().split(/[^a-zàâäçéèêëîïôöùûüœß'0-9]+/).filter(Boolean);
+  const fr = words.filter((w) => FRENCH.has(w)).length;
+  const it = words.filter((w) => ITALIAN.has(w)).length;
+  if (fr > it) return "fr";
+  if (it > fr) return "it";
+  return fallback;
+}
+
+/**
+ * The topic for a phrase of `lang` found under `cluster`: that topic when the
+ * languages agree, else its sibling of the phrase's language
+ * ("website-cost:de" → "website-cost:en") when the store has one, else none.
+ * Never a German topic for an English phrase.
+ */
+export function topicFor(cluster: string | null | undefined, lang: string | null): string | null {
+  if (!cluster) return null;
+  const all = clusters();
+  const c = all.find((x) => x.key === cluster);
+  if (!c) return null;
+  if (!lang || c.lang === lang) return c.key;
+  const stem = c.key.includes(":") ? c.key.slice(0, c.key.lastIndexOf(":")) : c.key;
+  return all.find((x) => x.key === `${stem}:${lang}`)?.key ?? null;
+}
+
+const INTENT_LIST: readonly Intent[] = ["commercial", "transactional", "informational", "local", "navigational"];
+
+/** A person corrects where a phrase is filed: its topic, language, intent. Kept against every later run and import (edited_by). */
+export function editKeyword(id: number, change: { cluster?: string | null; lang?: string | null; intent?: string | null }, by: string): { keyword: Keyword; changed: string[] } | null {
+  const had = keywordById(id);
+  if (!had) return null;
+  const next: { cluster: string | null; lang: string | null; intent: string | null } = { cluster: had.cluster, lang: had.lang, intent: had.intent };
+  const changed: string[] = [];
+  if (change.cluster !== undefined && change.cluster !== had.cluster) {
+    next.cluster = change.cluster;
+    changed.push("topic");
+  }
+  if (change.lang !== undefined && change.lang !== had.lang) {
+    next.lang = change.lang;
+    changed.push("language");
+  }
+  if (change.intent !== undefined && change.intent !== had.intent) {
+    next.intent = change.intent && INTENT_LIST.includes(change.intent as Intent) ? change.intent : null;
+    changed.push("intent");
+  }
+  if (changed.length) db.prepare("UPDATE cc_seo_keywords SET cluster = ?, lang = ?, intent = ?, edited_by = ? WHERE id = ?").run(next.cluster, next.lang, next.intent, by, id);
+  return { keyword: keywordById(id)!, changed };
+}
+
+/**
+ * Take a phrase out of the table: only one that came from a person alone. A
+ * phrase Search Console, the research or the audit brought would come back
+ * with their next run, so for those "judge it irrelevant" is the way.
+ */
+export function removeKeyword(id: number): "removed" | "not-mine" | "missing" {
+  const k = keywordById(id);
+  if (!k) return "missing";
+  if (k.sources.some((s) => s !== "manual")) return "not-mine";
+  db.prepare("DELETE FROM cc_seo_keywords WHERE id = ?").run(id);
+  try {
+    db.prepare("DELETE FROM cc_seo_kw_targets WHERE keyword_id = ?").run(id);
+  } catch {
+    /* the targets table is the page's own and is not there in a bare check */
+  }
+  return "removed";
+}
+
+/** A topic's key from its name and language: "Webdesign Preise", "de" → "webdesign-preise:de". */
+export function topicKey(name: string, lang: string): string {
+  const stem = name
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return `${stem || "topic"}:${lang}`;
+}
+
+/** A person creates a topic (source "manual"). The caller refuses a key that exists. */
+export function addTopic(name: string, lang: string, intent: Intent | null, by: string): Cluster {
+  const key = topicKey(name, lang);
+  upsertCluster({ key, name, lang, intent, priority: "medium", rank: null, page: null, pageSaid: null, why: `Created by ${by} on SEO › Keywords.`, action: null, examples: [], source: "manual" });
+  return clusters().find((c) => c.key === key)!;
+}
+
+/** A person renames a topic. Its key stays, so every phrase filed under it stays filed. */
+export function renameTopic(key: string, name: string): Cluster | null {
+  db.prepare("UPDATE cc_seo_clusters SET name = ?, updated_at = ? WHERE key = ?").run(name, now(), key);
+  return clusters().find((c) => c.key === key) ?? null;
+}
+
+/**
+ * A person tracks phrases found by researching a seed. Each is filed by its
+ * own language (topicFor), comes in with the sources "autocomplete" (the
+ * engines' suggestions) and "manual" (a person chose it), and is judged
+ * relevant by that person, as "Track a phrase" does.
+ */
+export function trackResearched(phrases: { phrase: string; cluster?: string | null }[], o: { seed: string; lang: string; by: string }): { added: number; known: number; ids: number[] } {
+  let added = 0;
+  let known = 0;
+  const ids: number[] = [];
+  const at = now();
+  for (const p of phrases.slice(0, 500)) {
+    const phrase = normal(p.phrase);
+    if (phrase.length < 2 || phrase.length > 120 || /[<>]/.test(phrase)) continue;
+    const lang = langOfPhrase(phrase, o.lang);
+    const cluster = topicFor(p.cluster ?? null, lang);
+    const got = upsertKeyword({ phrase, lang, cluster, source: "autocomplete", also: ["manual"], seed: normal(o.seed), status: "relevant", by: o.by }, at);
+    const row = db.prepare("SELECT id, status, cluster FROM cc_seo_keywords WHERE phrase = ?").get(phrase) as { id: number; status: KeywordStatus; cluster: string | null } | undefined;
+    if (!row) continue;
+    ids.push(row.id);
+    if (got === "added") {
+      added++;
+      continue;
+    }
+    known++;
+    if (row.status !== "relevant") setKeywordStatus(row.id, "relevant", o.by);
+    if (!row.cluster && cluster) db.prepare("UPDATE cc_seo_keywords SET cluster = ? WHERE id = ?").run(cluster, row.id);
+  }
+  return { added, known, ids };
+}
+
+/* ---------- what the kept result pages say, per phrase -------------------------------------- */
+
+export interface KeptGoogle {
+  id: number;
+  lang: string;
+  doneAt: string;
+  ownPosition: number | null;
+  ads: number;
+  localPack: boolean;
+  source: string;
+}
+
+/** The newest Google result page the desk kept for each phrase: its day, our place, its ads and map pack. */
+export function latestGoogleByPhrase(): Map<string, KeptGoogle> {
+  const out = new Map<string, KeptGoogle>();
+  let rows: { id: number; phrase: string; lang: string; done_at: string; own_position: number | null; result: string | null; source: string }[];
+  try {
+    rows = db.prepare("SELECT id, phrase, lang, done_at, own_position, result, source FROM cc_seo_serp_checks WHERE engine = 'google' AND state = 'done' ORDER BY id DESC").all() as typeof rows;
+  } catch {
+    return out;
+  }
+  for (const r of rows) {
+    if (out.has(r.phrase)) continue;
+    const page = json<{ ads?: number; localPack?: unknown[] }>(r.result, {});
+    out.set(r.phrase, { id: r.id, lang: r.lang, doneAt: r.done_at, ownPosition: r.own_position, ads: page.ads ?? 0, localPack: Array.isArray(page.localPack) && page.localPack.length > 0, source: r.source });
+  }
+  return out;
 }
 
 /* ---------- mapping by rule ------------------------------------------------------------------- */
@@ -399,7 +603,7 @@ export function shownPages(start: string, end: string): Map<string, string> {
   return new Map([...out.entries()].map(([q, v]) => [q, v.path]));
 }
 
-/* ---------- the weekly research: Google Autocomplete ------------------------------------- */
+/* ---------- the daily research (weekly budget): Google's suggestions ---------------------- */
 
 /** At most this many requests to Google Autocomplete a week, whoever asks. The counter is in cc_state. */
 export const AUTOCOMPLETE_CAP = 120;
@@ -437,22 +641,17 @@ export function spend(): boolean {
   return true;
 }
 
-/** Where the research asks. The check script replaces it with a stand-in. */
+/**
+ * Where the research asks. It goes through the web layer's Google client
+ * (client=chrome, the one a person's research on SEO › Keywords uses), so both
+ * read Google's answer one way. `readable` is false when the answer was not
+ * Google's list. The check scripts replace `suggest` with a stand-in.
+ */
 export const wire = {
-  suggest: async (seed: string, lang: "de" | "en"): Promise<{ status: number; suggestions: string[] }> => {
-    const url = `https://suggestqueries.google.com/complete/search?client=firefox&hl=${lang}&gl=ch&ie=utf-8&oe=utf-8&q=${encodeURIComponent(seed)}`;
-    const res = await fetch(url, { headers: { "user-agent": UA, "accept-language": lang === "de" ? "de-CH,de;q=0.9" : "en-CH,en;q=0.9" }, signal: AbortSignal.timeout(15_000) });
-    const buf = Buffer.from(await res.arrayBuffer());
-    const charset = /charset=([\w-]+)/i.exec(res.headers.get("content-type") ?? "")?.[1]?.toLowerCase() ?? "utf-8";
-    const text = new TextDecoder(charset === "iso-8859-1" ? "latin1" : charset).decode(buf);
-    let suggestions: string[] = [];
-    try {
-      const v = JSON.parse(text) as unknown[];
-      suggestions = Array.isArray(v[1]) ? (v[1] as unknown[]).map(String) : [];
-    } catch {
-      suggestions = [];
-    }
-    return { status: res.status, suggestions };
+  suggest: async (seed: string, lang: Lang): Promise<{ status: number; suggestions: string[]; readable?: boolean }> => {
+    const raw = await suggestWire.google(seed, lang, "ch", false);
+    const rows = raw.status === 200 ? parseGoogleSuggest(decodeAnswer(raw.body, raw.contentType)) : null;
+    return { status: raw.status, suggestions: rows ? rows.map((r) => r.phrase) : [], readable: rows !== null };
   },
   sleep: (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
 };
@@ -462,13 +661,13 @@ export const wire = {
  * earliest rank first, of two to five words, not asked in the last eight
  * weeks. Relevant phrases first; a cluster's own examples when it has none.
  */
-function seeds(limit: number): { seed: string; lang: "de" | "en"; cluster: string; intent: Intent | null }[] {
+function seeds(limit: number): { seed: string; lang: Lang; cluster: string; intent: Intent | null }[] {
   const asked = json<Record<string, string>>(state(ASKED_KEY), {});
   const since = addDays(today(), -REASK_DAYS);
   const rank: Record<Priority, number> = { high: 0, medium: 1, low: 2 };
-  const out: { seed: string; lang: "de" | "en"; cluster: string; intent: Intent | null }[] = [];
+  const out: { seed: string; lang: Lang; cluster: string; intent: Intent | null }[] = [];
   const list = clusters()
-    .filter((c) => c.lang === "de" || c.lang === "en")
+    .filter((c) => isLang(c.lang))
     .sort((a, b) => rank[a.priority] - rank[b.priority] || (a.rank ?? 9999) - (b.rank ?? 9999));
   /* One seed per cluster per pass, so a week spreads over many clusters instead of exhausting one. */
   const queues = list.map((c) => {
@@ -483,17 +682,20 @@ function seeds(limit: number): { seed: string; lang: "de" | "en"; cluster: strin
     for (const q of queues) {
       if (out.length >= limit) break;
       const seed = q.pool.shift();
-      if (seed) out.push({ seed, lang: q.c.lang as "de" | "en", cluster: q.c.key, intent: q.c.intent });
+      if (seed) out.push({ seed, lang: q.c.lang as Lang, cluster: q.c.key, intent: q.c.intent });
     }
   }
   return out;
 }
 
 /**
- * The weekly research: expand the clusters' seeds through Google Autocomplete,
- * one request a second, never beyond the week's budget, and keep every
- * suggestion as a phrase of the seed's cluster (unjudged, source
- * "autocomplete"). Stops at Google's first 429 or 5xx.
+ * The daily research, with a weekly budget: expand the clusters' seeds
+ * through Google's suggestions, one request a second, never beyond the week's
+ * budget, and keep every suggestion (unjudged, source "autocomplete") filed by
+ * its own language: under the seed's cluster when the languages agree, else
+ * that cluster's sibling of the suggestion's language, else no topic, and then
+ * without the seed's intent. Stops at any answer that is not a readable 200;
+ * a seed is spent (not asked for eight weeks) only when Google answered it.
  */
 export async function research(o: { most?: number; progress?: (done: number, of: number, what?: string) => void } = {}): Promise<string> {
   const left = AUTOCOMPLETE_CAP - budget().used;
@@ -517,22 +719,25 @@ export async function research(o: { most?: number; progress?: (done: number, of:
     if (sent) await wire.sleep(GAP_MS);
     sent++;
     o.progress?.(i, list.length, s.seed);
-    let got: { status: number; suggestions: string[] };
+    let got: { status: number; suggestions: string[]; readable?: boolean };
     try {
       got = await wire.suggest(s.seed, s.lang);
     } catch (e) {
-      stopped = `Autocomplete did not answer (${e instanceof Error ? e.message : String(e)})`;
+      stopped = `Google's suggestions did not answer (${e instanceof Error ? e.message : String(e)})`;
+      break;
+    }
+    if (got.status !== 200 || got.readable === false) {
+      /* Not spent: a refused or unreadable answer leaves the seed for the next run. */
+      stopped = got.status !== 200 ? `Google answered ${got.status}` : "Google's answer could not be read";
       break;
     }
     asked[`${s.lang}:${s.seed}`] = today();
-    /* Kept after every request: a run cut short by a restart does not ask the same seeds again. */
+    /* Kept after every answer: a run cut short by a restart does not ask the same seeds again. */
     setState(ASKED_KEY, JSON.stringify(asked));
-    if (got.status === 429 || got.status >= 500) {
-      stopped = `Google answered ${got.status}`;
-      break;
-    }
     for (const sug of got.suggestions) {
-      if (upsertKeyword({ phrase: sug, lang: s.lang, cluster: s.cluster, intent: s.intent, source: "autocomplete", seed: s.seed, by: "research" }, at) === "added") added++;
+      const lang = langOfPhrase(normal(sug), s.lang);
+      const same = lang === s.lang;
+      if (upsertKeyword({ phrase: sug, lang, cluster: same ? s.cluster : topicFor(s.cluster, lang), intent: same ? s.intent : null, source: "autocomplete", seed: s.seed, by: "research" }, at) === "added") added++;
     }
   }
   setState(ASKED_KEY, JSON.stringify(asked));

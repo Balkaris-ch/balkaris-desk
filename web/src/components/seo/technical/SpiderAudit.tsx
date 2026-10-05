@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent, type ReactNode } from "react";
-import type { AuditFacts, AuditIssue, AuditSeverity, SpiderAudit } from "@/contract/spider";
+import type { AuditFacts, AuditIssue, AuditSeverity, SpiderAudit, SpiderAuditListed } from "@/contract/spider";
 import { Chip } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -17,8 +17,10 @@ import { Mark, Quiet } from "./bits";
  * Audit any page: one page of any public website, the site's own or a
  * competitor's, fetched by the desk server and read the way the crawl reads
  * the site's pages (POST /api/v1/spider/audit, src/cc/site/audit.ts). The
- * answer is drawn here and kept only in this browser tab; the server keeps
- * it a day and answers the same address from it.
+ * answer is drawn here; the server keeps it a day and answers the same
+ * address from it, lists the day's audits (GET /api/v1/spider/audits) so one
+ * can be reopened by its address (?audit=<url>#audit, a link a person can
+ * pass on), and fetches again on "Audit again now" ({ fresh: true }).
  *
  * It goes the way the page's other buttons go (Act.tsx): from the browser to
  * /api/v1 on its own origin, so every refusal arrives as the server's own
@@ -34,19 +36,30 @@ const NO: Record<number, string> = { 400: "Not audited.", 429: "Not now.", 504: 
 const chars = (s: string): number => [...s].length;
 const when = (iso: string): string => `${fullDate(iso)}, ${clock(iso)}`;
 
-export function AuditCard() {
+/**
+ * `recent`: the audits the server keeps (a day), each with the address that
+ * reopens it (?audit=<url>#audit, built by the page), so an answer outlives
+ * the tab. `opened`: that one audit, read by the page from the server.
+ */
+export function AuditCard({ recent = [], opened = null, prefill = "" }: { recent?: (SpiderAuditListed & { href: string })[]; opened?: SpiderAudit | null; prefill?: string }) {
   const [busy, setBusy] = useState(false);
-  const [got, setGot] = useState<Got | null>(null);
+  const [got, setGot] = useState<Got | null>(opened ? { ok: true, audit: opened } : null);
+  /* ?audit=<url> with nothing kept for it (a link from another screen, Competitors' for one): the address is filled in, one press audits it. */
+  const [asked, setAsked] = useState<string>(opened?.url ?? prefill);
+
+  const ask = async (url: string, fresh: boolean) => {
+    if (busy || !url) return;
+    setBusy(true);
+    setGot(null);
+    setAsked(url);
+    const r = await send<SpiderAudit>("/api/v1/spider/audit", fresh ? { url, fresh: true } : { url });
+    setBusy(false);
+    setGot(r.ok ? { ok: true, audit: r.value } : { ok: false, status: r.status, message: r.message });
+  };
 
   const run = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (busy) return;
-    const url = String(new FormData(e.currentTarget).get("url") ?? "").trim();
-    setBusy(true);
-    setGot(null);
-    const r = await send<SpiderAudit>("/api/v1/spider/audit", { url });
-    setBusy(false);
-    setGot(r.ok ? { ok: true, audit: r.value } : { ok: false, status: r.status, message: r.message });
+    await ask(String(new FormData(e.currentTarget).get("url") ?? "").trim(), false);
   };
 
   return (
@@ -60,7 +73,7 @@ export function AuditCard() {
     >
       <form className="dk-seo-technical-audit-form" onSubmit={run}>
         <Field label="Address">
-          <Input name="url" inputMode="url" autoComplete="off" spellCheck={false} required maxLength={2000} />
+          <Input name="url" inputMode="url" autoComplete="off" spellCheck={false} required maxLength={2000} defaultValue={asked} key={asked} />
         </Field>
         <Button type="submit" variant="primary" icon="search" disabled={busy} aria-busy={busy || undefined}>
           {busy ? "Auditing…" : "Audit"}
@@ -85,7 +98,40 @@ export function AuditCard() {
         </p>
       ) : null}
 
-      {got?.ok ? <Result a={got.audit} /> : null}
+      {got?.ok ? (
+        <>
+          {got.audit.cached ? (
+            <p className="dk-seo-technical-audit-again">
+              <span>
+                The kept audit of {when(got.audit.at)}: the same address asked within a day is answered from it.
+              </span>
+              <Button size="sm" variant="quiet" icon="refresh" disabled={busy} onClick={() => void ask(got.audit.url, true)}>
+                Audit again now
+              </Button>
+            </p>
+          ) : null}
+          <Result a={got.audit} />
+        </>
+      ) : null}
+
+      {recent.length ? (
+        <details className="dk-seo-technical-more">
+          <summary>Audited in the last day ({num(recent.length)})</summary>
+          <ul className="dk-seo-technical-audit-recent">
+            {recent.map((r) => (
+              <li key={r.url}>
+                <Go href={r.href} className="dk-seo-technical-path dk-seo-technical-path--link" title={`Open the kept audit of ${r.url}`}>
+                  {r.url.replace(/^https?:\/\//, "")}
+                </Go>
+                <span className="dk-seo-technical-entries-date dk-num">
+                  {r.error ? "no answer" : `${r.status} · ${r.score === null ? "not scored" : `score ${num(r.score)}`}`}
+                </span>
+                <span className="dk-seo-technical-entries-date">{when(r.at)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
     </Card>
   );
 }

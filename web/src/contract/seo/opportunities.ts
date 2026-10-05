@@ -203,6 +203,8 @@ export interface OpportunityQuery {
   action: ActionKind | null;
   page: string | null;
   cluster: string | null;
+  /** One search phrase exactly (lower case, spaces collapsed, no surrounding quotes, as Keywords spells it): the opportunities whose subject is that phrase, as Keywords counts them. */
+  keyword: string | null;
   q: string;
   sort: "priority" | "potential" | "newest" | "page" | "shown" | "position";
   offset: number;

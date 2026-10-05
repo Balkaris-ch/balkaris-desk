@@ -82,9 +82,18 @@ function ClusterLine({ c, range }: { c: ClusterCompare; range: string }) {
           <Badge tone={PRIORITY_TONE[c.cluster.priority]}>{PRIORITY_LABEL[c.cluster.priority]}</Badge>
           {c.cluster.rank !== null ? <span className="dk-seo-competitors-quiet">order {c.cluster.rank}</span> : null}
         </span>
+        {/* Ways out: the cluster's phrases on Keywords, its gaps on Content Gaps. */}
+        <span className="dk-seo-competitors-cl-chips">
+          <Go href={`/seo/keywords?cluster=${encodeURIComponent(c.cluster.key)}`} className="dk-seo-competitors-task-link">
+            Keywords
+          </Go>
+          <Go href={`/seo/content-gaps?cluster=${encodeURIComponent(c.cluster.key)}`} className="dk-seo-competitors-task-link">
+            Content gaps
+          </Go>
+        </span>
         <span className="dk-seo-competitors-cl-queries">
           {c.queries.map((q) => (
-            <Tooltip key={q.query} text={`Seen in ${q.engines.join(", ")}. ${q.filed === "words" ? "Filed under this cluster by the page's words rule." : "Filed under this cluster by the keyword table."}`}>
+            <Tooltip key={q.query} text={`Seen in ${q.engines.join(", ")}. ${q.filed === "words" ? "Filed under this cluster by the page's words rule." : q.filed === "hand" ? "Filed under this cluster by hand." : "Filed under this cluster by the keyword table."}`}>
               <span className="dk-seo-competitors-q" tabIndex={0}>
                 “{q.query}”{q.filed === "words" ? "*" : ""}
               </span>
@@ -207,7 +216,7 @@ function Rival({ r, range }: { r: RivalPage; range: string }) {
               </Chip>
             ) : null}
             {href ? (
-              <Go href={href} className="dk-seo-competitors-ext" title={`${shortUrl(p.url)} (${p.address === "home" ? "its home page: the capture named only the site" : "the page that ranks"})`} aria-label={`Open ${shortUrl(p.url)}`}>
+              <Go href={href} className="dk-seo-competitors-ext" title={`${shortUrl(p.url)} (${p.address === "home" ? "its home page: the capture named only the site" : p.address === "topic" ? "its page for this cluster, from its sitemap" : "the page that ranks"})`} aria-label={`Open ${shortUrl(p.url)}`}>
                 <Icon name="external" size={11} />
               </Go>
             ) : null}

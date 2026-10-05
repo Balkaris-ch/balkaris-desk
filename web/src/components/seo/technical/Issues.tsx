@@ -1,17 +1,38 @@
 import type { Reading } from "@/contract/common";
-import type { IssueGroup, TechPage } from "@/contract/seo/technical";
+import type { IssueGroup, TechAsked, TechPage } from "@/contract/seo/technical";
 import { Chip } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Go } from "@/components/ui/Go";
 import { Icon } from "@/components/ui/icons";
+import { Select } from "@/components/ui/Select";
 import { Stamp } from "@/components/ui/Stamp";
 import { Table, type Column } from "@/components/ui/Table";
 import { cx } from "@/lib/cx";
-import { num } from "@/lib/format";
+import { fullDate, num } from "@/lib/format";
 import { TaskButton } from "./Act";
 import { Body, PathLink, pageView, Quiet, Severity } from "./bits";
 
-/** Every finding of the last crawl by rule, worst first, and every page by its score. */
+/**
+ * Every finding of the last crawl by rule, worst first, and every page by its
+ * score. Both are narrowed by the page's search (?q=), the findings by
+ * severity (?sev=) and the pages by Google's answer (?index=); the server
+ * narrows them, so what is shown is what the address says.
+ */
+
+const SEV_OPTIONS = [
+  { value: "all", label: "Every severity" },
+  { value: "critical", label: "Critical" },
+  { value: "warning", label: "Warnings" },
+  { value: "opportunity", label: "Opportunities" },
+] as const;
+
+const INDEX_OPTIONS = [
+  { value: "all", label: "Google: any" },
+  { value: "indexed", label: "Indexed" },
+  { value: "not", label: "Not indexed" },
+  { value: "unknown", label: "Not inspected" },
+] as const;
 
 const AREA: Record<string, string> = {
   status: "Status",
@@ -41,6 +62,11 @@ export function IssueRows({ rows, label }: { rows: IssueGroup[]; label: string }
               <span className="dk-seo-technical-issue-title">
                 {g.title}
                 {g.area ? <span className="dk-seo-technical-issue-area">{AREA[g.area] ?? g.area}</span> : null}
+                {g.fresh ? (
+                  <Chip tone="info" className="dk-seo-technical-issue-new">
+                    {num(g.fresh)} new
+                  </Chip>
+                ) : null}
               </span>
               <span className="dk-seo-technical-issue-n dk-num" title={`${g.count} finding${g.count === 1 ? "" : "s"}${g.scope === "site" ? " about the site" : `, on ${g.pages.length} page${g.pages.length === 1 ? "" : "s"}`}`}>
                 {num(g.count)}
@@ -53,7 +79,7 @@ export function IssueRows({ rows, label }: { rows: IssueGroup[]; label: string }
             <div className="dk-seo-technical-issue-body">
               <ul className="dk-seo-technical-issue-lines">
                 {(g.lines ?? g.pages.map((p) => ({ path: p, text: "" }))).map((l, i) => (
-                  <li key={`${l.path ?? "site"}-${i}`}>
+                  <li key={`${l.path ?? "site"}-${i}`} title={"firstSeen" in l && l.firstSeen ? `First found by the crawl of ${fullDate(l.firstSeen)}` : undefined}>
                     {l.path ? <PathLink path={l.path} /> : <span className="dk-seo-technical-path">the site</span>}
                     {l.text ? <span className="dk-seo-technical-issue-text">{l.text}</span> : null}
                   </li>
@@ -63,8 +89,18 @@ export function IssueRows({ rows, label }: { rows: IssueGroup[]; label: string }
               {g.fix ? (
                 <div className="dk-seo-technical-issue-fix">
                   <TaskButton task={g.fix.task} label={g.fix.label} variant="good" icon="sparkles" />
-                  <Quiet>The operator writes proposals on the studio workstation; nothing on the site changes before a person approves them.</Quiet>
+                  <Quiet>
+                    {g.fix.task.paths?.length ? `For ${g.fix.task.paths.join(", ")}. ` : ""}
+                    {g.fixNote ? `${g.fixNote} ` : ""}The operator writes proposals on the studio workstation; nothing on the site changes before a person approves them.
+                  </Quiet>
                 </div>
+              ) : g.fixNote ? (
+                <Quiet>
+                  {g.fixNote}{" "}
+                  <Go href="/operator?ap=waiting#approvals" className="dk-seo-technical-path--link">
+                    Open the approvals
+                  </Go>
+                </Quiet>
               ) : null}
             </div>
           </details>
@@ -85,16 +121,18 @@ function split(rows: IssueGroup[]): { issues: number; opportunities: number } {
   return { issues, opportunities };
 }
 
-export function IssuesCard({ reading }: { reading: Reading<{ rows: IssueGroup[] }> }) {
+export function IssuesCard({ reading, asked }: { reading: Reading<{ rows: IssueGroup[]; total?: number }>; asked?: TechAsked }) {
   const n = reading.state === "ok" ? split(reading.value.rows) : null;
+  const narrowed = !!asked && (asked.q !== "" || asked.sev !== "all");
+  const sevWord = asked?.sev === "critical" ? "critical findings" : asked?.sev === "warning" ? "warnings" : "opportunities";
   return (
     <Card
       title="Issues by rule"
       icon="list"
       id="issues"
       count={n ? num(n.issues) : undefined}
-      info="Every finding of the last crawl, grouped by the rule that found it, worst first, with the points the rule costs in the score. Critical and warning findings are issues, and only they are counted beside the title; opportunities are polish, listed after them and never counted as issues."
-      right={reading.state === "ok" ? <Stamp reading={reading} /> : null}
+      info="Every finding of the last crawl, grouped by the rule that found it, worst first, with the points the rule costs in the score. Critical and warning findings are issues, and only they are counted beside the title; opportunities are polish, listed after them and never counted as issues. “new” marks findings the last crawl found for the first time."
+      right={<Select param="sev" label="Severity" fallback="all" options={SEV_OPTIONS} />}
       flush
       className="dk-seo-technical-issues-card"
     >
@@ -103,10 +141,19 @@ export function IssuesCard({ reading }: { reading: Reading<{ rows: IssueGroup[] 
           v.rows.length ? (
             <>
               <Quiet className="dk-seo-technical-pad-x dk-seo-technical-issues-sum">
-                {num(n?.issues ?? 0)} {n?.issues === 1 ? "issue" : "issues"} (critical and warnings) and {num(n?.opportunities ?? 0)} {n?.opportunities === 1 ? "opportunity" : "opportunities"}, under {num(v.rows.length)} {v.rows.length === 1 ? "rule" : "rules"}.
+                {num(n?.issues ?? 0)} {n?.issues === 1 ? "issue" : "issues"} (critical and warnings) and {num(n?.opportunities ?? 0)} {n?.opportunities === 1 ? "opportunity" : "opportunities"}, under {num(v.rows.length)} {v.rows.length === 1 ? "rule" : "rules"}
+                {narrowed && v.total !== undefined ? ` of ${num(v.total)}, as narrowed${asked?.q ? ` to “${asked.q}”` : ""}` : ""}.
               </Quiet>
               <IssueRows rows={v.rows} label="Findings by rule" />
+              <div className="dk-seo-technical-stampline">
+                <Stamp reading={reading} />
+              </div>
             </>
+          ) : narrowed ? (
+            <Quiet className="dk-seo-technical-pad">
+              No finding of the last crawl matches{asked?.q ? ` “${asked.q}”` : ""}
+              {asked && asked.sev !== "all" ? ` among the ${sevWord}` : ""}.{v.total ? ` ${num(v.total)} rules have findings in all.` : ""}
+            </Quiet>
           ) : (
             <Quiet className="dk-seo-technical-pad">The last crawl found nothing against any rule.</Quiet>
           )
@@ -118,15 +165,23 @@ export function IssuesCard({ reading }: { reading: Reading<{ rows: IssueGroup[] 
 
 const PAGES_SHOWN = 12;
 
+/** Why a cell is empty, by what the page is: outside the sitemap Google is not asked; inside it, no answer has reached the desk. */
+const emptyWhy = (p: TechPage): string =>
+  p.inSitemap
+    ? "No answer from Google yet: the daily check has not reached this sitemap address in the last week. “Inspect now” in the index card asks about it."
+    : "Not inspected: it is not in the sitemap, and the daily check asks Google about the sitemap’s addresses only.";
+
 const indexCell = (p: TechPage) =>
   p.inIndex === null ? (
-    <span className="dk-seo-technical-quiet-cell" title="Not inspected: Google’s URL Inspection covers the sitemap’s addresses only.">
+    <span className="dk-seo-technical-quiet-cell" title={emptyWhy(p)}>
       —
     </span>
   ) : p.inIndex ? (
-    <Chip tone="good">Indexed</Chip>
+    <span title={p.inIndexDay ? `Google’s answer of ${fullDate(p.inIndexDay)}` : undefined}>
+      <Chip tone="good">Indexed</Chip>
+    </span>
   ) : (
-    <span title={p.coverage ?? undefined}>
+    <span title={`${p.coverage ?? "Not indexed"}${p.inIndexDay ? `, Google’s answer of ${fullDate(p.inIndexDay)}` : ""}`}>
       <Chip tone="warn">Not indexed</Chip>
     </span>
   );
@@ -172,18 +227,22 @@ const COLUMNS: Column<TechPage>[] = [
   { key: "index", head: "Google", cell: indexCell, sort: (p) => (p.inIndex === null ? null : p.inIndex ? 1 : 0), width: "104px" },
 ];
 
-export function PagesCard({ reading }: { reading: Reading<{ rows: TechPage[]; read: number; scored: number }> }) {
+export function PagesCard({ reading, asked }: { reading: Reading<{ rows: TechPage[]; read: number; scored: number }>; asked?: TechAsked }) {
+  const narrowed = !!asked && (asked.q !== "" || asked.index !== "all");
   return (
     <Card
       title="Pages by score"
       icon="pages"
       id="pages"
       count={reading.state === "ok" ? num(reading.value.read) : undefined}
-      info="Every page the crawl read, lowest score first. Issues are critical, warnings and opportunities. Google’s column is its newest URL Inspection of the address."
+      info="Every page the crawl read, lowest score first. Issues are critical, warnings and opportunities. Google’s column is its newest URL Inspection of the address, from the daily check or from “Inspect now”."
       right={
-        <LinkButton href="/seo/pages" size="sm">
-          All pages
-        </LinkButton>
+        <span className="dk-seo-technical-head-tools">
+          <Select param="index" label="Google’s answer" fallback="all" options={INDEX_OPTIONS} />
+          <LinkButton href="/seo/pages" size="sm">
+            All pages
+          </LinkButton>
+        </span>
       }
       flush
       className="dk-seo-technical-pages"
@@ -202,6 +261,7 @@ export function PagesCard({ reading }: { reading: Reading<{ rows: TechPage[]; re
               className={cx("dk-seo-technical-pages-table", v.rows.length > PAGES_SHOWN && "dk-seo-technical-pages-table--scroll")}
             />
             <Quiet className="dk-seo-technical-pad">
+              {narrowed ? `${num(v.rows.length)} of ${num(v.read)} pages, as narrowed${asked?.q ? ` to “${asked.q}”` : ""}. ` : ""}
               {num(v.scored)} of {num(v.read)} pages are scored; a page kept out of the sitemap is read but not scored.
               {v.rows.length > PAGES_SHOWN ? ` The list scrolls; the headings sort all ${num(v.rows.length)}.` : ""}
             </Quiet>

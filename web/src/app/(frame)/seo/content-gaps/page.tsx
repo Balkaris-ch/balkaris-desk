@@ -4,11 +4,11 @@ import { parseRange } from "@/lib/format";
 import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { SeoRefused } from "@/components/seo/nav/Refused";
-import { CoverageList, ViewSwitch } from "@/components/seo/content-gaps/Coverage";
+import { CoverageList, Find, ViewSwitch } from "@/components/seo/content-gaps/Coverage";
 import { GroupPanel } from "@/components/seo/content-gaps/Group";
 import { Headline, TableCoverage } from "@/components/seo/content-gaps/Headline";
-import { hrefWith, paramsOf } from "@/components/seo/content-gaps/look";
-import { ClusterPanel, CompetitorView, KeywordView, Lower } from "@/components/seo/content-gaps/Views";
+import { BASE, FIND, FIND_KEEPS, hrefWith, PAGES_LIST, paramsOf } from "@/components/seo/content-gaps/look";
+import { ClusterPanel, CompetitorView, ConsoleView, KeywordView, Lower } from "@/components/seo/content-gaps/Views";
 import "@/components/seo/content-gaps/gaps.css";
 
 export const metadata = { title: "Content Gaps · SEO" };
@@ -17,17 +17,19 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 /** The params the desk server reads (contract/seo/content-gaps.ts). */
-const PASSED = ["view", "open", "tab", "lang", "price", "question", "gap", "priority", "cluster", "offset", "limit"] as const;
+const PASSED = ["view", "open", "tab", "q", "lang", "price", "question", "gap", "priority", "sort", "dir", "cluster", "offset", "limit"] as const;
 
 /**
  * SEO › Content Gaps (board 113, panel 5). The head, the period and the tab
  * strip are the SEO layout's (app/(frame)/seo/layout.tsx). One request
  * (GET /api/v1/seo/content-gaps) draws the page: the two largest gaps
  * (German, price questions) in one low band on top; then the view switch
- * with the whole keyword table's coverage beside it, and either the coverage list with the open
- * group beside it (by topic, industry, language or cluster), the phrases
- * with no page (by keyword), or the competitor pages read (by competitor);
- * and what only the owner can do.
+ * with the search and the whole keyword table's coverage beside it, and
+ * either the coverage list with the open group beside it (by topic,
+ * industry, language or cluster), the phrases with no page (by keyword),
+ * the searches Google already shows the site for that no page carries
+ * (from Search Console), or the competitor sites read (by competitor); and
+ * what only the owner can do.
  *
  * Should the desk not answer for this page (its server code not loaded, a
  * failure), the page says so in place and the head and tabs stay.
@@ -56,30 +58,48 @@ export default async function SeoContentGapsPage({ searchParams }: { searchParam
   const base = paramsOf(data.asked, range);
   const listed = data.view === "topic" || data.view === "industry" || data.view === "language" || data.view === "clusters";
   const openKey = data.group?.state === "ok" ? data.group.value.group.key : data.asked.open;
+  const back = hrefWith(base, { cluster: null });
 
   return (
     <div className="dk-seo-gaps">
-      <Headline german={data.german} price={data.price} />
+      {/* The search box's own form, outside the tables' forms (forms do not nest): its field is beside the view switch (form="…"). A search starts the view's list again, from its first group. */}
+      <form id={FIND} method="get" action={BASE} hidden>
+        {FIND_KEEPS.filter((k) => base[k]).map((k) => (
+          <input key={k} type="hidden" name={k} value={base[k]} />
+        ))}
+      </form>
+      {/* The site's addresses, offered by every "which page answers it" field. */}
+      <datalist id={PAGES_LIST}>
+        {data.sitePages.map((p) => (
+          <option key={p.path} value={p.path}>
+            {p.title ?? p.path}
+            {p.lang ? ` (${p.lang.toUpperCase()})` : ""}
+          </option>
+        ))}
+      </datalist>
+      <Headline german={data.german} price={data.price} base={base} />
       <section className="dk-seo-gaps-explore" aria-label="Content gaps">
         <div className="dk-seo-gaps-switchrow">
           <ViewSwitch views={data.views} active={data.view} base={base} />
-          <TableCoverage tiles={data.tiles} />
+          <Find view={data.view} q={data.asked.q} />
         </div>
+        <TableCoverage tiles={data.tiles} unjudged={data.unjudged} />
         {listed && data.groups ? (
           <div className="dk-seo-gaps-main">
             <CoverageList reading={data.groups} view={data.view} open={openKey} asked={data.asked} base={base} />
             {data.selected ? (
-              <ClusterPanel reading={data.selected} back={hrefWith(base, { cluster: null })} />
+              <ClusterPanel reading={data.selected} back={back} base={base} />
             ) : (
-              <GroupPanel reading={data.group} base={base} impressionsNote={data.notes.impressions} />
+              <GroupPanel reading={data.group} view={data.view} asked={data.asked} base={base} impressionsNote={data.notes.impressions} />
             )}
           </div>
         ) : null}
         {data.view === "keywords" ? <KeywordView reading={data.keywords} asked={data.asked} base={base} impressionsNote={data.notes.impressions} /> : null}
-        {data.view === "competitors" ? <CompetitorView reading={data.competitors} /> : null}
-        {!listed && data.selected ? <ClusterPanel reading={data.selected} back={hrefWith(base, { cluster: null })} /> : null}
+        {data.view === "console" ? <ConsoleView reading={data.console} asked={data.asked} base={base} /> : null}
+        {data.view === "competitors" ? <CompetitorView reading={data.competitors} asked={data.asked} base={base} /> : null}
+        {!listed && data.selected ? <ClusterPanel reading={data.selected} back={back} base={base} /> : null}
       </section>
-      <Lower needsYou={data.needsYou} notes={data.notes} />
+      <Lower needsYou={data.needsYou} notes={data.notes} you={data.you} />
     </div>
   );
 }

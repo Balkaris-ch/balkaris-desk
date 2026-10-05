@@ -4,12 +4,13 @@ import { AreaChart, LineChart } from "@/components/charts";
 import { Chip, type ChipTone } from "@/components/ui/Badge";
 import { Card, CardFoot } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
+import { Go } from "@/components/ui/Go";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Absent } from "@/components/ui/Read";
 import { Stamp } from "@/components/ui/Stamp";
 import { cx } from "@/lib/cx";
 import { num, shortDate } from "@/lib/format";
-import { optimizeHref } from "./href";
+import { keywordHref, optimizeHref } from "./href";
 import { rateCell } from "./PagesList";
 import { QueueButton } from "./QueueButton";
 import { Switch } from "./Switch";
@@ -90,8 +91,13 @@ export function PerformanceCard({ selected }: { selected: Reading<SeoPageSummary
   );
 }
 
-/** "Keywords": the searches Google showed the chosen page for. The board's volume column is impressions: no free source gives search volume. */
-export function KeywordsCard({ selected }: { selected: Reading<SeoPageSummary> | null }) {
+/**
+ * "Keywords": the searches Google showed the chosen page for. The board's
+ * volume column is impressions: no free source gives search volume. Each
+ * search opens on the Keywords screen; the foot opens every one of them on
+ * Page Optimization's Keywords tab, in the period this screen shows.
+ */
+export function KeywordsCard({ selected, range }: { selected: Reading<SeoPageSummary> | null; range: string }) {
   const r = part(selected, (s) => s.keywords);
   const path = selected?.state === "ok" ? selected.value.row.page.path : null;
   return (
@@ -100,7 +106,7 @@ export function KeywordsCard({ selected }: { selected: Reading<SeoPageSummary> |
       count={r && r.state === "ok" ? num(r.value.total) : undefined}
       className="dk-seo-pages-kw"
       flush
-      footer={path ? <CardFoot href={optimizeHref(path)}>View all keywords</CardFoot> : undefined}
+      footer={path ? <CardFoot href={optimizeHref(path, range, "keywords")}>View all keywords</CardFoot> : undefined}
     >
       {!r ? (
         <div className="dk-seo-pages-pad">
@@ -137,8 +143,8 @@ export function KeywordsCard({ selected }: { selected: Reading<SeoPageSummary> |
             <tbody>
               {r.value.rows.slice(0, 6).map((k) => (
                 <tr key={k.query}>
-                  <td className="dk-seo-pages-kw-q" title={k.query}>
-                    {k.query}
+                  <td className="dk-seo-pages-kw-q" title={`${k.query}: open it on the Keywords screen`}>
+                    <Go href={keywordHref(range, k.query)}>{k.query}</Go>
                   </td>
                   <td className="dk-table-right dk-num">{num(k.position, 1)}</td>
                   <td className="dk-table-right dk-num">{num(k.impressions)}</td>

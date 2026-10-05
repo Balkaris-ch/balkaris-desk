@@ -8,7 +8,9 @@ import { LinkButton } from "@/components/ui/Button";
 import { Go } from "@/components/ui/Go";
 import { Badge } from "@/components/ui/Badge";
 import { AnswerText, Flags } from "@/components/operator/Answer";
+import { proposalLine } from "@/components/operator/look";
 import { ReviewButton } from "@/components/operator/Review";
+import { KeywordsApply, TodosAdd } from "@/components/operator/Apply";
 import "@/components/operator/operator.css";
 
 export const metadata = { title: "AI Operator: an answer" };
@@ -74,6 +76,57 @@ export default async function OperatorResultPage({ params }: { params: Promise<{
                   ))}
                 </ol>
               ) : null}
+              {r.keywords?.length ? <KeywordsApply judgements={r.keywords} /> : null}
+              {r.serp ? (
+                <div className="dk-operator-serp">
+                  <p className="dk-operator-given">
+                    From the result page for “{r.serp.phrase}”{r.serp.checkedAt ? `, read ${fullDate(r.serp.checkedAt)}` : ""}
+                    {r.serp.page ? (
+                      <>
+                        {"; our page "}
+                        <Go href={`/seo/pages/view?path=${encodeURIComponent(r.serp.page)}`} className="dk-operator-link">
+                          {r.serp.page}
+                        </Go>
+                      </>
+                    ) : "; no page of ours is mapped to it"}
+                    .
+                  </p>
+                  <ul className="dk-operator-opps" aria-label="What the first results have">
+                    {r.serp.theyHave.map((t, i) => (
+                      <li key={i} className="dk-operator-opp">
+                        <p>{t.what}</p>
+                        <p className="dk-operator-given">
+                          Seen on{" "}
+                          {t.seenOn.map((u, j) => (
+                            <span key={u}>
+                              {j ? ", " : ""}
+                              <Go href={u} className="dk-operator-link">
+                                {u.replace(/^https?:\/\//, "")}
+                              </Go>
+                            </span>
+                          ))}
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="dk-operator-aside">
+                    Turn it into an article from the{" "}
+                    <Go href={`/operator?do=brief&q=${encodeURIComponent(r.serp.phrase)}${r.serp.page ? `&path=${encodeURIComponent(r.serp.page)}` : ""}`} className="dk-operator-link">
+                      prompt box
+                    </Go>
+                    {r.serp.page ? (
+                      <>
+                        , or change the page itself on its{" "}
+                        <Go href={`/seo/pages/view?path=${encodeURIComponent(r.serp.page)}&tab=optimize`} className="dk-operator-link">
+                          Optimize tab
+                        </Go>
+                      </>
+                    ) : null}
+                    .
+                  </p>
+                </div>
+              ) : null}
+              {r.todos?.length ? <TodosAdd taskId={t.id} todos={r.todos} added={!!r.todosAdded} /> : null}
               {r.brief?.links.length ? (
                 <p className="dk-operator-aside">
                   Write it from the{" "}
@@ -130,7 +183,7 @@ export default async function OperatorResultPage({ params }: { params: Promise<{
                     <Badge tone={p.state === "applied" ? "good" : p.state === "waiting" ? "warn" : "quiet"}>{WORD[p.state] ?? p.state}</Badge>
                     <span className="dk-operator-ap-text">
                       <span className="dk-operator-ap-title">{p.address}</span>
-                      <span className="dk-operator-ap-sub">{p.kind === "redirect" ? `Redirect to ${p.after.to}` : p.shownTitle ?? p.after.title ?? p.after.description}</span>
+                      <span className="dk-operator-ap-sub">{p.kind === "meta" ? (p.shownTitle ?? p.after.title ?? p.after.description) : proposalLine(p).sub}</span>
                     </span>
                     <span className="dk-operator-ap-actions">
                       <ReviewButton p={p} mode={p.state === "applied" ? "withdraw" : "review"} canApprove={who.canPublish} why={why} specimen={false} label={p.state === "applied" && who.canPublish ? "Withdraw" : "Review"} variant={p.state === "applied" && who.canPublish ? "danger" : "quiet"} />

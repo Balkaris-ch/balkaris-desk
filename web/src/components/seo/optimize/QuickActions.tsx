@@ -9,14 +9,16 @@ import { Go } from "@/components/ui/Go";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { cx } from "@/lib/cx";
 
-/* As on the board: an icon on the first and the last button only, so the five fit one row. */
-const ICON: Partial<Record<QuickAction["key"], IconName>> = { optimize: "sparkles", schema: "code" };
+/* An icon on the review, which answers in words, and on the drafts that arrive as proposals. */
+const ICON: Partial<Record<QuickAction["key"], IconName>> = { optimize: "sparkles", meta: "edit", og: "image", schema: "code" };
 
 /**
  * "Quick actions" (board 115): each button queues one real operator task for
- * this page (POST /api/v1/operator/tasks). The operator runs on the studio
- * workstation's model, so a task waits while it is off; a title or
- * description it writes waits for a person's approval. A button whose task is
+ * this page (POST /api/v1/operator/tasks), of the kind its label names: a
+ * review in words, a title and description, a share card or a structured-data
+ * block that arrive as proposals, links and alt texts that arrive as to-dos,
+ * a brief. The operator runs on the studio workstation's local model, so a
+ * task waits while it is off; what it proposes waits for a person's approval. A button whose task is
  * already queued or running stays off until that task is done, so one press
  * is one task. The line under the buttons says what was queued, or the
  * desk's refusal word for word.
@@ -85,7 +87,7 @@ export function QuickActions({ actions, runnerLine }: { actions: QuickAction[]; 
               {pending.length === 1 ? "Its button comes back when the task is done." : "Their buttons come back when the tasks are done."}
             </>
           ) : (
-            "Each button queues a task for the AI Operator on the studio workstation. Nothing on the live site changes without a person’s approval."
+            "Each button queues a task for the local model on the studio workstation. Titles, share cards and structured data come back as proposals; links and alt texts as to-dos. Nothing on the live site changes without a person’s approval."
           )}
         </p>
       </div>

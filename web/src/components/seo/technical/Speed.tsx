@@ -2,6 +2,7 @@ import type { JobListed, Reading } from "@/contract/common";
 import type { SeoTechnicalPayload, TechVitals, VitalFigure } from "@/contract/seo/technical";
 import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Select } from "@/components/ui/Select";
 import { Stamp } from "@/components/ui/Stamp";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { Absent } from "@/components/ui/Read";
@@ -9,7 +10,7 @@ import { PanelAbsent } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
 import { ago, duration, num } from "@/lib/format";
 import { RunJob } from "./Act";
-import { Body, PathLink, pageView, Quiet, ratingTone, ratingWord, vitalValue } from "./bits";
+import { Body, PathLink, Quiet, ratingTone, ratingWord, vitalValue } from "./bits";
 
 /**
  * The board's right column: Core Web Vitals (LCP, INP, CLS) and Page speed
@@ -95,16 +96,34 @@ export function VitalsCard({ vitals }: { vitals: TechVitals }) {
   );
 }
 
-/** Page speed issues: the newest PageSpeed lab runs, slowest first, and the test on demand. */
+const DEVICES = [
+  { value: "mobile", label: "Phone" },
+  { value: "desktop", label: "Desktop" },
+] as const;
+
+/**
+ * Where a measured page's speed is shown in full: Pages › the page, which
+ * prints its phone and desktop runs with Lighthouse's scores. SEO › Page
+ * Optimization shows no speed figure, so "View" went to a page without one.
+ */
+const speedView = (path: string): string => `/pages/view?path=${encodeURIComponent(path)}`;
+
+/** Page speed issues: the newest PageSpeed lab runs, slowest first, on the phone or the desktop (?device=), and the test on demand. */
 export function SpeedCard({ speed, job }: { speed: SeoTechnicalPayload["speed"]; job: JobListed | null }) {
   const why = job && !job.ready ? "The speed test cannot run now: Google answered 429 (quota) and the desk waits a day before asking again, or it has no key. The reason is under the panel." : undefined;
+  const device = speed.state === "ok" && speed.value.strategy === "desktop" ? "desktop" : "mobile";
   return (
     <Card
       title="Page speed issues"
       icon="bolt"
       id="speed"
-      info="PageSpeed Insights’ lab run of each page on the daily list (the home page, the insights index, the newest article, two services and one industry page) on a simulated phone. Slowest Largest Contentful Paint first. Lab: one load each on Google’s machine, not visitors."
-      right={job ? <RunJob name={job.name} label="Run test" ready={job.ready && job.enabled} running={job.running} why={why ?? (!job.enabled ? "Switched off in Automations." : undefined)} /> : null}
+      info="PageSpeed Insights’ lab run of each page on the daily list (the home page, the insights index, the newest article, two services and one industry page) on a simulated phone and a desktop. Slowest Largest Contentful Paint first, with Lighthouse’s performance score out of 100. Lab: one load each on Google’s machine, not visitors."
+      right={
+        <span className="dk-seo-technical-head-tools">
+          <Select param="device" label="Device" fallback="mobile" options={DEVICES} />
+          {job ? <RunJob name={job.name} label="Run test" ready={job.ready && job.enabled} running={job.running} why={why ?? (!job.enabled ? "Switched off in Automations." : undefined)} /> : null}
+        </span>
+      }
       flush
       className="dk-seo-technical-speed"
     >
@@ -113,10 +132,10 @@ export function SpeedCard({ speed, job }: { speed: SeoTechnicalPayload["speed"];
           <div>
             {s.lcpLimits ? (
               <Quiet className="dk-seo-technical-pad-x">
-                {num(s.slow ?? 0)} of {num(s.measured ?? 0)} measured pages over {duration(s.lcpLimits.good)} LCP ({s.lcpLimits.by}){s.failed ? `; ${num(s.failed)} run${s.failed === 1 ? "" : "s"} failed` : ""}.
+                On the {device === "desktop" ? "desktop" : "phone"}: {num(s.slow ?? 0)} of {num(s.measured ?? 0)} measured pages over {duration(s.lcpLimits.good)} LCP ({s.lcpLimits.by}){s.failed ? `; ${num(s.failed)} run${s.failed === 1 ? "" : "s"} failed` : ""}.
               </Quiet>
             ) : null}
-            <ul className="dk-seo-technical-rows" aria-label="Page speed, slowest first">
+            <ul className="dk-seo-technical-rows" aria-label={`Page speed on the ${device === "desktop" ? "desktop" : "phone"}, slowest first`}>
               {s.rows.map((r) => (
                 <li key={`${r.path}-${r.strategy ?? "m"}`} className="dk-seo-technical-speed-row">
                   <PathLink path={r.path} />
@@ -130,10 +149,15 @@ export function SpeedCard({ speed, job }: { speed: SeoTechnicalPayload["speed"];
                     </span>
                   )}
                   <span className="dk-seo-technical-speed-more dk-num">
+                    {r.performance != null ? (
+                      <span title="Lighthouse’s performance score, out of 100" className={r.performance >= 90 ? "dk-seo-technical-ink-good" : r.performance >= 50 ? "dk-seo-technical-ink-warn" : "dk-seo-technical-ink-bad"}>
+                        Score {num(r.performance)}
+                      </span>
+                    ) : null}
                     {r.tbtMs !== null ? <span title="Total Blocking Time, lab">TBT {duration(r.tbtMs)}</span> : null}
                     {r.cls !== null ? <span title="Cumulative Layout Shift, lab">CLS {num(r.cls, 2)}</span> : null}
                   </span>
-                  <LinkButton href={pageView(r.path)} size="xs" variant="quiet">
+                  <LinkButton href={speedView(r.path)} size="xs" variant="quiet" title={`${r.path}: the phone and desktop runs with their scores`}>
                     View
                   </LinkButton>
                 </li>

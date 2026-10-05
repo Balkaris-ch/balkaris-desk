@@ -7,6 +7,7 @@ import { Empty } from "@/components/ui/Empty";
 import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { num } from "@/lib/format";
+import { DEFAULT_RANGE, seoHref } from "./href";
 import { PriorityTable } from "./PriorityTable";
 import "./overview.css";
 
@@ -24,8 +25,9 @@ export function curveLine(c: CtrCurve): string {
  * Priority Opportunities: what the opportunity engine found, highest priority
  * first, with what to do about each. The table and its filters run in the
  * browser (PriorityTable); this draws the panel and its absent state.
+ * `operate`: whether the person may queue operator work (the payload's `can`).
  */
-export function Priority({ reading, curve }: { reading: Reading<PriorityPanel>; curve: CtrCurve }) {
+export function Priority({ reading, curve, range = DEFAULT_RANGE, operate = true }: { reading: Reading<PriorityPanel>; curve: CtrCurve; range?: string; operate?: boolean }) {
   const total = reading.state === "ok" ? reading.value.total : null;
   return (
     <Card
@@ -37,13 +39,13 @@ export function Priority({ reading, curve }: { reading: Reading<PriorityPanel>; 
           Found by the stated rules in src/cc/seo/rules.ts from Search Console, the crawl, Google’s URL Inspection, the readiness check and the SEO audit, highest priority first. “Our est.” is our own estimate of the clicks a month it could add: {curveLine(curve)}
         </>
       }
-      right={total !== null ? <LinkButton href="/seo/opportunities" size="sm">View all ({num(total)})</LinkButton> : null}
+      right={total !== null ? <LinkButton href={seoHref("/seo/opportunities", range)} size="sm">View all ({num(total)})</LinkButton> : null}
       flush
     >
       {reading.state === "ok" ? (
         reading.value.total ? (
           <>
-            <PriorityTable panel={reading.value} />
+            <PriorityTable panel={reading.value} range={range} operate={operate} />
             <div className="dk-seo-overview-stampline">
               <Stamp reading={reading} />
             </div>

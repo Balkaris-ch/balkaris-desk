@@ -70,7 +70,7 @@ export function checkRefusal(c: Partial<NewAiCheck>): string | null {
   for (const list of [c.competitors, c.sources]) if (list && (!Array.isArray(list) || list.length > 40 || list.some((s) => typeof s !== "string" || s.length > 120))) return "competitors and sources are lists of at most 40 short names.";
   if (c.excerpt != null && (typeof c.excerpt !== "string" || c.excerpt.length > 600)) return "excerpt is at most 600 characters.";
   /* The form caps a note at 300; without the same rule here an API caller could store any size, and a note that is not text failed in the database instead of with a sentence. */
-  if (c.note != null && (typeof c.note !== "string" || c.note.length > 300)) return "note is at most 300 characters.";
+  if (c.note != null && (typeof c.note !== "string" || c.note.length > 300)) return "note must be text of at most 300 characters.";
   return null;
 }
 

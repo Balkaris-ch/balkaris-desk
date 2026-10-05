@@ -322,7 +322,7 @@ async function siteChecks(): Promise<SiteReadiness> {
   return {
     at: now(),
     checks,
-    robots: { status: robotsGot.status, agents },
+    robots: { status: robotsGot.status, agents, read: robotsRead },
     llms: { status: llmsGot.status, present, line: llmsLine },
     lastmod: { addresses: entries.length, withLastmod },
   };

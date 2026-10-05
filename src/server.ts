@@ -1114,6 +1114,7 @@ runner.post("/op/result/:id", async (c) => {
   }
 });
 
+runner.all("/fetch/*", (c) => import("./cc/seo/web/door.ts").then((m) => m.fetchDoor(c), () => c.json({ task: null, error: "The fetch door did not load. The reason is in the desk's log." }, 503)));
 app.route("/runner", runner);
 
 /* ---------- Telegram -------------------------------------------------------

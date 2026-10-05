@@ -1,15 +1,24 @@
 import { Hono } from "hono";
+import { HTTPException } from "hono/http-exception";
 import { db } from "../../../db.ts";
-import type { Vars } from "../../access.ts";
+import { me, requireOwner, type Vars } from "../../access.ts";
 import { status as jobStatus } from "../../scheduler.ts";
-import { off, ok, reading } from "../../store.ts";
+import { note, off, ok, reading, waiting } from "../../store.ts";
 import { scrub } from "../../system.ts";
 import type { Reading, Stat } from "../../../../web/src/contract/common.ts";
 import type { ReadinessCheck } from "../../../../web/src/contract/seo/ai-search.ts";
-import type { Priority, SeoSpan } from "../../../../web/src/contract/seo/common.ts";
+import type { DomainFacts, Priority, SeoSpan, SerpCheck, WebLang } from "../../../../web/src/contract/seo/common.ts";
 import type {
   BesideRow,
+  CapturedSearch,
   ClusterCompare,
+  CompetitorDecision,
+  CompetitorShown,
+  LookupCard,
+  SearchPanel,
+  SerpChange,
+  SerpPanel,
+  SerpView,
   CompetitorDetail,
   CompetitorEngineFilter,
   CompetitorHas,
@@ -29,7 +38,28 @@ import type {
   TaskRef,
 } from "../../../../web/src/contract/seo/competitors.ts";
 import { tally } from "../../seo/aisearch.ts";
-import { competitorNames, competitorPages, ENGINE_LABEL, PLATFORMS, sightings, type CompPageRow, type SightingRow } from "../../seo/competitors.ts";
+import {
+  competitorNames,
+  competitorPages,
+  decide,
+  decisions,
+  domainKey,
+  duePages,
+  ENGINE_LABEL,
+  fileSearch,
+  handFiling,
+  PLATFORMS,
+  readable,
+  recordByHand,
+  refreshPages,
+  sightings,
+  watchSite,
+  type CompPageRow,
+  type Decision,
+  type SightingRow,
+} from "../../seo/competitors.ts";
+import { keptPaid, lookupBrief, lookupRows, topicPages, type OwnSite } from "../../seo/competitors-web.ts";
+import * as web from "../../seo/web/index.ts";
 import { clusters as allClusters, type Cluster } from "../../seo/keywords.ts";
 import { ownerTasks } from "../../seo/owner.ts";
 import { profiles } from "../../seo/presence.ts";
@@ -37,7 +67,7 @@ import { queryFigures, rate } from "../../seo/rank.ts";
 import { pageReadiness } from "../../seo/readiness.ts";
 import { pageRef, type SitePage, type SiteView } from "../../seo/site.ts";
 import { langOf, normal, pageWords, PLACES, tokens } from "../../seo/words.ts";
-import { head, historyAbsent, historyAt, int, rangeFrom, view } from "./shared.ts";
+import { body, csvFile, head, historyAbsent, historyAt, int, rangeFrom, view } from "./shared.ts";
 
 /**
  * /api/v1/seo/competitors — SEO › Competitors: who appears for the searches
@@ -86,9 +116,15 @@ const LIMIT = 15;
 
 const pick = <T extends string>(list: readonly T[], raw: string | undefined, fallback: T): T => (list.includes(raw as T) ? (raw as T) : fallback);
 
+const SHOWN: CompetitorShown[] = ["active", "ignored", "all"];
+const LANGS: WebLang[] = ["de", "en", "fr", "it"];
+
 function askedOf(q: (k: string) => string | undefined): CompetitorsAsked {
   const cluster = (q("cluster") ?? "").trim().slice(0, 80);
   const open = (q("open") ?? "").trim().slice(0, 160);
+  const look = (q("look") ?? "").trim().slice(0, 200);
+  const serp = normal(q("serp") ?? "").slice(0, 120);
+  const search = (q("search") ?? "").trim().replace(/\s+/g, " ").slice(0, 160);
   return {
     engine: pick(ENGINES, q("engine"), "all"),
     type: pick(TYPES, q("type"), "all"),
@@ -98,7 +134,43 @@ function askedOf(q: (k: string) => string | undefined): CompetitorsAsked {
     offset: int(q("offset"), 0, 0, 10_000),
     limit: int(q("limit"), LIMIT, 5, 50),
     open: open || null,
+    look: look || null,
+    serp: serp.length >= 2 ? serp : null,
+    serpLang: serp.length >= 2 ? pick(LANGS, q("serpLang"), (langOf(serp) ?? "de") as WebLang) : null,
+    search: search || null,
+    shown: pick(SHOWN, q("shown"), "active"),
   };
+}
+
+/* ---------- what a person types, as the list matches it ----------------------------------------- */
+
+/**
+ * Letters and digits with single spaces, accents and umlauts folded the same
+ * way on both sides, so "zürich", "zuerich" and "zurich" are one word.
+ */
+const fold = (s: string): string =>
+  s
+    .toLowerCase()
+    .replace(/ß/g, "ss")
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/ae/g, "a")
+    .replace(/oe/g, "o")
+    .replace(/ue/g, "u")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+
+/** A pasted address as the host it names ("https://www.example.ch/de/" → "example.ch"); anything else as typed. */
+function typedHost(raw: string): string | null {
+  const t = raw.trim().toLowerCase();
+  const m = /^(?:[a-z][a-z0-9+.-]*:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)(?::\d+)?(?:[/?#].*)?$/.exec(t);
+  return m && /\.[a-z]{2,}$/.test(m[1]!) ? m[1]! : null;
+}
+
+/** The key a typed ?open= names: a host as the list keys it, else the text as given. */
+function openKeyOf(raw: string): string {
+  if (raw.startsWith("name:")) return raw;
+  return typedHost(raw) ?? domainKey(raw) ?? raw;
 }
 
 /* ---------- the page's rules, in words ------------------------------------------------------- */
@@ -117,6 +189,9 @@ const NOTHING_STEP = "The owner copies the audit's files to the box and runs npm
 
 const AI_KINDS = new Set(["named", "cited"]);
 const GOOGLE_KINDS = new Set(["organic", "local-pack"]);
+/** Seen in Google's own results: an organic result of Google (DuckDuckGo's second opinion is never Google's ranking) or the map pack. */
+const inGoogle = (s: { kind: string; engine: string }): boolean => (s.kind === "organic" && s.engine === "google") || s.kind === "local-pack";
+const inAi = (s: { kind: string }): boolean => AI_KINDS.has(s.kind);
 const BUSINESS = /^(Organization|Corporation|LocalBusiness|ProfessionalService|AdvertisingAgency|LegalService|FinancialService|Photographer|Store|OnlineBusiness)$/;
 const REVIEWS = /^(AggregateRating|Review)$/;
 
@@ -159,7 +234,7 @@ function joinTo(nameKey: string, domains: { key: string; n: number }[]): string 
 
 interface Filed {
   cluster: string | null;
-  filed: "audit" | "words" | null;
+  filed: "audit" | "words" | "hand" | null;
 }
 
 const place = (t: string): boolean => PLACES.has(t) || PLACES.has(t.replace(/ue/g, "u"));
@@ -174,7 +249,11 @@ function filer(list: Cluster[]): (query: string, lang: string | null, stored: st
     byCluster.get(r.cluster)?.sets.push(pageWords({ path: "", title: r.phrase, h1: null }));
   }
   const cache = new Map<string, Filed>();
+  /* A person's filing stands over the table and the rule (it is written into the stored cluster too). */
+  const hand = handFiling();
   return (query, lang, stored) => {
+    const h = hand.get(query);
+    if (h) return { cluster: h.cluster, filed: h.cluster ? "hand" : null };
     if (stored) return { cluster: stored, filed: "audit" };
     const k = `${lang ?? ""}|${query}`;
     const had = cache.get(k);
@@ -246,6 +325,10 @@ interface World {
   clusters: Map<string, Cluster>;
   clusterName: (key: string | null) => { key: string; name: string } | null;
   file: (query: string, lang: string | null, stored: string | null) => Filed;
+  /** A person's word on each key (src/cc/seo/competitors.ts `decide`). */
+  decisions: Map<string, Decision>;
+  /** A platform by the list, unless a person said otherwise. */
+  platform: (key: string) => boolean;
 }
 
 function world(): World {
@@ -253,11 +336,16 @@ function world(): World {
   const clusters = new Map(list.map((c) => [c.key, c]));
   const file = filer(list);
   const raw = sightings();
+  const said = decisions();
+  const platform = (key: string): boolean => {
+    const k = said.get(key)?.kind;
+    return k === "platform" ? true : k === "studio" ? false : isPlatform(key);
+  };
   const others = raw.filter((s) => !isOurs(s));
   const own = raw.filter(isOurs).map((s) => ({ ...s, ...file(s.query, s.lang, s.cluster) }));
   const names = competitorNames();
   const allPages = competitorPages().map(sane);
-  const pages = allPages.filter((p) => !isPlatform(p.domain));
+  const pages = allPages.filter((p) => !platform(p.domain));
   const counts = new Map<string, number>();
   for (const s of others) counts.set(s.domain, (counts.get(s.domain) ?? 0) + 1);
   const domains = [...counts.entries()].filter(([k]) => !k.startsWith("name:")).map(([key, n]) => ({ key, n }));
@@ -283,9 +371,19 @@ function world(): World {
     for (const long of bare.slice(i + 1)) if (target.get(long.k) === long.k && long.c !== short.c && long.c.startsWith(short.c)) target.set(long.k, short.k);
   }
   /* Where a spelling was joined to a name that a shorter one then took, follow it to the end. */
+  /* A person's merge ("the same company as …") comes first, then the joining rule. */
   const root = (k: string): string => {
     let x = k;
-    for (let i = 0; i < 8 && target.get(x) !== x; i++) x = target.get(x)!;
+    for (let i = 0; i < 8; i++) {
+      const merged = said.get(x)?.mergedInto;
+      if (merged && merged !== x) {
+        x = merged;
+        continue;
+      }
+      const t = target.get(x);
+      if (!t || t === x) break;
+      x = t;
+    }
     return x;
   };
   const byKey = new Map<string, Group>();
@@ -299,7 +397,12 @@ function world(): World {
     g.rows.push({ ...s, ...file(s.query, s.lang, s.cluster) });
     byKey.set(key, g);
   }
-  for (const p of pages) byKey.get(p.domain)?.pages.push(p);
+  /* A site a person chose to watch is on the list before any result shows it. */
+  for (const d of said.values()) {
+    if (!d.watch || d.mergedInto || byKey.has(d.domain)) continue;
+    byKey.set(d.domain, { key: d.domain, aliases: [], rows: [], pages: [] });
+  }
+  for (const p of pages) byKey.get(root(p.domain))?.pages.push(p);
   const day = others.map((s) => s.day).sort().at(-1) ?? null;
   const recorded = (db.prepare("SELECT MAX(updated_at) AS at FROM cc_seo_competitors").get() as { at: string | null } | undefined)?.at ?? null;
   return {
@@ -315,8 +418,13 @@ function world(): World {
     clusters,
     clusterName: (key) => (key ? { key, name: clusters.get(key)?.name ?? key } : null),
     file,
+    decisions: said,
+    platform,
   };
 }
+
+/** A decision as the page is told it. */
+const decisionOf = (d: Decision | undefined): CompetitorDecision | null => (d ? { watch: d.watch, ignore: d.ignore, kind: d.kind, mergedInto: d.mergedInto, by: d.by, at: d.at } : null);
 
 /** Our site as the comparisons need it: the sitemap pages, their German alternates, the readiness checks. */
 interface Ours {
@@ -347,6 +455,8 @@ function ours(): Ours {
 
 /* ---------- small facts -------------------------------------------------------------------------- */
 
+/** Which page of theirs it is, in words. */
+const kindOf = (p: CompPageRow): string => (p.topic ? "its page for one of our topics" : p.address === "home" ? "its home page" : "the page that ranks");
 const readOk = (p: CompPageRow): boolean => p.status === 200 && !p.error && p.fetchedAt !== null;
 const german = (lang: string | null): boolean => !!lang && lang.toLowerCase().startsWith("de");
 const median = (xs: number[]): number | null => {
@@ -379,7 +489,7 @@ function hasOf(pages: CompPageRow[]): CompetitorHas | null {
 }
 
 function rowOf(g: Group, w: World): CompetitorRow {
-  const organic = g.rows.filter((s) => s.kind === "organic" && s.position !== null).map((s) => s.position!);
+  const organic = g.rows.filter((s) => s.kind === "organic" && s.engine === "google" && s.position !== null).map((s) => s.position!);
   const local = g.rows.filter((s) => s.kind === "local-pack" && s.position !== null).map((s) => s.position!);
   const engines = [...new Set(g.rows.map((s) => s.engine))];
   const named = g.key.startsWith("name:") ? g.key.slice(5) : null;
@@ -397,12 +507,13 @@ function rowOf(g: Group, w: World): CompetitorRow {
     pages: read.length,
     pricePages: read.filter((p) => p.priceStated === true).length,
     lastSeen: g.rows.map((s) => s.day).sort().at(-1) ?? "",
-    platform: isPlatform(g.key),
+    platform: w.platform(g.key),
     engines: engines.map((key) => ({ key, label: ENGINE_LABEL[key] ?? key })),
     mapPack: local.length ? Math.min(...local) : null,
     alsoNamed: g.aliases.filter((a) => a.toLowerCase() !== (name ?? "").toLowerCase()),
     has: hasOf(g.pages),
     clusters: clusterKeys.map((k) => w.clusterName(k)!),
+    decision: decisionOf(w.decisions.get(g.key)),
   };
 }
 
@@ -424,7 +535,7 @@ function pageOf(p: Page, w: World): CompetitorPage {
   const f = p.cluster ? { cluster: p.cluster } : p.query ? { cluster: w.file(p.query, null, null).cluster } : { cluster: null };
   return {
     url: p.url,
-    address: p.address,
+    address: p.topic ? "topic" : p.address,
     cluster: w.clusterName(f.cluster),
     query: p.query,
     status: p.status,
@@ -518,10 +629,10 @@ function tilesOf(w: World, rows: CompetitorRow[]): CompetitorTiles {
   const note = w.raw.every((s) => s.by === "audit") && rounds === 1 ? `Observed by the SEO audit on ${dayText(w.day ?? "")}. One round of observations so far: nothing to compare with yet.` : `Observations of ${plural(rounds, "day")}, the newest on ${dayText(w.day ?? "")}; counted over all of them.`;
   const stat = (value: number, sub: string, of?: number): Stat => ({ value, previous: null, unit: "count", series: [], sub, ...(of !== undefined ? { of } : {}) });
   const studios = rows.filter((r) => !r.platform);
-  const searches = new Set(w.groups.flatMap((g) => g.rows.filter((s) => GOOGLE_KINDS.has(s.kind)).map((s) => s.query)));
+  const searches = new Set(w.groups.flatMap((g) => g.rows.filter(inGoogle).map((s) => s.query)));
   const questions = new Set(w.groups.flatMap((g) => g.rows.map((s) => s.query)));
-  const inGoogle = studios.filter((r) => r.bestPosition !== null || r.mapPack !== null);
-  const inAi = rows.filter((r) => r.named + r.cited > 0);
+  const googleRows = studios.filter((r) => r.bestPosition !== null || r.mapPack !== null);
+  const aiRows = rows.filter((r) => r.named + r.cited > 0);
   const t = (() => {
     try {
       return tally();
@@ -542,9 +653,9 @@ function tilesOf(w: World, rows: CompetitorRow[]): CompetitorTiles {
       at,
       `${note} Every site or company not on the desk's list of directories and platforms; not checked one by one to be a studio.`,
     ),
-    google: ok(stat(inGoogle.length, `in the top results of ${plural(searches.size, "Google search", "Google searches")}, map pack included`), "desk", at, `${note} Of the sites and companies, platforms apart.`),
+    google: ok(stat(googleRows.length, `in the top results of ${plural(searches.size, "Google search", "Google searches")}, map pack included`), "desk", at, `${note} Of the sites and companies, platforms apart.`),
     ai: ok(
-      stat(inAi.length, asked ? `Balkaris: named in ${named} of ${asked} questions that did not name it` : "No AI check of Balkaris is recorded yet"),
+      stat(aiRows.length, asked ? `Balkaris: named in ${named} of ${asked} questions that did not name it` : "No AI check of Balkaris is recorded yet"),
       "desk",
       at,
       `${note} Platforms included: an AI answer that cites a directory is a finding too.`,
@@ -558,17 +669,44 @@ function tilesOf(w: World, rows: CompetitorRow[]): CompetitorTiles {
 
 /* ---------- the list ----------------------------------------------------------------------------- */
 
-function filtered(rows: CompetitorRow[], g: Map<string, Group>, a: CompetitorsAsked, skip: "engine" | "type" | "cluster" | null): CompetitorRow[] {
-  const words = a.q.toLowerCase().split(/\s+/).filter(Boolean);
+/**
+ * What the search box matches in a row: the name shown (never the internal
+ * "name:" key), the host, the other names it was given, the searches it was
+ * seen for, the clusters and the titles of its pages read. All folded alike.
+ */
+function haystack(r: CompetitorRow, group: Group): string {
+  const shown = r.domain.startsWith("name:") ? r.domain.slice(5) : r.domain;
+  const titles = group.pages.flatMap((p) => [p.title ?? "", p.h1 ?? ""]);
+  return ` ${fold([shown, r.name ?? "", ...r.alsoNamed, ...r.queries, ...r.clusters.map((c) => c.name), ...titles].join(" "))} `;
+}
+
+/** The words a person typed, as the list matches them: a pasted address as its host. */
+function typedWords(q: string): string[] {
+  const host = typedHost(q);
+  return fold(host ?? q)
+    .split(" ")
+    .filter(Boolean);
+}
+
+function filtered(rows: CompetitorRow[], g: Map<string, Group>, a: CompetitorsAsked, skip: "engine" | "type" | "cluster" | "shown" | null): CompetitorRow[] {
+  const words = typedWords(a.q);
+  const kinds = a.engine === "google" ? inGoogle : a.engine === "ai" ? inAi : null;
   return rows.filter((r) => {
     const group = g.get(r.domain)!;
-    if (skip !== "engine" && a.engine === "google" && !group.rows.some((s) => GOOGLE_KINDS.has(s.kind))) return false;
-    if (skip !== "engine" && a.engine === "ai" && !group.rows.some((s) => AI_KINDS.has(s.kind))) return false;
+    const ignored = !!r.decision?.ignore;
+    if (skip !== "shown" && (a.shown ?? "active") === "active" && ignored) return false;
+    if (skip !== "shown" && a.shown === "ignored" && !ignored) return false;
     if (skip !== "type" && a.type === "studios" && r.platform) return false;
     if (skip !== "type" && a.type === "platforms" && !r.platform) return false;
-    if (skip !== "cluster" && a.cluster && !r.clusters.some((c) => c.key === a.cluster)) return false;
+    /* Engine, cluster and captured search are asked of ONE observation together: "AI answers in this cluster" is an AI answer for this cluster. */
+    const useEngine = skip !== "engine" && kinds;
+    const useCluster = skip !== "cluster" && a.cluster;
+    if (useEngine || useCluster || a.search) {
+      const fits = group.rows.some((s) => (!useEngine || kinds!(s)) && (!useCluster || s.cluster === a.cluster) && (!a.search || s.query === a.search));
+      if (!fits) return false;
+    }
     if (words.length) {
-      const hay = `${r.domain} ${r.name ?? ""} ${r.alsoNamed.join(" ")}`.toLowerCase();
+      const hay = haystack(r, group);
       if (!words.every((x) => hay.includes(x))) return false;
     }
     return true;
@@ -589,22 +727,34 @@ function sorted(rows: CompetitorRow[], sort: CompetitorSort): CompetitorRow[] {
 }
 
 function listOf(w: World, all: CompetitorRow[], a: CompetitorsAsked): SeoCompetitorsPayload["list"] {
-  if (!w.raw.length) return off("desk", NOTHING, NOTHING_STEP);
+  if (!w.raw.length && !w.groups.length) return off("desk", NOTHING, NOTHING_STEP);
   const rows = sorted(filtered(all, w.byKey, a, null), a.sort);
+  /* A page past the end shows the last page, and says so by its offset. */
+  const last = rows.length ? Math.floor((rows.length - 1) / a.limit) * a.limit : 0;
+  a.offset = Math.max(0, Math.min(a.offset, last));
   const forEngines = filtered(all, w.byKey, a, "engine");
   const forTypes = filtered(all, w.byKey, a, "type");
   const forClusters = filtered(all, w.byKey, a, "cluster");
-  const has = (r: CompetitorRow, kinds: Set<string>) => w.byKey.get(r.domain)!.rows.some((s) => kinds.has(s.kind));
+  const forShown = filtered(all, w.byKey, a, "shown");
+  /* The counts take the same one-observation test as the list. */
+  const has = (r: CompetitorRow, kinds: (s: SightingRow) => boolean) => w.byKey.get(r.domain)!.rows.some((s) => kinds(s) && (!a.cluster || s.cluster === a.cluster) && (!a.search || s.query === a.search));
+  const kinds = a.engine === "google" ? inGoogle : a.engine === "ai" ? inAi : null;
   const clusterCounts = new Map<string, number>();
-  for (const r of forClusters) for (const c of r.clusters) clusterCounts.set(c.key, (clusterCounts.get(c.key) ?? 0) + 1);
+  for (const r of forClusters) {
+    const keys = new Set(w.byKey.get(r.domain)!.rows.filter((s) => s.cluster && (!kinds || kinds(s)) && (!a.search || s.query === a.search)).map((s) => s.cluster!));
+    for (const k of keys) clusterCounts.set(k, (clusterCounts.get(k) ?? 0) + 1);
+  }
+  /* The cluster asked is always among the options, with its count, so the select shows what is applied. */
+  if (a.cluster && !clusterCounts.has(a.cluster)) clusterCounts.set(a.cluster, 0);
+  const ignored = forShown.filter((r) => r.decision?.ignore).length;
   return ok(
     {
       total: rows.length,
       rows: rows.slice(a.offset, a.offset + a.limit),
       engines: [
         { key: "all", label: "All", count: forEngines.length },
-        { key: "google", label: "Google results", count: forEngines.filter((r) => has(r, GOOGLE_KINDS)).length },
-        { key: "ai", label: "AI answers", count: forEngines.filter((r) => has(r, AI_KINDS)).length },
+        { key: "google", label: "Google results", count: forEngines.filter((r) => has(r, inGoogle)).length },
+        { key: "ai", label: "AI answers", count: forEngines.filter((r) => has(r, inAi)).length },
       ],
       offset: a.offset,
       limit: a.limit,
@@ -616,6 +766,14 @@ function listOf(w: World, all: CompetitorRow[], a: CompetitorsAsked): SeoCompeti
       clusters: [...clusterCounts.entries()]
         .map(([key, count]) => ({ key, name: w.clusterName(key)!.name, count }))
         .sort((x, y) => y.count - x.count || x.name.localeCompare(y.name)),
+      shown: [
+        { key: "active", label: "Competitors", count: forShown.length - ignored },
+        { key: "ignored", label: "Ignored", count: ignored },
+        { key: "all", label: "All", count: forShown.length },
+      ],
+      /* Nothing matched what was typed: offer exactly that to look up (an address) or to check (a phrase). */
+      lookFor: !rows.length && a.q ? (web.domainOf(a.q).ok ? (typedHost(a.q) ?? a.q) : null) : null,
+      checkFor: !rows.length && a.q && !typedHost(a.q) && normal(a.q).length >= 2 ? normal(a.q) : null,
     },
     "desk",
     w.at,
@@ -639,7 +797,7 @@ interface Context {
 function detailOf(g: Group, c: Context): CompetitorDetail {
   const { w, o } = c;
   const row = rowOf(g, w);
-  const organic = g.rows.filter((s) => s.kind === "organic" && s.position !== null).sort((a, b) => a.position! - b.position!);
+  const organic = g.rows.filter((s) => s.kind === "organic" && s.engine === "google" && s.position !== null).sort((a, b) => a.position! - b.position!);
   const best = organic[0] ?? null;
   const clusterKey = best?.cluster ?? g.rows.find((s) => s.cluster)?.cluster ?? null;
   const cluster = clusterKey ? w.clusters.get(clusterKey) : undefined;
@@ -681,7 +839,7 @@ function detailOf(g: Group, c: Context): CompetitorDetail {
       key: "price",
       label: "States a price",
       them: priced.length
-        ? `“${priced[0]!.priceText ?? "a CHF amount"}” on ${priced[0]!.address === "home" ? "its home page" : "the page that ranks"}`
+        ? `“${priced[0]!.priceText ?? "a CHF amount"}” on ${kindOf(priced[0]!)}`
         : read.some((p) => p.priceDoubt)
           ? read.find((p) => p.priceDoubt)!.priceDoubt!
           : `No CHF amount on the ${plural(read.length, "page")} read`,
@@ -712,7 +870,7 @@ function detailOf(g: Group, c: Context): CompetitorDetail {
       task: biz.length > 0 && usBiz.length === 0 ? c.task(TASKS.business) : null,
     });
     /* words, for scale */
-    const words = read.filter((p) => p.words !== null).map((p) => `${p.words ? n0(p.words) : "no text in its HTML"} (${p.address === "home" ? "home page" : "the page that ranks"})`);
+    const words = read.filter((p) => p.words !== null).map((p) => `${p.words ? n0(p.words) : "no text in its HTML"} (${kindOf(p)})`);
     beside.push({
       key: "words",
       label: "Words on the page",
@@ -746,7 +904,7 @@ function detailOf(g: Group, c: Context): CompetitorDetail {
   });
   /* organic: their best against ours in the same capture (same search, same day) where the capture records us; else against Search Console for the same search */
   if (best) {
-    const same = w.ours.find((s) => s.kind === "organic" && s.position !== null && s.query === best.query && s.day === best.day) ?? null;
+    const same = w.ours.find((s) => s.kind === "organic" && s.engine === "google" && s.position !== null && s.query === best.query && s.day === best.day) ?? null;
     if (same) {
       beside.push({
         key: "organic",
@@ -781,7 +939,32 @@ function detailOf(g: Group, c: Context): CompetitorDetail {
     site,
     against,
     beside,
+    topics: topicsOf(g, w),
+    mergeWith: mergeCandidates(g, w),
+    merged: [...w.decisions.values()].filter((d) => d.mergedInto === g.key).map((d) => ({ key: d.domain, name: d.domain.startsWith("name:") ? d.domain.slice(5) : d.domain, by: d.by })),
   };
+}
+
+/** Its pages read, by our clusters: a page's own cluster, else its title filed by the same rule as a search. */
+function topicsOf(g: Group, w: World): NonNullable<CompetitorDetail["topics"]> {
+  const by = new Map<string, { url: string; title: string | null }[]>();
+  for (const p of g.pages.filter(readOk)) {
+    const key = p.cluster ?? (p.title ? w.file(p.title, p.lang?.slice(0, 2) ?? null, null).cluster : null);
+    if (!key) continue;
+    by.set(key, [...(by.get(key) ?? []), { url: p.url, title: p.title }]);
+  }
+  return [...by.entries()].map(([key, pages]) => ({ cluster: w.clusterName(key)!, pages })).sort((a, b) => b.pages.length - a.pages.length || a.cluster.name.localeCompare(b.cluster.name));
+}
+
+/** Rows whose name begins like this one's (four letters or more): the ones a person may want to count as one company. */
+function mergeCandidates(g: Group, w: World): { key: string; name: string }[] {
+  const shown = (k: string): string => (k.startsWith("name:") ? k.slice(5) : (w.names.get(k) ?? k));
+  const stem = compact(shown(g.key).replace(LEGAL, "").split(".")[0] ?? "").slice(0, 4);
+  if (stem.length < 4) return [];
+  return w.groups
+    .filter((o) => o.key !== g.key && compact(shown(o.key).replace(LEGAL, "").split(".")[0] ?? "").startsWith(stem))
+    .slice(0, 6)
+    .map((o) => ({ key: o.key, name: shown(o.key) }));
 }
 
 /** Our service and landing pages the readiness check asks a price of, and how many state one. */
@@ -908,7 +1091,7 @@ function lacksOf(c: Context): Reading<LackPanel> {
     dirs = [];
   }
   const listed = dirs.filter((p) => p.state === "exists").length;
-  const platformHits = w.groups.filter((g) => isPlatform(g.key));
+  const platformHits = w.groups.filter((g) => w.platform(g.key) && !w.decisions.get(g.key)?.ignore);
   push(
     "directories",
     "Listed in directories",
@@ -951,9 +1134,9 @@ function directoriesOf(c: Context): Reading<DirectoryRow[]> {
     );
   };
   const rows: DirectoryRow[] = w.groups
-    .filter((g) => isPlatform(g.key))
+    .filter((g) => w.platform(g.key) && !w.decisions.get(g.key)?.ignore)
     .map((g) => {
-      const organic = g.rows.filter((s) => s.kind === "organic" && s.position !== null).map((s) => s.position!);
+      const organic = g.rows.filter((s) => s.kind === "organic" && s.engine === "google" && s.position !== null).map((s) => s.position!);
       const p = profileFor(g.key);
       return {
         domain: g.key,
@@ -963,7 +1146,8 @@ function directoriesOf(c: Context): Reading<DirectoryRow[]> {
           .sort((a, b) => (a.position ?? 99) - (b.position ?? 99)),
         best: organic.length ? Math.min(...organic) : null,
         ours: p ? { key: p.key, name: p.name, state: p.state, stateWhy: p.stateWhy, url: p.url, checkedAt: p.checkedAt } : null,
-        task: p?.ownerTaskId ? c.task([p.ownerTaskId]) : null,
+        /* A profile may name a task the engine never made ("local-listings"): the directories step stands in for it. */
+        task: p?.ownerTaskId ? c.task([p.ownerTaskId, ...TASKS.directories]) : null,
       };
     })
     .sort((a, b) => (a.best ?? 99) - (b.best ?? 99) || b.seen.length - a.seen.length || a.domain.localeCompare(b.domain));
@@ -989,7 +1173,7 @@ function clustersOf(c: Context): Reading<ClusterCompare[]> {
   for (const key of keys) {
     const cl = w.clusters.get(key);
     const rows = w.groups.flatMap((g) => g.rows.filter((s) => s.cluster === key).map((s) => ({ g, s })));
-    const queries = new Map<string, { query: string; filed: "audit" | "words"; engines: Set<string> }>();
+    const queries = new Map<string, { query: string; filed: "audit" | "words" | "hand"; engines: Set<string> }>();
     for (const { s } of rows) {
       const q = queries.get(s.query) ?? { query: s.query, filed: s.filed ?? "audit", engines: new Set<string>() };
       q.engines.add(ENGINE_LABEL[s.engine] ?? s.engine);
@@ -998,13 +1182,21 @@ function clustersOf(c: Context): Reading<ClusterCompare[]> {
     /* who ranks: each site's best organic position across the cluster's searches */
     const bestBy = new Map<string, { g: Group; s: SightingRow & Filed }>();
     for (const r of rows) {
-      if (r.s.kind !== "organic" || r.s.position === null) continue;
+      if (r.s.kind !== "organic" || r.s.engine !== "google" || r.s.position === null) continue;
       const had = bestBy.get(r.g.key);
       if (!had || r.s.position < had.s.position!) bestBy.set(r.g.key, r);
     }
     const qset = new Set(queries.keys());
-    const pageFor = (g: Group, query: string): Page | null =>
-      g.pages.find((p) => p.address === "ranking" && p.query === query) ?? g.pages.find((p) => p.query !== null && qset.has(p.query) && p.address === "ranking") ?? g.pages.find((p) => p.address === "home") ?? null;
+    /* The page that ranks for the search, then one ranking for the cluster, then the page of its sitemap for the cluster, then its home page: the first of them that was READ, and only when none was, the first, so its error is shown. */
+    const pageFor = (g: Group, query: string): Page | null => {
+      const order = [
+        g.pages.find((p) => p.address === "ranking" && p.query === query),
+        g.pages.find((p) => p.query !== null && qset.has(p.query) && p.address === "ranking"),
+        g.pages.find((p) => p.topic && p.cluster === key),
+        g.pages.find((p) => p.address === "home"),
+      ].filter((p): p is Page => !!p);
+      return order.find(readOk) ?? order[0] ?? null;
+    };
     /* The six shown: "who ranks" and "their pages" are both of these, so every page counted is a site the reader sees. */
     const shown = [...bestBy.values()].sort((a, b) => a.s.position! - b.s.position! || a.g.key.localeCompare(b.g.key)).slice(0, 6);
     const organic: RivalPage[] = shown.map(({ g, s }) => {
@@ -1014,14 +1206,14 @@ function clustersOf(c: Context): Reading<ClusterCompare[]> {
         name: w.names.get(g.key) ?? null,
         position: s.position!,
         query: s.query,
-        page: p ? { url: p.url, address: p.address, words: p.words, lang: p.lang, schemaTypes: p.schemaTypes, priceStated: p.priceStated, priceText: p.priceText, priceDoubt: p.priceDoubt, error: p.error } : null,
+        page: p ? { url: p.url, address: p.topic ? "topic" : p.address, words: p.words, lang: p.lang, schemaTypes: p.schemaTypes, priceStated: p.priceStated, priceText: p.priceText, priceDoubt: p.priceDoubt, error: p.error } : null,
       };
     });
     /* our own place in the same captures: the best per search, best first */
-    const googleSearches = new Set(rows.filter(({ s }) => s.kind === "organic").map(({ s }) => s.query));
+    const googleSearches = new Set(rows.filter(({ s }) => s.kind === "organic" && s.engine === "google").map(({ s }) => s.query));
     const ourBest = new Map<string, SightingRow & Filed>();
     for (const s of w.ours) {
-      if (s.kind !== "organic" || s.position === null || !(s.cluster === key || googleSearches.has(s.query))) continue;
+      if (s.kind !== "organic" || s.engine !== "google" || s.position === null || !(s.cluster === key || googleSearches.has(s.query))) continue;
       const had = ourBest.get(s.query);
       if (!had || s.position < had.position! || (s.position === had.position && s.day > had.day)) ourBest.set(s.query, s);
     }
@@ -1110,7 +1302,7 @@ function briefFor(cl: Cluster | undefined, key: string, queries: string[], organ
   const facts = (r: RivalPage): string => {
     const p = r.page;
     if (!p || p.error) return `${r.domain} at ${r.position}`;
-    const bits = [p.address === "home" ? "home page" : "the page that ranks", langName(p.lang), p.words !== null ? `${n0(p.words)} words` : null, p.schemaTypes.includes("FAQPage") ? "FAQ markup" : null, p.priceStated ? `states “${p.priceText ?? "a price"}”` : "no price"];
+    const bits = [p.address === "home" ? "home page" : p.address === "topic" ? "its page for this topic" : "the page that ranks", langName(p.lang), p.words !== null ? `${n0(p.words)} words` : null, p.schemaTypes.includes("FAQPage") ? "FAQ markup" : null, p.priceStated ? `states “${p.priceText ?? "a price"}”` : "no price"];
     return `${r.domain} at ${r.position} (${bits.filter(Boolean).join(", ")})`;
   };
   const head = `A ${lang} page for “${name}”, to compete in the searches captured${day ? ` on ${day}` : ""}: ${queries
@@ -1137,12 +1329,196 @@ function briefFor(cl: Cluster | undefined, key: string, queries: string[], organ
   }
 }
 
+/* ---------- a site looked up, beside Balkaris ------------------------------------------------------ */
+
+/** Lookups still reading in the background (a slow fact, PageSpeed above all), by domain. */
+const looking = new Map<string, number>();
+const OWN_DOMAIN = "balkaris.ch";
+
+function ownSite(o: Ours | null): OwnSite {
+  if (!o) return { sitemapPages: null, languages: [], schemaTypes: [], at: null };
+  const langs = new Set<string>();
+  for (const p of o.sitemap) {
+    if (p.lang) langs.add(p.lang.split("-")[0]!.toLowerCase());
+    for (const l of o.hreflang.get(p.path) ?? []) if (l && l !== "x-default") langs.add(l.split("-")[0]!.toLowerCase());
+  }
+  return { sitemapPages: o.view.at ? o.sitemap.length : null, languages: [...langs].sort(), schemaTypes: [...new Set(o.sitemap.flatMap((p) => p.schemaTypes))].sort(), at: o.view.at ?? null };
+}
+
+function lookupOf(asked: string, w: World, all: CompetitorRow[], o: () => Ours): Reading<LookupCard> {
+  const d = web.domainOf(asked);
+  if (!d.ok) return off("desk", `The desk does not read that: ${d.why}.`, "Type a site's address or its domain, like example.ch.");
+  const facts = web.domainFacts(d.domain);
+  const pending = (looking.get(d.domain) ?? 0) > Date.now() - 180_000;
+  if (!facts) {
+    return pending
+      ? waiting("desk", `${d.domain} is being looked up: its facts arrive within a minute. Reload to see them.`)
+      : off("desk", `${d.domain} has not been looked up in the last seven days.`, "Press Look up to read what the open web says about it: one of today's domain lookups.");
+  }
+  let mine: Ours | null = null;
+  try {
+    mine = o();
+  } catch {
+    mine = null;
+  }
+  const rows = lookupRows(facts, web.domainFacts(OWN_DOMAIN), ownSite(mine));
+  const key = root(w, d.domain);
+  const known = all.find((r) => r.domain === key) ?? null;
+  const pages = (db.prepare("SELECT COUNT(*) AS n FROM cc_seo_comp_pages WHERE domain = ?").get(d.domain) as { n: number }).n;
+  const lang = (facts.facts.home.state === "ok" ? facts.facts.home.value.lang?.slice(0, 2) : null) as WebLang | null;
+  return ok<LookupCard>(
+    {
+      asked,
+      domain: d.domain,
+      home: facts.home,
+      asOf: facts.asOf,
+      line: pending ? `${facts.line} Some facts are still being read: reload in a moment.` : facts.line,
+      pending,
+      rows,
+      known: known ? { key: known.domain, name: known.name, sightings: known.sightings, decision: known.decision ?? null } : null,
+      pages,
+      allowance: web.domainAllowance(),
+      paid: keptPaid(d.domain, lang && LANGS.includes(lang) ? lang : "de"),
+      brief: lookupBrief(facts, rows),
+    },
+    "desk",
+    facts.asOf,
+    "Each fact names who said it and when; a fact is kept seven days, so a second look asks nothing. Balkaris's side is the lookup of balkaris.ch, or the desk's own crawl where that lookup could not say it.",
+  );
+}
+
+/** The list key a domain has, merges followed. */
+function root(w: World, domain: string): string {
+  let x = domain;
+  for (let i = 0; i < 8; i++) {
+    const m = w.decisions.get(x)?.mergedInto;
+    if (!m || m === x) break;
+    x = m;
+  }
+  return x;
+}
+
+/* ---------- who ranks: the result-page checks -------------------------------------------------------- */
+
+/** Who came, went or moved between two captures of one phrase and engine. */
+function changesOf(now: { host: string; position: number }[], before: { host: string; position: number }[] | null, since: string | null): SerpChange | null {
+  if (!before || !since) return null;
+  const a = new Map(now.map((r) => [r.host, r.position]));
+  const b = new Map(before.map((r) => [r.host, r.position]));
+  return {
+    since,
+    newcomers: [...a.keys()].filter((h) => !b.has(h)),
+    gone: [...b.keys()].filter((h) => !a.has(h)),
+    moved: [...a.entries()].filter(([h, p]) => b.has(h) && b.get(h) !== p).map(([host, to]) => ({ host, from: b.get(host)!, to })),
+  };
+}
+
+function viewOf(check: SerpCheck | null, w: World): SerpView | null {
+  if (!check) return null;
+  const { page, ...rest } = check;
+  const rows = (page?.organic ?? []).map((r) => {
+    const key = domainKey(r.host) ?? r.host;
+    return { position: r.position, title: r.title, url: r.url, host: r.host, key: root(w, key), known: w.byKey.has(root(w, key)), ours: /balkaris/i.test(r.host) };
+  });
+  let changes: SerpChange | null = null;
+  if (check.state === "done" && page) {
+    const before = web.serpHistory(check.phrase, { lang: check.lang, engine: check.engine, limit: 6 }).find((x) => x.id !== check.id && x.state === "done" && x.page && (x.doneAt ?? "") < (check.doneAt ?? ""));
+    changes = changesOf(
+      page.organic.map((r) => ({ host: domainKey(r.host) ?? r.host, position: r.position })),
+      before?.page ? before.page.organic.map((r) => ({ host: domainKey(r.host) ?? r.host, position: r.position })) : null,
+      before?.doneAt ?? null,
+    );
+  }
+  return { check: rest, rows, local: page?.localPack ?? [], related: page?.related ?? [], questions: page?.questions ?? [], ads: page?.ads ?? 0, changes };
+}
+
+function serpOf(a: CompetitorsAsked, w: World): Reading<SerpPanel> {
+  const lane = web.googleLane();
+  const configured = web.dataforseoConfigured();
+  const latest = a.serp ? web.latestSerp(a.serp, a.serpLang ?? undefined) : null;
+  /* A check still waiting stands in for Google's when no done one is kept, so the person sees its state. */
+  const google = latest ? (latest.google ?? (latest.pending?.engine === "google" ? latest.pending : null)) : null;
+  const recent = web.recentSerps(12).map((r) => ({ id: r.id, phrase: r.phrase, lang: r.lang, engine: r.engine, state: r.state, label: r.label, requestedAt: r.requestedAt, doneAt: r.doneAt, ownPosition: r.ownPosition, requestedBy: r.requestedBy, line: r.line }));
+  return ok<SerpPanel>(
+    {
+      lane,
+      dataforseo: { configured, step: configured ? null : web.dataforseoStep() },
+      phrase: a.serp ?? null,
+      lang: a.serpLang ?? null,
+      google: viewOf(google, w),
+      duckduckgo: viewOf(latest?.duckduckgo ?? null, w),
+      recent,
+      langs: LANGS,
+    },
+    "desk",
+    recent[0]?.doneAt ?? recent[0]?.requestedAt ?? new Date().toISOString(),
+    "Google's page is fetched by the studio workstation from its own line (or bought from DataForSEO when it is connected); DuckDuckGo's is read by the server and is a second opinion, never Google's ranking. Every result of a finished check is kept as an observation.",
+  );
+}
+
+/* ---------- the captured searches ----------------------------------------------------------------------- */
+
+function searchesOf(a: CompetitorsAsked, w: World, qfig: Context["qfig"], span: SeoSpan | null): Reading<SearchPanel> {
+  const google = [...w.groups.flatMap((g) => g.rows.map((s) => ({ g, s }))), ...w.ours.map((s) => ({ g: null as Group | null, s }))].filter(({ s }) => inGoogle(s));
+  if (!google.length) return off("desk", "No Google result page is captured yet.", "Check who ranks for a phrase above, or record a Google result you looked at by hand.");
+  const byQuery = new Map<string, { g: Group | null; s: SightingRow & Filed }[]>();
+  for (const x of google) byQuery.set(x.s.query, [...(byQuery.get(x.s.query) ?? []), x]);
+  const window = span ? `${dayText(span.start)} – ${dayText(span.end)}` : null;
+  const build = (query: string, full: boolean): CapturedSearch => {
+    const list = byQuery.get(query)!;
+    const days = [...new Set(list.map((x) => x.s.day))].sort().reverse();
+    const newest = days[0]!;
+    const atNewest = list.filter((x) => x.s.day === newest);
+    const first = list[0]!.s;
+    const own = atNewest.find((x) => !x.g && x.s.kind === "organic" && x.s.position !== null);
+    const f = qfig?.get(normal(query));
+    const ours: CapturedSearch["ours"] = own
+      ? { position: own.s.position, how: "capture", line: `#${own.s.position} in the capture of ${dayText(newest)}` }
+      : f && f.impressions && f.position !== null
+        ? { position: f.position, how: "search-console", line: `Not in the capture; Search Console's average ${f.position} over ${window} (a stand-in, not the same page)` }
+        : { position: null, how: null, line: w.ours.some((s) => s.query === query) ? "Not in this capture" : !qfig ? "Not recorded in the capture; Search Console's history is not on this desk yet" : `Not recorded in the capture, and not shown for it in Search Console over ${window}` };
+    const out: CapturedSearch = {
+      query,
+      lang: first.lang,
+      cluster: w.clusterName(first.cluster),
+      filed: first.filed,
+      days,
+      by: atNewest[0]!.s.by,
+      sites: new Set(atNewest.filter((x) => x.g).map((x) => x.g!.key)).size,
+      ours,
+    };
+    if (full) {
+      const organicAt = (day: string) =>
+        list
+          .filter((x) => x.s.day === day && x.s.kind === "organic" && x.s.position !== null)
+          .sort((p, q) => p.s.position! - q.s.position!);
+      out.organic = organicAt(newest).map((x) => ({ position: x.s.position!, key: x.g?.key ?? OWN_DOMAIN, name: x.g ? (x.g.key.startsWith("name:") ? x.g.key.slice(5) : (w.names.get(x.g.key) ?? x.g.key)) : "Balkaris", url: x.s.url ?? null, title: x.s.title ?? null, ours: !x.g }));
+      out.mapPack = atNewest.filter((x) => x.s.kind === "local-pack" && x.s.position !== null).sort((p, q) => p.s.position! - q.s.position!).map((x) => ({ position: x.s.position!, name: x.s.name ?? (x.g?.key.startsWith("name:") ? x.g.key.slice(5) : (x.g?.key ?? "")) }));
+      out.changes = days[1] ? changesOf(organicAt(newest).map((x) => ({ host: x.g?.key ?? OWN_DOMAIN, position: x.s.position! })), organicAt(days[1]).map((x) => ({ host: x.g?.key ?? OWN_DOMAIN, position: x.s.position! })), days[1]) : null;
+    }
+    return out;
+  };
+  const rows = [...byQuery.keys()].map((q) => build(q, false)).sort((x, y) => (y.days[0] ?? "").localeCompare(x.days[0] ?? "") || x.query.localeCompare(y.query));
+  return ok<SearchPanel>(
+    {
+      rows,
+      unfiled: rows.filter((r) => !r.cluster).length,
+      clusters: [...w.clusters.values()].map((c) => ({ key: c.key, name: c.name, lang: c.lang })).sort((x, y) => x.name.localeCompare(y.name)),
+      chosen: a.search && byQuery.has(a.search) ? build(a.search, true) : null,
+    },
+    "desk",
+    w.at,
+    "Each search as captured: by the SEO audit in the owner's Chrome, a check through the workstation, or a person by hand. Our place is the capture's where it has one; Search Console's average is shown as a stand-in, labelled, where it has none.",
+  );
+}
+
 /* ---------- the answer ------------------------------------------------------------------------ */
 
 routes.get("/", async (c) => {
   const range = rangeFrom(c);
   const h = head(range);
   const asked = askedOf((k) => c.req.query(k));
+  const owner = !!me(c)?.owner;
 
   let w: World;
   try {
@@ -1160,11 +1536,16 @@ routes.get("/", async (c) => {
       directories: off("desk", why),
       clusters: off("desk", why),
       rules: { filing: FILING, joining: JOINING, observed: observed(null, true) },
-      refresh: refreshOf(0, 0),
+      refresh: refreshOf([], 0),
+      owner,
+      lookup: null,
+      serp: off("desk", why),
+      searches: off("desk", why),
     });
   }
 
   const all = w.groups.map((g) => rowOf(g, w));
+  const active = all.filter((r) => !r.decision?.ignore);
   let o: Ours | null = null;
   const oursOnce = (): Ours => (o ??= ours());
   const span = h.span;
@@ -1206,33 +1587,45 @@ routes.get("/", async (c) => {
   const list = await reading("desk", () => listOf(w, all, asked));
   let selected: SeoCompetitorsPayload["selected"] = null;
   if (list.state === "ok") {
-    const askedFor = asked.open ? (w.byKey.get(asked.open) ?? w.groups.find((g) => g.aliases.some((a) => `name:${a}` === asked.open)) ?? null) : null;
-    const g = askedFor ?? (list.value.rows[0] ? w.byKey.get(list.value.rows[0].domain) : undefined) ?? null;
-    if (g) selected = await reading("desk", () => ok(detailOf(g, context()), "desk", w.at, "Where it was seen, what its pages say, and the same things of ours beside them."));
-    else if (asked.open) selected = off("desk", `No competitor ${asked.open} is in the desk's record.`);
+    /* ?open= is matched as typed, as a host (scheme, www. and path taken off), and through a merge; a key that is not there says so instead of opening another. */
+    const key = asked.open ? root(w, openKeyOf(asked.open)) : null;
+    const askedFor = key ? (w.byKey.get(key) ?? w.groups.find((g) => g.aliases.some((x) => `name:${x}` === asked.open)) ?? null) : null;
+    if (asked.open && !askedFor) selected = off("desk", `No competitor ${asked.open} is in the desk's record.`, typedHost(asked.open) ? `Look it up instead: ${typedHost(asked.open)}.` : undefined);
+    else {
+      const g = askedFor ?? (list.value.rows[0] ? w.byKey.get(list.value.rows[0].domain) : undefined) ?? null;
+      if (g) selected = await reading("desk", () => ok(detailOf(g, context()), "desk", w.at, "Where it was seen, what its pages say, and the same things of ours beside them."));
+    }
   }
 
-  const [lacks, directories, clusterList] = await Promise.all([reading("desk", () => lacksOf(context())), reading("desk", () => directoriesOf(context())), reading("desk", () => clustersOf(context()))]);
+  const [lacks, directories, clusterList, lookup, serp, searches] = await Promise.all([
+    reading("desk", () => lacksOf(context())),
+    reading("desk", () => directoriesOf(context())),
+    reading("desk", () => clustersOf(context())),
+    asked.look ? reading("desk", () => lookupOf(asked.look!, w, all, oursOnce)) : Promise.resolve(null),
+    reading("desk", () => serpOf(asked, w)),
+    reading("desk", () => searchesOf(asked, w, qfig, span)),
+  ]);
 
-  /* The weekly read's own figures: every page on its list, platforms' included. */
-  const known = w.allPages.length;
-  const fetched = w.allPages.filter((p) => p.fetchedAt !== null).length;
-  const newestRead = w.allPages.map((p) => p.fetchedAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
   return c.json<SeoCompetitorsPayload>({
     head: h,
     asked,
-    tiles: tilesOf(w, all),
+    tiles: tilesOf(w, active),
     list,
     selected,
     lacks,
     directories,
     clusters: clusterList,
     rules: { filing: FILING, joining: JOINING, observed: observed(w.day, w.raw.every((s) => s.by === "audit")) },
-    refresh: refreshOf(known, fetched, newestRead),
+    refresh: refreshOf(w.allPages, duePages().length),
+    owner,
+    lookup,
+    serp,
+    searches,
   });
 });
 
-function refreshOf(pages: number, fetched: number, newestRead: string | null = null): SeoCompetitorsPayload["refresh"] {
+/** The weekly read's own figures: every page on its list, platforms' included; "read" is a page that answered and was read. */
+function refreshOf(pages: Page[], due: number): SeoCompetitorsPayload["refresh"] {
   let j: ReturnType<typeof jobStatus>[number] | undefined;
   try {
     j = jobStatus().find((x) => x.name === "seo-competitors");
@@ -1241,5 +1634,267 @@ function refreshOf(pages: number, fetched: number, newestRead: string | null = n
   }
   /* The job's note is a sentence of its own: without its closing stop, so the page can end it once. */
   const lastNote = j?.lastNote ? scrub(j.lastNote).trim().replace(/[.\s]+$/, "") || null : null;
-  return { lastRun: j?.lastEnd ?? null, lastNote, nextRun: j?.nextRun ?? null, pages, fetched, registered: !!j, running: !!j?.running, newestRead };
+  const newestRead = pages.map((p) => p.fetchedAt).filter((x): x is string => !!x).sort().at(-1) ?? null;
+  return {
+    lastRun: j?.lastEnd ?? null,
+    lastNote,
+    nextRun: j?.nextRun ?? null,
+    pages: pages.length,
+    fetched: pages.filter(readOk).length,
+    failed: pages.filter((p) => p.fetchedAt !== null && !readOk(p)).length,
+    due,
+    registered: !!j,
+    running: !!j?.running,
+    newestRead,
+  };
 }
+
+/* ---------- what a person does here ------------------------------------------------------------------- */
+
+const fail = (status: 400 | 404 | 409, message: string): never => {
+  throw new HTTPException(status, { message });
+};
+const who = (c: Parameters<typeof me>[0]): string => me(c)?.name ?? "desk";
+const text = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().replace(/\s+/g, " ").slice(0, max) : "");
+
+/** Run something after the answer, never letting it throw into the void. */
+const later = (what: string, f: () => Promise<unknown>): void => {
+  void f().catch((e) => note("seo-competitors", `${what} did not finish`, { tone: "warn", detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) }));
+};
+
+/** How long a lookup may hold the answer before it goes on in the background. */
+export const LOOKUP_WAIT_MS = { value: 25_000 };
+
+/**
+ * POST /lookup { input, fresh? }: what the open web says about any site,
+ * through the web layer (one of today's domain lookups; kept seven days).
+ * Balkaris's own domain is looked up beside it when nothing of ours is kept.
+ * A slow fact (PageSpeed) goes on after the answer; the card says so.
+ */
+routes.post("/lookup", async (c) => {
+  const b = await body(c);
+  const input = text(b.input, 200);
+  if (input.length < 3) fail(400, "Type a site's address or its domain, like example.ch.");
+  const d = web.domainOf(input);
+  if (!d.ok) fail(400, `The desk does not read that: ${d.why}.`);
+  const domain = (d as { domain: string }).domain;
+  const by = who(c);
+  looking.set(domain, Date.now());
+  const run = web.lookupDomain(input, by, { fresh: b.fresh === true }).finally(() => looking.delete(domain));
+  if (!web.domainFacts(OWN_DOMAIN) && domain !== OWN_DOMAIN) later("The lookup of balkaris.ch", () => web.lookupDomain(OWN_DOMAIN, by));
+  const got = await Promise.race([run.then((f) => ({ f })), new Promise<null>((r) => setTimeout(() => r(null), LOOKUP_WAIT_MS.value))]);
+  if (!got) {
+    run.catch(() => {});
+    return c.json({ ok: true, domain, href: `/seo/competitors?look=${encodeURIComponent(domain)}`, line: `Looking up ${domain}: most facts are in, the slow ones arrive within a minute.` });
+  }
+  return c.json({ ok: true, domain, href: `/seo/competitors?look=${encodeURIComponent(domain)}`, line: got.f.line });
+});
+
+/**
+ * POST /watch { input, watch }: put a site on the list as a competitor a
+ * person chose (its home page read at once), or stop watching it.
+ */
+routes.post("/watch", async (c) => {
+  const b = await body(c);
+  const input = text(b.input ?? b.domain, 200);
+  const d = web.domainOf(input);
+  if (!d.ok) fail(400, `The desk does not read that: ${d.why}.`);
+  const domain = (d as { domain: string }).domain;
+  if (/balkaris/i.test(domain)) fail(400, "Balkaris is the studio itself, not a competitor.");
+  const by = who(c);
+  if (b.watch === false) {
+    decide(domain, { watch: false }, by);
+    return c.json({ ok: true, domain, line: `${domain} is no longer watched. Its observations stay; it leaves the list when it has none.` });
+  }
+  const kept = web.domainFacts(domain);
+  const home = kept?.facts.home.state === "ok" ? kept.facts.home.value.url : `https://${(d as { host: string }).host}/`;
+  const name = kept?.facts.home.state === "ok" ? (kept.facts.home.value.title?.split(/\s[|–—-]\s/)[0]?.trim().slice(0, 80) ?? null) : null;
+  const w = watchSite(domain, name, by, home);
+  later(`Reading ${domain}'s home page`, () => refreshPages(() => {}, { domain, most: 4 }));
+  return c.json({ ok: true, domain, href: `/seo/competitors?open=${encodeURIComponent(domain)}`, line: `${domain} is watched as a competitor${w.added ? "; its home page is being read now" : ""}. It is on the list as added by ${by}.` });
+});
+
+/**
+ * POST /decide { domain, ignore?, kind?, mergeInto? }: a person's word on a
+ * row. ignore hides it (its observations are kept); kind "platform" or
+ * "studio" overrides the platform list ("auto" gives it back); mergeInto
+ * counts it as another row (null undoes it).
+ */
+routes.post("/decide", async (c) => {
+  const b = await body(c);
+  const domain = text(b.domain, 200);
+  if (!domain) fail(400, "Name the competitor: its key as the list shows it.");
+  const w = world();
+  if (!w.raw.some((s) => s.domain === domain) && !w.byKey.has(domain) && !w.decisions.has(domain)) fail(404, `No competitor ${domain} is in the desk's record.`);
+  const change: Parameters<typeof decide>[1] = {};
+  const said: string[] = [];
+  if (typeof b.ignore === "boolean") {
+    change.ignore = b.ignore;
+    said.push(b.ignore ? "ignored: hidden from the list and its counts, its observations kept" : "no longer ignored");
+  }
+  if (b.kind !== undefined) {
+    if (b.kind !== "platform" && b.kind !== "studio" && b.kind !== "auto") fail(400, "kind is platform, studio or auto.");
+    change.kind = b.kind === "auto" ? null : (b.kind as "platform" | "studio");
+    said.push(b.kind === "auto" ? "a platform or not by the desk's list again" : b.kind === "platform" ? "counted as a directory or platform" : "counted as a site or company, not a platform");
+  }
+  if (b.mergeInto !== undefined) {
+    const into = b.mergeInto === null ? null : text(b.mergeInto, 200);
+    if (into === domain) fail(400, "A competitor cannot be merged into itself.");
+    if (into && root(w, into) === domain) fail(409, `${into} is already counted as ${domain}: merge the other way, or undo that first.`);
+    if (into && !w.byKey.has(root(w, into))) fail(404, `No competitor ${into} is on the list to merge into.`);
+    change.mergedInto = into || null;
+    said.push(into ? `counted as ${into} from now on` : "counted on its own again");
+  }
+  if (!said.length) fail(400, "Say what to change: ignore, kind or mergeInto.");
+  decide(domain, change, who(c));
+  return c.json({ ok: true, domain, line: `${domain.startsWith("name:") ? domain.slice(5) : domain}: ${said.join("; ")}.` });
+});
+
+/**
+ * POST /read { domain }: read a competitor's sitemap for the pages that
+ * answer our clusters (they join the weekly read under that cluster, which
+ * Content Gaps reads too), then read its due pages now, in the background.
+ */
+routes.post("/read", async (c) => {
+  const b = await body(c);
+  const d = web.domainOf(text(b.domain, 200));
+  if (!d.ok) fail(400, `The desk does not read that: ${d.why}.`);
+  const domain = (d as { domain: string }).domain;
+  if (!readable(domain) && decisions().get(domain)?.kind !== "studio") fail(409, `${domain} is a platform: its pages are not read as a competitor's. Count it as a site first.`);
+  const kept = web.domainFacts(domain);
+  const home = kept?.facts.home.state === "ok" ? kept.facts.home.value.url : `https://${(d as { host: string }).host}/`;
+  const sitemaps = kept?.facts.robots.state === "ok" ? kept.facts.robots.value.sitemaps : [];
+  const siteLang = kept?.facts.home.state === "ok" ? (kept.facts.home.value.lang?.slice(0, 2) ?? null) : null;
+  const got = await topicPages(domain, home, sitemaps, 8, siteLang);
+  later(`Reading ${domain}'s pages`, () => refreshPages(() => {}, { domain, most: 12 }));
+  return c.json({ ok: true, domain, added: got.added.length, line: `${got.line} Reading its due pages now, two seconds apart.` });
+});
+
+/**
+ * POST /serp { phrase, lang? }: who ranks for a phrase, through the web
+ * layer: Google through the studio workstation (or DataForSEO when it is
+ * connected), and DuckDuckGo's second opinion. The phrase is filed under our
+ * cluster first, so its results carry the cluster on every tab.
+ */
+routes.post("/serp", async (c) => {
+  const b = await body(c);
+  const phrase = normal(text(b.phrase, 160));
+  const lang = typeof b.lang === "string" && LANGS.includes(b.lang as WebLang) ? (b.lang as WebLang) : undefined;
+  const cluster = phrase.length >= 2 ? (web.fileUnder(phrase, lang ?? null)?.key ?? null) : null;
+  const asked = await web.requestSerp({ phrase, lang, by: who(c), clusterKey: cluster });
+  const l = asked.google?.lang ?? asked.duckduckgo?.lang ?? lang ?? "de";
+  return c.json({ ok: true, line: asked.line, href: `/seo/competitors?serp=${encodeURIComponent(phrase)}&serpLang=${l}`, google: asked.google?.id ?? null, duckduckgo: asked.duckduckgo?.id ?? null });
+});
+
+/**
+ * POST /paid { domain, lang? }: what DataForSEO says about a domain (what it
+ * ranks for on google.ch, its visibility, its links), bought at a person's
+ * press and kept seven days. While there is no account it refuses with the
+ * owner's step and buys nothing.
+ */
+routes.post("/paid", async (c) => {
+  const b = await body(c);
+  const d = web.domainOf(text(b.domain, 200));
+  if (!d.ok) fail(400, `The desk does not read that: ${d.why}.`);
+  if (!web.dataforseoConfigured()) fail(409, `DataForSEO is not connected: no account exists. ${web.dataforseoStep()}`);
+  const lang = typeof b.lang === "string" && LANGS.includes(b.lang as WebLang) ? (b.lang as WebLang) : "de";
+  const domain = (d as { domain: string }).domain;
+  const got = await web.paidDomainFacts(domain, lang, who(c));
+  const had = [got.overview, got.ranked, got.competitors, got.backlinks].filter((f) => f.state === "ok").length;
+  return c.json({ ok: true, domain, line: `DataForSEO answered ${had} of 4 questions about ${domain}; kept seven days.` });
+});
+
+/** POST /serp/:id/withdraw: take back a Google check still waiting for the workstation. */
+routes.post("/serp/:id/withdraw", async (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id) || id < 1) fail(400, "That is not a check's number.");
+  const check = web.serpCheck(id);
+  if (!check) fail(404, `There is no check ${id}.`);
+  const state: Record<SerpCheck["state"], string> = { queued: "still queued", running: "being fetched now", done: "finished", failed: "over (it failed, or was taken back)" };
+  if (!web.withdrawSerp(id, who(c))) fail(409, `Check ${id} is ${state[check!.state]}: only a check still queued can be taken back.`);
+  return c.json({ ok: true, line: `Check ${id} for “${check!.phrase}” is taken back; nothing is asked of Google for it.` });
+});
+
+/**
+ * POST /record { phrase, lang, day, results, mapPack?, ours } (the owner's):
+ * a Google result page he looked at in his own browser, one result per line
+ * ("1 https://example.ch/page" or just the address, in order).
+ */
+routes.post("/record", requireOwner, async (c) => {
+  const b = await body(c);
+  const phrase = normal(text(b.phrase, 160));
+  if (phrase.length < 2 || phrase.length > 120) fail(400, "Write the search as it was typed: 2 to 120 characters.");
+  const lang = typeof b.lang === "string" && LANGS.includes(b.lang as WebLang) ? (b.lang as WebLang) : ((langOf(phrase) ?? "de") as WebLang);
+  const day = text(b.day, 10);
+  if (!/^\d{4}-\d\d-\d\d$/.test(day) || Number.isNaN(Date.parse(day)) || day > new Date().toISOString().slice(0, 10)) fail(400, "day is the day you looked, YYYY-MM-DD, not in the future.");
+  const lines = (typeof b.results === "string" ? b.results : "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) fail(400, "Write the results, one per line, in the order Google showed them.");
+  if (lines.length > 20) fail(400, "At most 20 results: the first page is ten.");
+  const organic: { position: number; domain: string; url: string | null }[] = [];
+  const bad: string[] = [];
+  lines.forEach((l, i) => {
+    const m = /^(\d{1,2})[.)]?\s+(.+)$/.exec(l);
+    const position = m ? Number(m[1]) : i + 1;
+    const addr = (m ? m[2]! : l).trim();
+    const host = typedHost(addr);
+    if (!host) return void bad.push(addr);
+    organic.push({ position, domain: domainKey(host)!, url: /^https?:\/\//i.test(addr) ? addr : null });
+  });
+  if (bad.length) fail(400, `Not an address: ${bad.slice(0, 3).join(", ")}. Write each result as its address (example.ch/page).`);
+  if (new Set(organic.map((o) => o.position)).size !== organic.length) fail(400, "Two results have the same place.");
+  const mapPack = (typeof b.mapPack === "string" ? b.mapPack : "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .slice(0, 10)
+    .map((name, i) => ({ position: i + 1, name: name.slice(0, 120) }));
+  const ours = b.ours === null || b.ours === undefined || b.ours === "" ? null : Number(b.ours);
+  if (ours !== null && (!Number.isInteger(ours) || ours < 1 || ours > 100)) fail(400, "ours is Balkaris's place, 1 to 100, or empty when it was not there.");
+  const cluster = web.fileUnder(phrase, lang)?.key ?? null;
+  const done = recordByHand({ phrase, lang, cluster, day, organic: organic.filter((o) => !/balkaris/i.test(o.domain)), mapPack, ours: ours ?? organic.find((o) => /balkaris/i.test(o.domain))?.position ?? null, by: who(c) });
+  return c.json({ ok: true, line: done.line, href: `/seo/competitors?search=${encodeURIComponent(phrase)}` });
+});
+
+/** POST /file { query, cluster }: file a captured search under one of our clusters by hand (null: under none). */
+routes.post("/file", async (c) => {
+  const b = await body(c);
+  const query = text(b.query, 200);
+  if (!query) fail(400, "Name the search to file.");
+  if (!sightings().some((s) => s.query === query)) fail(404, `No captured search “${query}” is in the desk's record.`);
+  const cluster = b.cluster === null || b.cluster === "" ? null : text(b.cluster, 80);
+  const list = allClusters();
+  if (cluster && !list.some((x) => x.key === cluster)) fail(400, "That is not one of our clusters.");
+  const n = fileSearch(query, cluster, who(c));
+  const name = cluster ? (list.find((x) => x.key === cluster)?.name ?? cluster) : null;
+  return c.json({ ok: true, line: `“${query}” is filed ${name ? `under ${name}` : "under no cluster"} by hand: ${n.sightings} observation${n.sightings === 1 ? "" : "s"} and ${n.pages} page${n.pages === 1 ? "" : "s"} follow, on this tab and on Content Gaps.` });
+});
+
+/** GET /export.csv: the list as filtered (every page of it), one row per competitor. */
+routes.get("/export.csv", (c) => {
+  const asked = askedOf((k) => c.req.query(k));
+  const w = world();
+  const rows = sorted(filtered(w.groups.map((g) => rowOf(g, w)), w.byKey, asked, null), asked.sort);
+  return csvFile(
+    c,
+    "competitors",
+    ["Competitor", "Site", "Platform", "Best Google position", "Best map-pack position", "AI named", "AI cited", "Observations", "Searches", "Clusters", "Pages read", "Pages with a price", "Last seen", "Watched", "Ignored", "Decided by"],
+    rows.map((r) => [
+      r.name ?? (r.domain.startsWith("name:") ? r.domain.slice(5) : r.domain),
+      r.domain.startsWith("name:") ? "" : r.domain,
+      r.platform ? "yes" : "no",
+      r.bestPosition ?? "",
+      r.mapPack ?? "",
+      r.named,
+      r.cited,
+      r.sightings,
+      r.queries.join(" | "),
+      r.clusters.map((x) => x.name).join(" | "),
+      r.pages,
+      r.pricePages,
+      r.lastSeen,
+      r.decision?.watch ? "yes" : "",
+      r.decision?.ignore ? "yes" : "",
+      r.decision?.by ?? "",
+    ]),
+  );
+});

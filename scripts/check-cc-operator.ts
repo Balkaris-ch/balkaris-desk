@@ -1,7 +1,7 @@
 /**
  * The AI Operator's machinery, end to end, without a model: a throwaway
  * database and a throwaway website repository in work/, the real server on
- * port 3434, and a fake runner that answers with canned text through the
+ * port 3454, and a fake runner that answers with canned text through the
  * same function the workstation's runner calls (src/cc/operator/work.ts).
  *
  *   node --experimental-sqlite --disable-warning=ExperimentalWarning --import tsx scripts/check-cc-operator.ts
@@ -50,7 +50,7 @@ const dir = path.join(root, "work", `check-op-${process.pid}`);
 rmSync(dir, { recursive: true, force: true });
 mkdirSync(dir, { recursive: true });
 
-const PORT = 3434;
+const PORT = 3454;
 const BASE = `http://127.0.0.1:${PORT}`;
 const RUNNER = "runner-secret-of-the-operator-check";
 
@@ -108,15 +108,26 @@ const LIVE: Record<string, number | [number, string]> = {
 const asked: string[] = [];
 const real = globalThis.fetch;
 const left: string[] = [];
+/* The pages' own text, where a check needs more than a line: a FAQ is checked against it. */
+const TEXT: Record<string, string> = {
+  "/services":
+    "Specimen services. We design and build specimen websites for specimen businesses. Every specimen project starts with a short workshop about your goals. We deliver a first specimen draft within two weeks of the workshop. Specimen support continues after launch with monthly reports.",
+};
+/* What a page's head says, for reading a change back after a deploy. */
+const HEADS: Record<string, string> = {};
+/* Files the stub website serves as they are: a share picture already on the site, and its sitemap. */
+const FILES: Record<string, { type: string; body: Uint8Array | string }> = {};
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = String(input instanceof Request ? input.url : input);
   if (url.startsWith(BASE)) return real(input as never, init);
   if (url.startsWith(SITE)) {
     const p = new URL(url).pathname.replace(/\/+$/, "") || "/";
     asked.push(p);
+    const file = FILES[p];
+    if (file) return new Response(file.body as BodyInit, { status: 200, headers: { "content-type": file.type } });
     const r = LIVE[p];
     if (Array.isArray(r)) return new Response(null, { status: r[0], headers: { location: r[1] } });
-    if (r === 200) return new Response(`<html><body><main><h1>Specimen</h1><p>Specimen text for ${p}.</p></main></body></html>`, { status: 200, headers: { "content-type": "text/html" } });
+    if (r === 200) return new Response(`<html><head>${HEADS[p] ?? ""}</head><body><main><h1>Specimen</h1><p>${TEXT[p] ?? `Specimen text for ${p}.`}</p></main></body></html>`, { status: 200, headers: { "content-type": "text/html" } });
     return new Response("Specimen: not found", { status: 404 });
   }
   left.push(url.split("?")[0]!);
@@ -187,7 +198,7 @@ async function finish(): Promise<never> {
   process.exit(failed ? 1 : 0);
 }
 
-check("the server came up on port 3434", await until(async () => (await ask("/health").catch(() => null))?.status === 200));
+check(`the server came up on port ${PORT}`, await until(async () => (await ask("/health").catch(() => null))?.status === 200));
 
 /* ---- the people -------------------------------------------------------------- */
 const owner = people.rememberGoogle("owner@desk.test", "Specimen Owner");
@@ -626,6 +637,267 @@ try {
   threw = true;
 }
 check("a refused secret still reaches the runner's loop", threw);
+
+/* ============ 13. the website's overrides v2: share cards, search, canonicals, structured data ============ */
+quiet.log("\n13. overrides v2: every new kind of change, by hand, through the one door");
+const sharp = (await import("sharp")).default;
+db.prepare("DELETE FROM cc_cache WHERE key LIKE 'op:excerpt:%'").run();
+const tree = () => git(["--git-dir", remote, "ls-tree", "-r", "--name-only", "main"]).split("\n");
+const b64 = (b: Buffer) => b.toString("base64");
+TEXT["/about"] =
+  "About the specimen studio. The specimen studio is a small team that builds specimen websites for specimen businesses. The team works from one specimen office and answers every enquiry within a day.";
+FILES["/og/about.jpg"] = { type: "image/jpeg", body: new Uint8Array(await sharp({ create: { width: 1200, height: 630, channels: 3, background: { r: 40, g: 40, b: 40 } } }).jpeg().toBuffer()) };
+
+/* A phone photo stored on its side (EXIF orientation 6): upright it is 1600 by 900, and it is made 1200 by 630. */
+const sideways = await sharp({ create: { width: 900, height: 1600, channels: 3, background: { r: 200, g: 120, b: 60 } } }).jpeg({ quality: 70 }).withMetadata({ orientation: 6 }).toBuffer();
+a = await ask("/api/v1/operator/pictures", { who: helper, method: "POST", body: { address: "/services", data: b64(sideways) } });
+const pic = a.json?.picture;
+check(
+  "a share picture is taken: upright, 1200 by 630, named by the page and a hash of its bytes",
+  a.status === 201 && pic?.width === 1200 && pic?.height === 630 && pic?.format === "jpeg" && /^services-[0-9a-f]{8}\.jpg$/.test(pic?.name ?? "") && pic.sitePath === `/desk/og/${pic.name}`,
+  show(a),
+);
+a = await ask(pic ? pic.url : "/nothing", { who: helper });
+check("the desk serves it until it is committed", a.status === 200, `${a.status}`);
+const noise = await sharp({ create: { width: 1400, height: 1400, channels: 3, background: "#808080", noise: { type: "gaussian", mean: 128, sigma: 60 } } }).png().toBuffer();
+a = await ask("/api/v1/operator/pictures", { who: helper, method: "POST", body: { address: "/services", data: b64(noise) } });
+check("a picture over 600 KB is refused with its size", a.status === 400 && /600 KB/.test(a.json?.error ?? ""), show(a));
+a = await ask("/api/v1/operator/pictures", { who: helper, method: "POST", body: { address: "/services", data: b64(await sharp({ create: { width: 400, height: 200, channels: 3, background: "#888" } }).png().toBuffer()) } });
+check("so is one too small for a share card", a.status === 400 && /600 by 315/.test(a.json?.error ?? ""), show(a));
+a = await ask("/api/v1/operator/pictures", { who: helper, method: "POST", body: { address: "/services", data: b64(Buffer.from("not a picture at all, only words in a file")) } });
+check("and a file that is not a picture", a.status === 400, show(a));
+
+const propose = (body: object, who: Person = helper) => ask("/api/v1/operator/proposals", { who, method: "POST", body });
+a = await propose({ kind: "og", address: "/services", ogTitle: "Specimen services", ogImage: pic?.sitePath });
+check("a share title that copies the page's title is refused: it adds nothing", a.status === 409 && /same as the page's title/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "og", address: "/services", ogImage: "/desk/og/never-uploaded-1234abcd.jpg" });
+check("a desk picture that was never uploaded is refused", a.status === 409 && /upload it again/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "og", address: "/services", ogImage: "/og/About.JPG" });
+check("a picture address the website would ignore is refused before anyone approves it", a.status === 409 && /picture address/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "og", address: "/services", ogTitle: "Specimen websites, built with you", ogDescription: "How a specimen project runs, from the first workshop to the reports after launch.", ogImage: pic?.sitePath });
+const og = a.json?.proposal;
+check(
+  "a share card is proposed by hand, saying what changes, the picture as a picture",
+  a.status === 201 && og?.kind === "og" && og.state === "waiting" && og.picture?.name === pic?.name && og.changes.some((c: any) => c.look === "picture" && c.after === pic?.url) && /share picture/.test(og.consequence),
+  show(a),
+);
+a = await propose({ kind: "og", address: "/services", ogTitle: "Specimen websites, built with you", ogDescription: "How a specimen project runs, from the first workshop to the reports after launch.", ogImage: pic?.sitePath });
+check("pressing twice never makes a twin", a.status === 409 && /already waits/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "og", address: "/about", ogImage: "/og/about.jpg" });
+const ogSite = a.json?.proposal;
+check("a picture already on the site is read from it and checked", a.status === 201 && ogSite?.picture === null && ogSite.after.ogImage === "/og/about.jpg", show(a));
+
+a = await ask(`/api/v1/operator/proposals/${og?.id}/approve`, { who: helper, method: "POST" });
+check("a person who cannot publish cannot approve a share card (403)", a.status === 403, show(a));
+a = await ask(`/api/v1/operator/proposals/${og?.id}/approve`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check(
+  "approved: the entry and the picture go to the site in one commit",
+  a.status === 200 &&
+    a.json.proposal.state === "applied" &&
+    overrides.meta["/services"]?.ogImage === pic?.sitePath &&
+    overrides.meta["/services"]?.ogTitle === "Specimen websites, built with you" &&
+    tree().includes(`public${pic?.sitePath}`),
+  show(a),
+);
+{
+  const m = git(["--git-dir", remote, "log", "-1", "--format=%s%n%b", "--name-only"]);
+  check("its commit names the change, who proposed it and who approved it", m.startsWith("Desk: new share card for /services") && m.includes("Proposed by Specimen Helper") && m.includes("approved by Specimen Owner") && m.includes(`public${pic?.sitePath}`), m.slice(0, 200));
+}
+
+/* Read back after the deploy: first a page that does not show it, then one that does. */
+FILES["/sitemap.xml"] = { type: "application/xml", body: `<urlset>${["/", "/services", "/about", "/specimen-a", "/specimen-b"].map((p) => `<url><loc>https://www.balkaris.ch${p === "/" ? "" : p}</loc></url>`).join("")}</urlset>` };
+a = await ask(`/api/v1/operator/proposals/${og?.id}/check`, { who: helper, method: "POST" });
+check("read back, a page that does not show the change says which fields are missing", a.status === 200 && a.json.proposal.readBack?.ok === false && a.json.proposal.readBack.missing.length >= 3, show(a));
+HEADS["/services"] = [
+  '<meta property="og:title" content="Specimen websites, built with you">',
+  '<meta name="twitter:title" content="Specimen websites, built with you">',
+  '<meta property="og:description" content="How a specimen project runs, from the first workshop to the reports after launch.">',
+  '<meta name="twitter:description" content="How a specimen project runs, from the first workshop to the reports after launch.">',
+  `<meta property="og:image" content="https://www.balkaris.ch${pic?.sitePath}">`,
+  `<meta name="twitter:image" content="https://www.balkaris.ch${pic?.sitePath}">`,
+  '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">',
+].join("");
+a = await ask(`/api/v1/operator/proposals/${og?.id}/check`, { who: helper, method: "POST" });
+check("and once the page shows it, it says so", a.status === 200 && a.json.proposal.readBack?.ok === true, show(a));
+
+/* In and out of search. */
+a = await propose({ kind: "index", address: "/", noindex: true });
+check("the home page can never be taken out of search, and the refusal says what it would do", a.status === 409 && /home page/.test(a.json?.error ?? "") && /sitemap/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "index", address: "/about", noindex: false });
+check("a page the desk never took out of search cannot be put back", a.status === 409 && /never took/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "index", address: "/about", noindex: true });
+const outOf = a.json?.proposal;
+check("taking a page out of search says it leaves the sitemap", a.status === 201 && /leaves the sitemap/.test(outOf?.consequence ?? ""), show(a));
+a = await propose({ kind: "canonical", address: "/about", canonical: "/services" });
+check("a page going out of search gets no canonical beside it", a.status === 409 && /never both/.test(a.json?.error ?? ""), show(a));
+a = await ask(`/api/v1/operator/proposals/${outOf?.id}/approve`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check("approved, the file says noindex: true and nothing else changes", a.status === 200 && overrides.meta["/about"]?.noindex === true && overrides.meta["/services"]?.ogImage === pic?.sitePath, JSON.stringify(overrides.meta));
+a = await propose({ kind: "index", address: "/about", noindex: false });
+check("now it can be put back", a.status === 201 && a.json.proposal.after.noindex === false, show(a));
+await ask(`/api/v1/operator/proposals/${a.json?.proposal?.id}/reject`, { who: helper, method: "POST" });
+
+/* Canonicals. */
+a = await propose({ kind: "canonical", address: "/specimen-b", canonical: "/specimen-b" });
+check("a page cannot name itself", a.status === 409, show(a));
+a = await propose({ kind: "canonical", address: "/specimen-b", canonical: "/about" });
+check("nor point at a page that is out of search", a.status === 409 && /out of search/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "canonical", address: "/specimen-b", canonical: "/nowhere" });
+check("nor at an address not in the sitemap", a.status === 409 && /not in the sitemap/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "canonical", address: "/specimen-b", canonical: "/services" });
+const canon = a.json?.proposal;
+check("a canonical to a live page in the sitemap is proposed", a.status === 201 && canon?.after.canonical === "/services", show(a));
+a = await propose({ kind: "canonical", address: "/specimen-a", canonical: "/specimen-b" });
+check("a chain is refused", a.status === 409 && /chain|canonical of its own/.test(a.json?.error ?? ""), show(a));
+a = await ask(`/api/v1/operator/proposals/${canon?.id}/approve`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check("approved, the canonical is in the file", a.status === 200 && overrides.meta["/specimen-b"]?.canonical === "/services", show(a));
+
+/* Structured data: only what the page says. */
+const faq = (q: string, ans: string) => ({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: [{ "@type": "Question", name: q, acceptedAnswer: { "@type": "Answer", text: ans } }] });
+a = await propose({ kind: "schema", address: "/services", jsonLd: faq("How fast is a first draft?", "We deliver a first specimen draft within 3 weeks.") });
+check("a block with a figure the page does not say is refused", a.status === 409 && /does not say/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "schema", address: "/services", jsonLd: faq("Who runs the project?", "Our partner Specimenco runs every specimen project.") });
+check("so is one naming what the page does not mention", a.status === 409 && /does not mention/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "schema", address: "/services", jsonLd: { "@context": "https://schema.org", "@type": "Organization", name: "Balkaris" } });
+check("the company's own Organization is never repeated", a.status === 409 && /#organization/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "schema", address: "/services", jsonLd: { "@context": "http://schema.org", "@type": "FAQPage" } });
+check("a block the website would skip is refused", a.status === 409 && /@context/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "schema", address: "/services", jsonLd: "{ not json" });
+check("written by hand, text that is not JSON is refused with the reason (400)", a.status === 400 && /not valid JSON/.test(a.json?.error ?? ""), show(a));
+a = await propose({ kind: "schema", address: "/services", jsonLd: JSON.stringify(faq("How does a specimen project start?", "Every specimen project starts with a short workshop about your goals.")) });
+const sch = a.json?.proposal;
+check("a FAQ from the page's own words is proposed, drawn as code", a.status === 201 && sch?.changes?.[0]?.look === "code", show(a));
+a = await ask(`/api/v1/operator/proposals/${sch?.id}/approve`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check("approved, the block is in the page's jsonLd list", a.status === 200 && overrides.meta["/services"]?.jsonLd?.[0]?.["@type"] === "FAQPage" && overrides.meta["/services"].ogTitle, JSON.stringify(overrides.meta["/services"]));
+
+/* Withdraw: the fields go, and the picture with them. */
+a = await ask(`/api/v1/operator/proposals/${og?.id}/withdraw`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check(
+  "withdrawn, the share card leaves the file and its picture leaves the site in the same commit",
+  a.status === 200 && a.json.proposal.state === "withdrawn" && !overrides.meta["/services"]?.ogImage && !overrides.meta["/services"]?.ogTitle && overrides.meta["/services"]?.jsonLd && !tree().includes(`public${pic?.sitePath}`),
+  JSON.stringify(overrides.meta["/services"]),
+);
+for (const id of [sch?.id, canon?.id, outOf?.id]) await ask(`/api/v1/operator/proposals/${id}/withdraw`, { who: owner, method: "POST" });
+overrides = JSON.parse(onRemote("content/desk/overrides.json"));
+check("every withdrawal undoes its own field and leaves the file valid", !overrides.meta["/services"] && !overrides.meta["/about"] && !overrides.meta["/specimen-b"], JSON.stringify(overrides));
+
+/* The drift bug of the audit: the website now adds the brand only where it fits, so the same words without it are the same title. */
+db.prepare("UPDATE cc_pages SET title = 'Specimen page A, with a title that runs far past where a search result cuts it off' WHERE path = '/specimen-a'").run();
+const driftId = Number(
+  db
+    .prepare("INSERT INTO cc_proposals (kind, address, before_json, after_json, why, source, proposed_by, state, created_at) VALUES ('meta', '/specimen-a', ?, ?, NULL, 'person', 'Specimen Helper', 'waiting', ?)")
+    .run(JSON.stringify({ title: "Specimen page A, with a title that runs far past where a search result cuts it off | Balkaris" }), JSON.stringify({ title: "Specimen page A, shorter" }), new Date().toISOString()).lastInsertRowid,
+);
+a = await ask(`/api/v1/operator/proposals/${driftId}`, { who: owner });
+check("a title that differs only by the brand the site adds is not 'changed since'", a.status === 200 && a.json.drift === null, JSON.stringify(a.json?.drift));
+a = await propose({ kind: "meta", address: "/specimen-a", title: "Specimen page A, shorter" });
+check("and a person's meta proposal that repeats a waiting one is refused", a.status === 409 && /already waits/.test(a.json?.error ?? ""), show(a));
+db.prepare("UPDATE cc_proposals SET state = 'rejected' WHERE id = ?").run(driftId);
+
+/* ============ 14. the local model's new tasks ============ */
+quiet.log("\n14. the local model's page and search tasks");
+db.prepare("UPDATE cc_pages SET facts = json_set(facts, '$.images', json(?)) WHERE path = '/about'").run(
+  JSON.stringify([{ file: "/work/specimen-team-at-work.jpg", remote: null, via: "direct", alt: "absent", width: null, height: null, loading: null, hidden: false, place: "main", unnamedLink: false }]),
+);
+const day = new Date().toISOString();
+const kw1 = Number(db.prepare("INSERT INTO cc_seo_keywords (phrase, sources, status, first_seen, last_seen) VALUES ('specimen website design', 'manual', 'unjudged', ?, ?)").run(day, day).lastInsertRowid);
+const kw2 = Number(db.prepare("INSERT INTO cc_seo_keywords (phrase, sources, status, first_seen, last_seen) VALUES ('free specimen games', 'manual', 'unjudged', ?, ?)").run(day, day).lastInsertRowid);
+db.prepare("INSERT INTO cc_seo_clusters (key, name, lang, priority, source, first_seen, updated_at) VALUES ('specimen-design', 'Specimen design', 'en', 'high', 'manual', ?, ?)").run(day, day);
+const serpRow = Number(
+  db
+    .prepare("INSERT INTO cc_seo_serp_checks (phrase, lang, country, engine, state, source, requested_by, requested_at, done_at, result, own_position) VALUES ('specimen website design', 'en', 'ch', 'google', 'done', 'server', 'Specimen Owner', ?, ?, ?, NULL)")
+    .run(day, day, JSON.stringify({ organic: [{ position: 1, title: "Specimen design studio", url: "https://specimen-rival.test/design", host: "specimen-rival.test", snippet: "Prices from the first call." }], localPack: [], ads: 0, adHosts: [], related: [], questions: [] }))
+    .lastInsertRowid,
+);
+db.prepare("INSERT INTO cc_seo_comp_pages (url, domain, address, query, status, title, h1, words, schema, price_text, added_at) VALUES ('https://specimen-rival.test/design', 'specimen-rival.test', 'ranking', 'specimen website design', 200, 'Specimen design studio', 'Design', 1800, '[\"FAQPage\"]', 'from 900', ?)").run(day);
+db.prepare("UPDATE cc_seo_keywords SET page = '/services' WHERE id = ?").run(kw1);
+
+a = await make({ kind: "og" });
+check("a page task without a page is refused (400)", a.status === 400 && /which page/.test(a.json?.error ?? ""), show(a));
+a = await make({ kind: "schema", path: "/about", schemaType: "FAQPage" });
+const tSchema = a.json?.task?.id;
+check("a structured-data task is queued with the page's own text", a.status === 202 && JSON.parse(task(tSchema).pack).page?.own.includes("answers every enquiry within a day"), show(a));
+const tOg = (await make({ kind: "og", path: "/about" })).json?.task?.id;
+const tLinks = (await make({ kind: "links", path: "/services" })).json?.task?.id;
+check("a links task is given candidates from the link graph", JSON.parse(task(tLinks).pack).linkFrom?.some((c: any) => c.path === "/about"), JSON.stringify(JSON.parse(task(tLinks).pack).linkFrom));
+const tAlt = (await make({ kind: "alt", path: "/about" })).json?.task?.id;
+const tKw = (await make({ kind: "keywords", ids: [kw1, kw2] })).json?.task?.id;
+a = await make({ kind: "serp", serpId: serpRow });
+const tSerp = a.json?.task?.id;
+check("a results task is given the kept result page, their pages and ours", a.status === 202 && /OUR PAGE: \/services/.test(JSON.parse(task(tSerp).pack).blocks[0].text), show(a));
+
+let ogAsked = 0;
+canned = (prompt) => {
+  if (prompt.includes("TASK: Write the share card")) {
+    ogAsked++;
+    return ogAsked === 1
+      ? JSON.stringify({ ogTitle: "Over 500 specimen sites built by the studio", ogDescription: "A small team that builds specimen websites for specimen businesses, and answers within a day." })
+      : JSON.stringify({ ogTitle: "The small team behind specimen websites", ogDescription: "A small team that builds specimen websites for specimen businesses, and answers every enquiry within a day." });
+  }
+  if (prompt.includes("questions a reader of the page"))
+    return JSON.stringify({
+      questions: [
+        { question: "Who is the specimen studio?", answer: "The specimen studio is a small team that builds specimen websites for specimen businesses." },
+        { question: "How fast does the team answer?", answer: "The team answers every enquiry within a day." },
+      ],
+    });
+  if (prompt.includes("needs links from other pages")) return JSON.stringify({ links: [{ from: "/about", words: "specimen services", why: "A reader of the studio's story wants to see what it offers." }, { from: "/nowhere", words: "x y", why: "z" }] });
+  if (prompt.includes("Write an alt text")) return JSON.stringify({ alts: [{ src: "/work/specimen-team-at-work.jpg", alt: "The specimen team at work" }] });
+  if (prompt.includes("Judge each search phrase"))
+    return JSON.stringify({
+      phrases: [
+        { phrase: "specimen website design", judgement: "relevant", topic: "Specimen design", newTopic: false, intent: "commercial", why: "It is what the studio offers." },
+        { phrase: "free specimen games", judgement: "irrelevant", topic: "Games", newTopic: true, intent: "informational", why: "Nobody looking for games is a client." },
+      ],
+    });
+  if (prompt.includes("Compare the FIRST RESULTS"))
+    return JSON.stringify({ theyHave: [{ what: "The first result states a price from the first call.", seenOn: ["https://specimen-rival.test/design", "https://made-up.test/x"] }], outline: ["Say what a first workshop costs.", "Add a FAQ about timing."], notes: "Do not copy their prices." });
+  return "Specimen answer.";
+};
+for (let i = 0; i < 12 && (await runner()); i++);
+const res = async (id: number) => (await ask(`/api/v1/operator/tasks/${id}`, { who: owner })).json;
+let r = await res(tOg);
+check(
+  "share card: a figure the page does not hold is sent back once; the second answer becomes a proposal",
+  ogAsked === 2 && r?.task?.retried === true && r.proposals?.[0]?.kind === "og" && r.proposals[0].after.ogTitle === "The small team behind specimen websites",
+  JSON.stringify({ ogAsked, retried: r?.task?.retried, p: r?.proposals?.[0]?.after }),
+);
+r = await res(tSchema);
+check("structured data: the FAQ from the page's own words becomes a schema proposal", r?.proposals?.[0]?.kind === "schema" && r.proposals[0].after.jsonLd["@type"] === "FAQPage" && r.proposals[0].after.jsonLd.mainEntity.length === 2, JSON.stringify(r?.flags ?? r));
+r = await res(tLinks);
+check("links: an invented page is dropped on the last answer and named; the rest is a to-do for the website's code", r?.todos?.length === 1 && r.todos[0].page === "/about" && r.todosAdded === false && r.flags.some((f: string) => /nowhere/.test(f)), JSON.stringify(r?.todos ?? r));
+a = await ask(`/api/v1/operator/tasks/${tLinks}/todos`, { who: helper, method: "POST" });
+check("its to-dos are put on the list with one press", a.status === 200 && a.json.added === 1 && (db.prepare("SELECT COUNT(*) AS n FROM cc_todos WHERE title = 'Link /about to /services'").get() as any).n === 1, show(a));
+a = await ask(`/api/v1/operator/tasks/${tLinks}/todos`, { who: helper, method: "POST" });
+check("and only once", a.status === 409, show(a));
+r = await res(tAlt);
+check("alt texts: one per picture without one, as to-dos", r?.todos?.[0]?.note.includes("The specimen team at work"), JSON.stringify(r?.todos ?? r));
+r = await res(tKw);
+check(
+  "keywords: each phrase judged, with its id, its topic (given or new) and intent",
+  r?.keywords?.length === 2 && r.keywords.find((k: any) => k.id === kw1)?.topic === "Specimen design" && r.keywords.find((k: any) => k.id === kw2)?.newTopic === true,
+  JSON.stringify(r?.keywords ?? r),
+);
+a = await ask("/api/v1/seo/keywords/bulk", { who: owner, method: "POST", body: { op: "irrelevant", ids: [kw2] } });
+check("'Apply these judgements' is the Keywords screen's own bulk address", a.status === 200 && (db.prepare("SELECT status FROM cc_seo_keywords WHERE id = ?").get(kw2) as any)?.status === "irrelevant", show(a));
+r = await res(tSerp);
+check(
+  "search results: what the first results have, naming only addresses it was given",
+  r?.serp?.theyHave?.[0]?.seenOn?.join() === "https://specimen-rival.test/design" && r.serp.page === "/services" && r.serp.outline.length === 2,
+  JSON.stringify(r?.serp ?? r),
+);
+a = await make({ kind: "keywords", ids: Array.from({ length: 31 }, (_, i) => i + 1) });
+check("more than thirty phrases at once is refused (400)", a.status === 400, show(a));
+
+/* The "View" link right after queueing: a task that has not finished is said to be waiting, not replaced by another's answer. */
+const tWait = (await make({ kind: "ask", prompt: "Which specimen page is newest?", context: "pages" })).json?.task?.id;
+a = await ask(`/api/v1/operator?result=${tWait}`, { who: owner });
+check("?result= of an unfinished task shows it as pending, not another answer", a.status === 200 && a.json.pending?.id === tWait && a.json.answer === null && Array.isArray(a.json.serps), show(a));
+await ask(`/api/v1/operator/tasks/${tWait}/cancel`, { who: owner, method: "POST" });
 
 check("nothing tried to leave this machine", left.length === 0, left.slice(0, 4).join(", "));
 await finish();

@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import type { Reading } from "@/contract/common";
-import type { ExplorerDimension, ExplorerQuery, ExplorerResult, ExplorerRow } from "@/contract/seo/search-console";
+import type { ExplorerDimension, ExplorerQuery, ExplorerResult, ExplorerRow, PageStanding } from "@/contract/seo/search-console";
+import { Chip } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Delta } from "@/components/ui/Delta";
 import { EarlyLine, EarlyMark } from "@/components/ui/Early";
@@ -11,7 +12,7 @@ import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent, PositionChange } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
 import { DASH, fullDate, num } from "@/lib/format";
-import { exportHref, firstDir, optimizeHref, ROWS_PER_PAGE, scHref, type Place } from "./href";
+import { exactly, exportHref, firstDir, googleHref, keywordsHref, optimizeHref, ROWS_PER_PAGE, scHref, type Place } from "./href";
 import { rateText } from "./Tiles";
 import "@/components/ui/table.css";
 
@@ -34,16 +35,26 @@ const MOVE_FLOOR = 30;
 function drill(place: Place, d: ExplorerDimension, row: ExplorerRow): { href: string; title: string } | null {
   switch (d) {
     case "query":
-      return { href: scHref(place, { q: row.key, dimension: "page" }), title: "The pages Google showed for queries containing these words" };
+      /* The exact query, in quotes: "seo" alone would also take every longer query containing it. */
+      return { href: scHref(place, { q: exactly(row.key), dimension: "page" }), title: "The pages Google showed for this query" };
     case "page":
       return { href: scHref(place, { page: row.key, dimension: "query" }), title: "The queries Google showed this page for" };
     case "country":
       return { href: scHref(place, { country: row.key, dimension: "query" }), title: "The queries searched from this country" };
     case "device":
       return { href: scHref(place, { device: row.key, dimension: "query" }), title: "The queries searched on this kind of device" };
+    case "date":
+      return { href: scHref(place, { dates: { start: row.key, end: row.key }, dimension: "query" }), title: "The queries of this one day, compared with the day before" };
     default:
       return null;
   }
+}
+
+/** The "Top page" or "Top query" beside a row, as a link to that one page's queries or that one query's pages. */
+function topHref(place: Place, d: ExplorerDimension, top: string): { href: string; title: string } | null {
+  if (d === "query") return { href: scHref(place, { page: top, q: "", dimension: "query" }), title: "Every query Google showed this page for" };
+  if (d === "page") return { href: scHref(place, { q: exactly(top), page: null, dimension: "page" }), title: "Every page Google showed for this query" };
+  return null;
 }
 
 function SortHead({ place, sort, label, numeric, title }: { place: Place; sort: ExplorerQuery["sort"]; label: string; numeric?: boolean; title?: string }) {
@@ -144,6 +155,57 @@ function Before({ row, d }: { row: ExplorerRow; d: ExplorerDimension }) {
   );
 }
 
+const STANDING: Record<PageStanding["state"], { label: string; tone: "warn" | "bad" | "quiet"; title: string } | null> = {
+  listed: null,
+  "not-listed": { label: "Not in the sitemap", tone: "quiet", title: "A page of the website that its sitemap does not list, by the desk's last crawl." },
+  redirects: { label: "Redirects", tone: "warn", title: "The address redirects on the website now, by the desk's last crawl: Google still shows the old address." },
+  gone: { label: "Gone", tone: "bad", title: "The address answered 404 or 410 at the desk's last crawl: Google still shows a page the website no longer has." },
+  unknown: { label: "Not on the site", tone: "warn", title: "The desk's crawl knows no page at this address: an old address Google still shows, or a page nothing on the site links to." },
+};
+
+/** What the website has at a page Google shows, when that is not simply "a page of the site, in its sitemap and in the index". */
+function Standing({ s }: { s: PageStanding }) {
+  const look = STANDING[s.state];
+  const title = look ? `${look.title}${s.to ? ` It leads to ${s.to}.` : ""}` : "";
+  return (
+    <>
+      {look ? (
+        <span title={title}>
+          <Chip tone={look.tone} icon={s.state === "redirects" ? "redirect" : undefined} className="dk-seo-gsc-standing">
+            {look.label}
+          </Chip>
+          <span className="dk-sr">. {title}</span>
+        </span>
+      ) : null}
+      {s.indexed === false ? (
+        <span title="Google's newest URL Inspection of the address has it out of the index, though it still showed it in this window.">
+          <Chip tone="warn" className="dk-seo-gsc-standing">
+            Not indexed
+          </Chip>
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * A query taken out of the desk: to Google itself as a searcher in
+ * Switzerland sees it, and to the Keywords tab, where it can be tracked and
+ * judged. Both are links; nothing is fetched from Google's result page.
+ */
+function QueryOut({ query }: { query: string }) {
+  return (
+    <span className="dk-seo-gsc-key-tools">
+      <Go href={googleHref(query)} className="dk-seo-gsc-key-go" title="Search this on Google, as a searcher in Switzerland sees it (opens Google)" aria-label={`Search “${query}” on Google Switzerland`}>
+        <Icon name="globe" size={12} />
+      </Go>
+      <Go href={keywordsHref(query)} className="dk-seo-gsc-key-go" title="Open this query on the Keywords tab, where it can be tracked" aria-label={`Open “${query}” on the Keywords tab`}>
+        <Icon name="key" size={12} />
+      </Go>
+    </span>
+  );
+}
+
 function KeyCell({ row, d, place }: { row: ExplorerRow; d: ExplorerDimension; place: Place }) {
   const to = drill(place, d, row);
   const text = d === "date" ? fullDate(row.key) : row.label;
@@ -156,12 +218,40 @@ function KeyCell({ row, d, place }: { row: ExplorerRow; d: ExplorerDimension; pl
       ) : (
         <span className="dk-seo-gsc-key-text">{text}</span>
       )}
+      {d === "query" ? <QueryOut query={row.key} /> : null}
       {d === "page" ? (
         <Go href={optimizeHref(row.key)} className="dk-seo-gsc-key-go" title="Open this page in Page Optimization" aria-label={`Open ${row.key} in Page Optimization`}>
           <Icon name="arrow-up-right" size={12} />
         </Go>
       ) : null}
+      {d === "page" && row.site ? <Standing s={row.site} /> : null}
     </span>
+  );
+}
+
+/**
+ * The Pages list's own filter: every page, or only the addresses the website
+ * no longer has (it redirects, is gone, or the crawl knows no page there),
+ * which Google keeps showing long after a relaunch.
+ */
+function OffSiteSwitch({ place, count }: { place: Place; count: number | null }) {
+  const on = place.asked.offsite;
+  return (
+    <nav className="dk-seo-gsc-switch" aria-label="Which pages">
+      <Go href={scHref(place, { offsite: false })} scroll={false} replace className={cx("dk-seo-gsc-switch-item", !on && "dk-seo-gsc-switch-item--on")} aria-current={!on ? "true" : undefined}>
+        All pages
+      </Go>
+      <Go
+        href={scHref(place, { offsite: true })}
+        scroll={false}
+        replace
+        className={cx("dk-seo-gsc-switch-item", on && "dk-seo-gsc-switch-item--on")}
+        aria-current={on ? "true" : undefined}
+        title="Only addresses Google shows that the website no longer has as a page: it redirects, answered 404, or the crawl knows no page there"
+      >
+        Not on the site {count !== null ? <span className="dk-num dk-seo-gsc-switch-count">{num(count)}</span> : null}
+      </Go>
+    </nav>
   );
 }
 
@@ -171,12 +261,18 @@ function KeyCell({ row, d, place }: { row: ExplorerRow; d: ExplorerDimension; pl
  * and Google's average position, the window before beside them when it was
  * compared, and beside a query the page Google showed most for it (beside a
  * page, its query). Every head sorts and a row opens the same view narrowed
- * to it, one level down. Export takes every row as filtered.
+ * to it, one level down (a day opens that one day). A query also goes out to
+ * Google and to the Keywords tab; a page to Page Optimization, with what the
+ * website has at the address when Google shows one it no longer has. Export
+ * takes every row as filtered.
  */
 export function Explorer({ result, place, consoleHref }: { result: Reading<ExplorerResult>; place: Place; consoleHref: string | null }) {
   const a = place.asked;
   const r = result.state === "ok" ? result.value : null;
-  const compared = !!r?.previous;
+  /* A day has no window before (the server gives none): the chart is where days are compared, so Dates draws no empty column. */
+  const compared = !!r?.previous && a.dimension !== "date";
+  /* A limit typed into the address (?limit=5) is offered too, so the select says what the table shows. */
+  const perPage = (ROWS_PER_PAGE as readonly number[]).includes(a.limit) ? [...ROWS_PER_PAGE] : [...ROWS_PER_PAGE, a.limit].sort((x, y) => x - y);
   return (
     <section className="dk-card dk-card--flush dk-seo-gsc-explorer" aria-label="Search Console explorer">
       <div className="dk-seo-gsc-bar">
@@ -191,6 +287,7 @@ export function Explorer({ result, place, consoleHref }: { result: Reading<Explo
           })}
         </nav>
         <div className="dk-seo-gsc-bar-tools">
+          {a.dimension === "page" && r && (r.offsite !== null || a.offsite) ? <OffSiteSwitch place={place} count={r.offsite} /> : null}
           {r && r.total ? (
             <LinkButton href={exportHref(place)} size="sm" icon="download" title="Every row of this view, as filtered, as a CSV file">
               Export
@@ -235,17 +332,22 @@ export function Explorer({ result, place, consoleHref }: { result: Reading<Explo
                 {r.rows.length === 0 ? (
                   <tr className="dk-table-none">
                     <td colSpan={5 + (compared ? 1 : 0) + (r.topLabel ? 1 : 0)}>
-                      {a.dimension === "searchAppearance"
-                        ? "Google reports no special search appearance (rich results, videos, FAQ and the like) for the site in this view."
-                        : a.q || a.page || a.country !== "all" || a.device !== "all"
-                          ? "Google reports nothing for this view. Clear a filter to see more."
-                          : "Google reports nothing for this window."}
+                      {a.offsite
+                        ? r.offsite === null
+                          ? "The desk’s crawler has not read the website yet, so it cannot tell which addresses the site no longer has."
+                          : "Every address Google showed in this view is a page of the website."
+                        : a.dimension === "searchAppearance"
+                          ? "Google reports no special search appearance (rich results, videos, FAQ and the like) for the site in this view."
+                          : a.q || a.page || a.part || a.country !== "all" || a.device !== "all"
+                            ? "Google reports nothing for this view. Clear a filter to see more."
+                            : "Google reports nothing for this window."}
                     </td>
                   </tr>
                 ) : (
                   r.rows.map((row) => {
                     const p = row.previous;
                     const moved = p && p.position !== null && row.position !== null && row.impressions >= MOVE_FLOOR && p.impressions >= MOVE_FLOOR;
+                    const topTo = row.top ? topHref(place, a.dimension, row.top) : null;
                     return (
                       <tr key={row.key}>
                         <td>
@@ -267,8 +369,14 @@ export function Explorer({ result, place, consoleHref }: { result: Reading<Explo
                           </td>
                         ) : null}
                         {r.topLabel ? (
-                          <td className="dk-seo-gsc-top" title={row.top ?? undefined}>
-                            {row.top ?? <span className="dk-seo-gsc-none">{DASH}</span>}
+                          <td className="dk-seo-gsc-top">
+                            {row.top && topTo ? (
+                              <Go href={topTo.href} scroll={false} className="dk-seo-gsc-key-link" title={`${row.top}: ${topTo.title.toLowerCase()}`}>
+                                {row.top}
+                              </Go>
+                            ) : (
+                              (row.top ?? <span className="dk-seo-gsc-none">{DASH}</span>)
+                            )}
                           </td>
                         ) : null}
                       </tr>
@@ -282,7 +390,7 @@ export function Explorer({ result, place, consoleHref }: { result: Reading<Explo
             <Pager total={r.total} offset={a.offset} limit={a.limit} to={(offset) => scHref(place, { offset })} what={r.total === 1 ? "row" : "rows"} />
             <div className="dk-seo-gsc-foot-tools">
               <Suspense fallback={null}>
-                <Select param="limit" fallback="25" resets={["offset"]} label="Rows per page" options={ROWS_PER_PAGE.map((n) => ({ value: String(n), label: `${n} rows` }))} />
+                <Select param="limit" fallback="25" resets={["offset"]} label="Rows per page" options={perPage.map((n) => ({ value: String(n), label: `${n} rows` }))} />
               </Suspense>
               <Stamp reading={result} />
             </div>

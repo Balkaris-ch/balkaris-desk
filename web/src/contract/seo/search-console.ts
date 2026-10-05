@@ -10,6 +10,8 @@
  *   ?q=kosten -balkaris  the query contains every plain word and none of the words with a minus;
  *                        ?q="website kosten" (in double quotes) is that exact query
  *   ?page=/seo           one page
+ *   ?pagepart=/insights/ pages whose address contains this (a section of the site)
+ *   ?offsite=1           with dimension=page: only addresses the website no longer has as a page
  *   ?sort=impressions    clicks | impressions | ctr | position | key
  *   ?dir=desc
  *   ?offset=0&limit=50   at most 500; an offset past the end answers the last page
@@ -111,6 +113,14 @@ export interface ExplorerQuery {
   device: string;
   q: string;
   page: string | null;
+  /** Pages whose address contains this, lower case (?pagepart=); null for none. */
+  part: string | null;
+  /**
+   * The Pages list narrowed to addresses the website no longer has as a page
+   * (?offsite=1): it redirects, answered 404 or 410, or the crawl knows no
+   * page there. Only with dimension=page; the figures above stay the view's.
+   */
+  offsite: boolean;
   sort: "clicks" | "impressions" | "ctr" | "position" | "key";
   dir: "asc" | "desc";
   /** The offset that was answered: one past the end is brought back to the last page. */
@@ -141,6 +151,7 @@ export interface ExplorerResult {
   previousTotals: { clicks: number; impressions: number; ctr: Rate; position: number | null } | null;
   /** One row per day of the window, for the chart: the same days the totals add up. */
   days: { date: string; clicks: number; impressions: number; position: number | null }[];
+  /** Rows in the list, before paging (after ?offsite= when it is set). */
   total: number;
   /** The offset these rows start at (see ExplorerQuery.offset). */
   offset: number;
@@ -157,6 +168,13 @@ export interface ExplorerResult {
   early: EarlySignals | null;
   /** What the "top" column holds for this dimension: "Top page" beside a query, "Top query" beside a page; null for none. */
   topLabel: string | null;
+  /**
+   * For the Pages list: how many of its addresses the website no longer has as
+   * a page (what ?offsite=1 keeps), counted before that filter. Null for
+   * every other dimension, and before the desk's first crawl, when it cannot
+   * be told.
+   */
+  offsite: number | null;
 }
 
 export interface ExplorerRow {

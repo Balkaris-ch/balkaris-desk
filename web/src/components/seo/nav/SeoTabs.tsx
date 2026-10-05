@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SeoTab } from "@/contract/seo/common";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
 import { Icon } from "@/components/ui/icons";
@@ -11,8 +12,16 @@ import { SEO_PAGES, seoPlace } from "./pages";
 
 /**
  * The SEO section's tab strip (board 103): the eleven pages as links, the one
- * showing underlined in green, and on Opportunities the number open now when
- * the desk has it (`opportunities`; null draws no number at all).
+ * showing underlined in green, and the counts the desk keeps for them
+ * (GET /api/v1/seo/nav, `tabs`; null draws no count at all):
+ *
+ *   Opportunities  how many are open: the board's filled green chip
+ *   Overview       the owner's own steps still open          } work waiting on a
+ *   Keywords       phrases nobody has judged yet             } person: a quiet
+ *   Technical      pages waiting for "Request indexing"      } amber chip
+ *
+ * A tab with nothing waiting draws no chip, never a 0. Each count's words
+ * ("steps need you") are read out after the number and shown on hover.
  *
  * Each tab keeps the period chosen in the head (`?range=`) and nothing else:
  * a filter on one page means nothing on the next. The tabs close up on a
@@ -24,7 +33,7 @@ import { SEO_PAGES, seoPlace } from "./pages";
  * A page the owner withheld from this person has no tab (`pages`, as the
  * sidebar's submenu follows it); on such a page's own address none is lit.
  */
-export function SeoTabs({ opportunities, pages }: { opportunities: number | null; pages?: PageAccess }) {
+export function SeoTabs({ tabs, pages }: { tabs: SeoTab[] | null; pages?: PageAccess }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const active = seoPlace(pathname)?.page.key;
@@ -94,7 +103,10 @@ export function SeoTabs({ opportunities, pages }: { opportunities: number | null
       <ul ref={strip} onScroll={measure}>
         {SEO_PAGES.filter((p) => mayOpen(pages, p.href)).map((p) => {
           const on = p.key === active;
-          const count = p.key === "opportunities" ? opportunities : null;
+          /* The desk keys the Overview "overview"; this list keys it by its address, "". */
+          const tab = tabs?.find((t) => t.key === (p.key || "overview"));
+          const count = tab && typeof tab.count === "number" && Number.isInteger(tab.count) && tab.count >= 0 ? tab.count : null;
+          const says = tab?.countSays ?? (p.key === "opportunities" ? "open" : "");
           return (
             <li key={p.key}>
               <Link href={`${p.href}${keep}`} prefetch={false} className={cx("dk-seo-nav-tab", on && "dk-seo-nav-tab--on")} aria-current={on ? "page" : undefined}>
@@ -102,10 +114,10 @@ export function SeoTabs({ opportunities, pages }: { opportunities: number | null
                 <span className="dk-seo-nav-tab-label" data-label={p.label}>
                   {p.label}
                 </span>
-                {count !== null ? (
-                  <span className="dk-seo-nav-count dk-num">
+                {count !== null && (count > 0 || !tab?.todo) ? (
+                  <span className={cx("dk-seo-nav-count dk-num", tab?.todo && "dk-seo-nav-count--todo")} title={says ? `${num(count)} ${says}` : undefined}>
                     {num(count)}
-                    <span className="dk-sr"> open</span>
+                    {says ? <span className="dk-sr"> {says}</span> : null}
                   </span>
                 ) : null}
               </Link>

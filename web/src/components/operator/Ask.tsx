@@ -15,6 +15,11 @@ export interface Preset {
   context?: ContextChoice;
   paths?: string[];
   path?: string;
+  /** "keywords": the phrases asked about. */
+  ids?: number[];
+  /** "serp": the kept result page. */
+  serpId?: number;
+  schemaType?: "FAQPage" | "Service";
 }
 
 /** The seven suggested prompts: each fills the box with what it will run. True to this site. */
@@ -36,6 +41,12 @@ const PLACEHOLDER: Record<TaskKind, string> = {
   redirect: "Propose redirects for addresses that no longer answer",
   brief: "What should the brief be about? A topic, or a search query people use...",
   audit: "Run a full SEO audit",
+  og: "Write a share card for this page",
+  schema: "Draft structured data for this page",
+  links: "Find pages that should link to this page",
+  alt: "Write alt texts for this page's pictures",
+  keywords: "Sort the searches that wait for a judgement",
+  serp: "Compare our page with the first results",
 };
 
 function Pick<T extends string>({ icon, label, value, options, onChange, title }: { icon: IconName; label: string; value: T; options: { value: T; label: string }[]; onChange: (v: T) => void; title?: string }) {
@@ -103,7 +114,18 @@ export function Ask({ preset, range, specimen }: { preset: Preset | null; range:
 
   const submit = async () => {
     if (busy) return;
-    const body: NewTask = { kind, prompt: text.trim(), depth, range, ...(kind === "ask" ? { context } : {}), ...(paths?.length ? { paths } : {}), ...(path ? { path } : {}) };
+    const body: NewTask = {
+      kind,
+      prompt: text.trim(),
+      depth,
+      range,
+      ...(kind === "ask" ? { context } : {}),
+      ...(paths?.length ? { paths } : {}),
+      ...(path ? { path } : {}),
+      ...(preset?.kind === kind && preset.ids?.length ? { ids: preset.ids } : {}),
+      ...(preset?.kind === kind && preset.serpId ? { serpId: preset.serpId } : {}),
+      ...(preset?.kind === kind && preset.schemaType ? { schemaType: preset.schemaType } : {}),
+    };
     if (specimen) {
       setMessage({ ok: false, text: "Specimen data is showing: nothing is queued from this view. Open the screen without ?specimen=1 to ask." });
       return;
@@ -122,7 +144,7 @@ export function Ask({ preset, range, specimen }: { preset: Preset | null; range:
       /* What another screen asked for is done: the address stops asking for it, so a reload does not fill the box again. */
       if (arrived) {
         const u = new URL(window.location.href);
-        for (const k of ["do", "path", "q"]) u.searchParams.delete(k);
+        for (const k of ["do", "path", "q", "ids", "serp", "type"]) u.searchParams.delete(k);
         window.history.replaceState(window.history.state, "", `${u.pathname}${u.search}${u.hash}`);
       }
     }
@@ -164,7 +186,7 @@ export function Ask({ preset, range, specimen }: { preset: Preset | null; range:
           <Pick icon="sparkles" label="Depth" value={depth} options={DEPTH_OPTIONS} onChange={setDepth} title={depthHint} />
           {kind !== "ask" || path ? (
             <button type="button" className="dk-operator-mode" onClick={clear} title="Back to a plain question">
-              <span>{kind === "ask" ? `Page: ${path}` : paths?.length ? `${KIND_LOOK[kind].name}: ${paths.join(", ")}` : KIND_LOOK[kind].name}</span>
+              <span>{kind === "ask" ? `Page: ${path}` : paths?.length ? `${KIND_LOOK[kind].name}: ${paths.join(", ")}` : path ? `${KIND_LOOK[kind].name}: ${path}` : KIND_LOOK[kind].name}</span>
               <Icon name="x" size={12} />
             </button>
           ) : null}

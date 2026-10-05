@@ -116,10 +116,12 @@ export interface LatestInspection {
   of: number | null;
   /** True when the check on `day` reached every sitemap address. */
   complete: boolean;
-  /** Rows from `day` itself, or newer (one address asked by a person since). */
+  /** Rows from the check on `day` itself: how far that check reached. */
   checked: number;
   /** Rows carried from an earlier day because the check on `day` did not reach the address. */
   carried: number;
+  /** Rows newer than the check: an address a person asked Google about since ("Inspect now"). */
+  later: number;
   /** The newest day whose check reached every address, or null when none has yet. */
   wholeDay: string | null;
   /** Sitemap addresses with no result at all in the last week: unknown, never counted as not indexed. */
@@ -187,7 +189,10 @@ export function latestInspection(): LatestInspection | null {
 
   const rows = [...by.values()].sort((a, b) => Number(a.indexed) - Number(b.indexed) || a.url.localeCompare(b.url));
   const carried = rows.filter((r) => r.day < day).length;
-  return { day, rows, of, complete, checked: rows.length - carried, carried, wholeDay: whole?.d ?? null, missing: of === null ? 0 : Math.max(0, of - rows.length) };
+  const later = rows.filter((r) => r.day > day).length;
+  /* How far the check itself reached: its own rows, those a person's newer answer replaced included. */
+  const checked = own.length;
+  return { day, rows, of, complete, checked, carried, later, wholeDay: whole?.d ?? null, missing: of === null ? 0 : Math.max(0, of - rows.length) };
 }
 
 /** Coverage groups of the rows given (each address's newest result), not indexed first, then by size. */

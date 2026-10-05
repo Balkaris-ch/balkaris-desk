@@ -1,5 +1,5 @@
 import type { ProposalRow } from "@/contract/operator";
-import type { PageQuery, SeoPageViewPayload } from "@/contract/seo/page-view";
+import type { PagePhrase, PageQuery, SeoPageViewPayload } from "@/contract/seo/page-view";
 import { AreaChart, Legend, LineChart } from "@/components/charts";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -11,8 +11,8 @@ import { Stamp } from "@/components/ui/Stamp";
 import { Table } from "@/components/ui/Table";
 import { cx } from "@/lib/cx";
 import { ago, DASH, duration, num, shortDate } from "@/lib/format";
-import { rateText } from "./bits";
-import { MetaEditor } from "./MetaEditor";
+import { optimizeHref, rateText } from "./bits";
+import { SettingsView } from "./SettingsView";
 
 const PROPOSAL_WORD: Record<ProposalRow["state"], { word: string; tone: "warn" | "good" | "quiet" | "bad" | "info" }> = {
   waiting: { word: "Waiting for approval", tone: "warn" },
@@ -22,10 +22,10 @@ const PROPOSAL_WORD: Record<ProposalRow["state"], { word: string; tone: "warn" |
   withdrawn: { word: "Withdrawn", tone: "quiet" },
 };
 
-/** The proposals for this address, newest first, each with its state in the approval queue. */
+/** Every proposal for this address, newest first, decided ones too: the page's history of changes. */
 function Proposals({ rows }: { rows: ProposalRow[] }) {
   return (
-    <Card title="Changes proposed for this page" count={rows.length || undefined} className="dk-seo-optimize-panel" info="Titles, descriptions and redirects proposed for this address, by the operator or a person. A proposal changes the live site only when someone who can publish approves it in AI Operator › Approvals." right={<Go href="/operator?ap=waiting#approvals" className="dk-seo-optimize-headlink">Approvals</Go>}>
+    <Card title="Every change proposed for this page" count={rows.length || undefined} className="dk-seo-optimize-panel" info="Every change proposed for this address, by the local model or a person, decided or not: titles, share cards, index, canonical, structured data and redirects. A proposal changes the live site only when someone who can publish approves it." right={<Go href="/operator?ap=waiting#approvals" className="dk-seo-optimize-headlink">Approvals</Go>}>
       {rows.length ? (
         <ul className="dk-seo-optimize-props">
           {rows.map((p) => (
@@ -35,56 +35,98 @@ function Proposals({ rows }: { rows: ProposalRow[] }) {
                   {PROPOSAL_WORD[p.state].word}
                 </Badge>
                 <span className="dk-seo-optimize-quiet">
-                  #{p.id} · {p.source === "operator" ? `the operator (task #${p.taskId ?? "?"})` : (p.proposedBy ?? "a person")} · {ago(p.createdAt)}
+                  #{p.id} · {p.source === "operator" ? `the local model (task #${p.taskId ?? "?"})` : (p.proposedBy ?? "a person")} · {ago(p.createdAt)}
                 </span>
               </span>
-              {p.kind === "meta" ? (
-                <>
-                  {p.shownTitle ? (
-                    <span className="dk-seo-optimize-props-line">
-                      <b>Title</b> {p.before.title ?? "(none)"} <Icon name="arrow-right" size={12} /> {p.shownTitle}
-                    </span>
-                  ) : null}
-                  {p.after.description !== undefined ? (
-                    <span className="dk-seo-optimize-props-line">
-                      <b>Description</b> {p.after.description}
-                    </span>
-                  ) : null}
-                </>
-              ) : (
+              {p.kind === "redirect" ? (
                 <span className="dk-seo-optimize-props-line">
                   <b>Redirect</b> to {p.after.to}
                 </span>
+              ) : (
+                p.changes.map((c) => (
+                  <span key={c.label} className="dk-seo-optimize-props-line">
+                    <b>{c.label}</b> {c.look === "code" ? <code className="dk-seo-optimize-mono">{(c.after ?? "").slice(0, 120)}</code> : <>{c.before ?? "(none)"} <Icon name="arrow-right" size={12} /> {c.after ?? "(removed)"}</>}
+                  </span>
+                ))
               )}
-              {p.drift ? <span className="dk-seo-optimize-props-line dk-tone-warn">The page has changed since it was proposed: ask the operator again.</span> : null}
+              {p.drift ? <span className="dk-seo-optimize-props-line dk-tone-warn">The page has changed since it was proposed: ask again.</span> : null}
               {p.error ? <span className="dk-seo-optimize-props-line dk-tone-bad">{p.error}</span> : null}
             </li>
           ))}
         </ul>
       ) : (
         <Empty icon="edit" title="Nothing proposed yet">
-          Propose a title and description above, or let the operator write them.
+          Edit a setting above, or ask the AI to draft it.
         </Empty>
       )}
     </Card>
   );
 }
 
-/** "Optimize": the editor and what waits. */
+/** "Optimize": the page's settings (search, sharing, index, structured data), then every change proposed for it. */
 export function OptimizeView({ data }: { data: SeoPageViewPayload }) {
-  const c = data.crawl.state === "ok" ? data.crawl.value : null;
-  const page = data.page.state === "ok" ? data.page.value : null;
   return (
     <>
-      <Card title="Title and description" className="dk-seo-optimize-panel" info="What Google and a shared link show for the page. The website appends “| Balkaris” to every title itself.">
-        {c && page && data.serp ? (
-          <MetaEditor path={data.path!} url={page.url} title={c.title} description={c.description} titleLimit={data.serp.titleLimit} descriptionLimit={data.serp.descriptionLimit} answers200={c.status === 200} />
-        ) : (
-          <Absent reading={data.crawl.state === "ok" ? { state: "waiting", source: "crawl", reason: "The crawl has no title for this page." } : data.crawl} />
-        )}
-      </Card>
+      <SettingsView data={data} />
       <Proposals rows={data.proposals} />
     </>
+  );
+}
+
+const YES = <Icon name="check" size={14} className="dk-tone-good" />;
+const NO = <Icon name="x" size={14} className="dk-tone-warn" />;
+
+/** Google for one phrase, as a Swiss searcher would ask it: a link out, nothing fetched. */
+const googleFor = (phrase: string, lang: string | null): string => `https://www.google.ch/search?q=${encodeURIComponent(phrase)}&hl=${lang === "de" ? "de" : "en"}&gl=ch`;
+
+const JUDGED: Record<PagePhrase["status"], string> = { relevant: "Relevant", weak: "Weak", irrelevant: "Irrelevant", unjudged: "Not yet" };
+
+/** The keyword store's phrases mapped to this page, and where the page carries each. */
+function Phrases({ data }: { data: SeoPageViewPayload }) {
+  return (
+    <Card
+      title="Phrases this page should win"
+      flush
+      className="dk-seo-optimize-panel"
+      info="The keyword store's phrases mapped to this page (SEO › Keywords), relevant first. A tick means every word of the phrase, of three letters or more, is in the title, the main heading, the description or the address. Impressions and position only when Google showed the page for exactly that phrase in the period. No search volume: no free source gives it."
+      right={<Go href="/seo/keywords" className="dk-seo-optimize-headlink">Keywords</Go>}
+    >
+      <Read reading={data.phrases}>
+        {(rows, r) => (
+          <>
+            <Table<PagePhrase>
+              caption="Phrases mapped to this page"
+              rows={rows}
+              rowKey={(x) => String(x.id)}
+              minWidth={640}
+              empty="The keyword store maps no phrase to this page. On SEO › Keywords a phrase can be given its page."
+              columns={[
+                {
+                  key: "phrase",
+                  head: "Phrase",
+                  cell: (x) => (
+                    <Go href={googleFor(x.phrase, x.lang)} className="dk-seo-optimize-link">
+                      {x.phrase}
+                    </Go>
+                  ),
+                  sort: (x) => x.phrase,
+                },
+                { key: "status", head: "Judged", width: "92px", cell: (x) => <span className={x.status === "relevant" ? "" : "dk-seo-optimize-quiet"}>{JUDGED[x.status]}</span>, sort: (x) => x.status },
+                { key: "title", head: "Title", width: "56px", cell: (x) => (x.inTitle ? YES : NO) },
+                { key: "h1", head: "H1", width: "48px", cell: (x) => (x.inH1 ? YES : NO) },
+                { key: "desc", head: "Descr.", width: "56px", cell: (x) => (x.inDescription ? YES : NO) },
+                { key: "addr", head: "Address", width: "64px", cell: (x) => (x.inAddress ? YES : NO) },
+                { key: "impressions", head: "Impressions", numeric: true, width: "96px", cell: (x) => (x.impressions === null ? DASH : num(x.impressions)), sort: (x) => x.impressions },
+                { key: "position", head: "Position", numeric: true, width: "72px", cell: (x) => (x.position === null ? DASH : num(x.position, 1)), sort: (x) => x.position },
+              ]}
+            />
+            <div className="dk-seo-optimize-pad">
+              <Stamp reading={r} />
+            </div>
+          </>
+        )}
+      </Read>
+    </Card>
   );
 }
 
@@ -113,7 +155,7 @@ export function KeywordsView({ data }: { data: SeoPageViewPayload }) {
                   { key: "potential", head: "Our estimate", numeric: true, width: "104px", cell: (x) => (x.potential ? <span title={x.potential.basis}>+{num(x.potential.clicksPerMonth, 1)}/mo</span> : DASH), sort: (x) => x.potential?.clicksPerMonth ?? null },
                 ]}
               />
-              <p className="dk-seo-optimize-note dk-seo-optimize-pad">{q.withheld}</p>
+              {q.rows.length ? <p className="dk-seo-optimize-note dk-seo-optimize-pad">{q.withheld}</p> : null}
               <div className="dk-seo-optimize-pad">
                 <Stamp reading={r} />
               </div>
@@ -121,6 +163,7 @@ export function KeywordsView({ data }: { data: SeoPageViewPayload }) {
           )}
         </Read>
       </Card>
+      <Phrases data={data} />
       <Card title="Topics this page answers" className="dk-seo-optimize-panel" info="The keyword table's clusters mapped to this page: by the audit, by a person, or by the desk's rule (every word of the phrase in the page's title, heading or address).">
         {data.clusters.length ? (
           <ul className="dk-seo-optimize-tags">
@@ -204,7 +247,7 @@ export function ContentView({ data }: { data: SeoPageViewPayload }) {
 }
 
 /** "Internal Links": who links here (from their text or only the menu and footer), and where it links from its own text. */
-export function LinksView({ data }: { data: SeoPageViewPayload }) {
+export function LinksView({ data, range }: { data: SeoPageViewPayload; range: string | null }) {
   return (
     <Read reading={data.links}>
       {(l, r) => {
@@ -229,7 +272,7 @@ export function LinksView({ data }: { data: SeoPageViewPayload }) {
                     rows={inRows}
                     rowKey={(x) => x.source}
                     columns={[
-                      { key: "page", head: "Page", width: "46%", cell: (x) => <Go href={`/seo/pages/view?path=${encodeURIComponent(x.source)}`} className="dk-seo-optimize-link">{x.source}</Go>, sort: (x) => x.source },
+                      { key: "page", head: "Page", width: "46%", cell: (x) => <Go href={optimizeHref(x.source, range, "links")} className="dk-seo-optimize-link">{x.source}</Go>, sort: (x) => x.source },
                       { key: "words", head: "With the words", cell: (x) => <span className="dk-seo-optimize-quiet dk-seo-optimize-wrap">{x.texts.length ? `“${x.texts.slice(0, 2).join("”, “")}”` : DASH}</span> },
                     ]}
                   />
@@ -264,6 +307,27 @@ export function LinksView({ data }: { data: SeoPageViewPayload }) {
         );
       }}
     </Read>
+  );
+}
+
+/** The standard checks of one page elsewhere, one click away: links built from its address, nothing fetched by the desk. */
+function Elsewhere({ url }: { url: string }) {
+  const u = encodeURIComponent(url);
+  const links = [
+    { label: "Rich Results Test", href: `https://search.google.com/test/rich-results?url=${u}` },
+    { label: "PageSpeed Insights", href: `https://pagespeed.web.dev/analysis?url=${u}` },
+    { label: "Search Console performance", href: `https://search.google.com/search-console/performance/search-analytics?resource_id=sc-domain%3Abalkaris.ch&page=!${u}` },
+    { label: "site: search on Google", href: `https://www.google.ch/search?q=${encodeURIComponent(`site:${url}`)}` },
+  ];
+  return (
+    <p className="dk-seo-optimize-note dk-seo-optimize-set-row">
+      Check elsewhere:
+      {links.map((l) => (
+        <Go key={l.label} href={l.href} className="dk-seo-optimize-link">
+          {l.label}
+        </Go>
+      ))}
+    </p>
   );
 }
 
@@ -328,9 +392,10 @@ export function TechnicalView({ data }: { data: SeoPageViewPayload }) {
                 <dd>{c.schemaTypes.length ? c.schemaTypes.join(", ") : <span className="dk-tone-warn">None</span>}</dd>
                 <dt>Share card</dt>
                 <dd>
-                  {c.og.title ? "og:title" : "no og:title"}, {c.og.image ? "its own picture" : c.defaultPicture ? "the site's default picture" : "no picture"}, {c.twitterCard ? `twitter:${c.twitterCard}` : "no twitter card"}
+                  {c.og.title ? "og:title" : "no og:title"}, {c.og.image ? (c.defaultPicture && c.og.image === c.defaultPicture ? "the site's default picture" : "its own picture") : "no picture"}, {c.twitterCard ? `twitter:${c.twitterCard}` : "no twitter card"}
                 </dd>
               </dl>
+              {data.page.state === "ok" ? <Elsewhere url={data.page.value.url} /> : null}
               <Stamp reading={r} />
             </>
           )}

@@ -11,6 +11,7 @@ import { Clusters } from "@/components/seo/competitors/Clusters";
 import { Directories, Refresh } from "@/components/seo/competitors/Directories";
 import { Lacks } from "@/components/seo/competitors/Lacks";
 import { hrefWith, paramsOf } from "@/components/seo/competitors/look";
+import { Ask, Lookup, Searches, Serp } from "@/components/seo/competitors/Web";
 import "@/components/seo/competitors/competitors.css";
 
 export const metadata = { title: "Competitors · SEO" };
@@ -19,7 +20,7 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 /** What the address may carry to the desk server; anything else in it is ignored. */
-const PASSED = ["engine", "type", "cluster", "q", "sort", "offset", "limit", "open"] as const;
+const PASSED = ["engine", "type", "cluster", "q", "sort", "offset", "limit", "open", "look", "serp", "serpLang", "search", "shown"] as const;
 
 /**
  * SEO › Competitors. No board of its own: drawn in the SEO boards' manner
@@ -35,6 +36,11 @@ const PASSED = ["engine", "type", "cluster", "q", "sort", "offset", "limit", "op
  * gives either. Every filter is in the address, so the server draws it and a
  * view can be shared. The buttons queue a brief for the AI Operator or ask
  * for the weekly read of their pages; nothing here changes the website.
+ *
+ * On the open web (the web build): look up any site and set it beside
+ * Balkaris (?look=), check who ranks for a search now (?serp=), and every
+ * captured search with its result page (?search=). A person's word on who is
+ * a competitor (watch, ignore, platform, merge) is kept by the desk.
  */
 export default async function SeoCompetitorsPage({ searchParams }: { searchParams: Search }) {
   const q = await searchParams;
@@ -61,20 +67,28 @@ export default async function SeoCompetitorsPage({ searchParams }: { searchParam
   const base = paramsOf(data.asked, data.head.range);
   const a = data.asked;
   /* The same list with its filters taken off (the order and the period kept): offered when the filters leave no row. */
-  const clear = a.q || a.cluster || a.type !== "all" || a.engine !== "all" ? hrefWith(base, { engine: undefined, type: undefined, cluster: undefined, q: undefined }) : null;
+  const clear = a.q || a.cluster || a.search || a.type !== "all" || a.engine !== "all" ? hrefWith(base, { engine: undefined, type: undefined, cluster: undefined, q: undefined, search: undefined }) : null;
+  const owner = data.owner === true;
 
   return (
     <div className="dk-seo-competitors">
       <CompTiles tiles={data.tiles} />
+      <Ask data={data} />
+      <Lookup reading={data.lookup ?? null} base={base} />
+      {a.serp ? <Serp reading={data.serp} base={base} owner={owner} /> : null}
       <div className="dk-seo-competitors-main">
         <div className="dk-seo-competitors-main-grid">
           <div className="dk-seo-competitors-area-list">
             <CompList data={data} base={base} openKey={openKey} />
           </div>
           <div className="dk-seo-competitors-area-detail">
-            <CompDetail reading={data.selected} list={data.list} clear={clear} />
+            <CompDetail reading={data.selected} list={data.list} clear={clear} base={base} />
           </div>
         </div>
+      </div>
+      <div className="dk-seo-competitors-pair">
+        <Searches reading={data.searches} base={base} owner={owner} />
+        {a.serp ? null : <Serp reading={data.serp} base={base} owner={owner} />}
       </div>
       <div className="dk-seo-competitors-under">
         <Lacks reading={data.lacks} />

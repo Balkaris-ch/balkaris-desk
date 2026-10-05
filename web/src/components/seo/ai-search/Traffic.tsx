@@ -1,5 +1,5 @@
 import type { Reading } from "@/contract/common";
-import type { AiCrawlers, AiReferrals } from "@/contract/seo/ai-search";
+import type { AiCrawlers, AiJob, AiReferrals } from "@/contract/seo/ai-search";
 import { AreaChart, BarList } from "@/components/charts";
 import { Card } from "@/components/ui/Card";
 import { Chip } from "@/components/ui/Badge";
@@ -9,7 +9,8 @@ import { Icon } from "@/components/ui/icons";
 import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
-import { num, shortDate } from "@/lib/format";
+import { fullDate, num, shortDate } from "@/lib/format";
+import { PostButton } from "./Act";
 import "@/components/ui/table.css";
 import "./ai-search.css";
 
@@ -20,8 +21,14 @@ const spanText = (w: { start: string; end: string }) => `${shortDate(w.start)} t
  * (the rule is printed in the (i)), by day, by assistant and by the page they
  * landed on. Consenting visitors only.
  */
-export function Visits({ reading }: { reading: Reading<AiReferrals> }) {
+export function Visits({ reading, job }: { reading: Reading<AiReferrals>; job: AiJob | null }) {
   const v = reading.state === "ok" ? reading.value : null;
+  /* The daily read rarely gets its slot: "Read now" asks GA4 at once. */
+  const read = job?.running ? (
+    <span className="dk-seo-ai-search-quiet">Reading GA4 now…</span>
+  ) : job?.ready ? (
+    <PostButton path="/visits/run" label="Read now" busyLabel="Asking…" icon="refresh" title={`Ask GA4 for the visits now.${job.lastStart ? ` Last read ${fullDate(job.lastStart)}${job.lastOk === false ? ", failed" : ""}.` : ""}`} />
+  ) : null;
   return (
     <Card
       title="Visits from AI assistants"
@@ -29,7 +36,14 @@ export function Visits({ reading }: { reading: Reading<AiReferrals> }) {
       className="dk-seo-ai-search-panel"
       info={v ? `${v.rule} Consenting visitors only: a visitor who declined analytics is not counted anywhere.` : "GA4 sessions whose source is an AI assistant, consenting visitors only."}
       sub={v ? spanText(v) : undefined}
-      right={v ? <Stamp reading={reading} /> : null}
+      right={
+        v || read ? (
+          <span className="dk-seo-ai-search-head-acts">
+            {v ? <Stamp reading={reading} /> : null}
+            {read}
+          </span>
+        ) : null
+      }
     >
       {v ? (
         <div className="dk-seo-ai-search-traffic">
@@ -94,7 +108,7 @@ const PURPOSE: Record<AiCrawlers["byAgent"][number]["purpose"], string> = {
  * page. Until the drain delivers, the panel says so, and shows the one true
  * thing about crawlers the desk already reads: which of them robots.txt lets in.
  */
-export function Crawlers({ reading, robots }: { reading: Reading<AiCrawlers>; robots: { agent: string; family: string; allowed: boolean }[] | null }) {
+export function Crawlers({ reading, robots, robotsNote }: { reading: Reading<AiCrawlers>; robots: { agent: string; family: string; allowed: boolean }[] | null; robotsNote: string | null }) {
   const v = reading.state === "ok" ? reading.value : null;
   return (
     <Card
@@ -163,6 +177,11 @@ export function Crawlers({ reading, robots }: { reading: Reading<AiCrawlers>; ro
                 ))}
               </ul>
               <p className="dk-seo-ai-search-quiet">From the readiness check's last read of robots.txt: allowed is not the same as visited.</p>
+            </div>
+          ) : robotsNote ? (
+            <div className="dk-seo-ai-search-robots">
+              <p className="dk-seo-ai-search-sublabel">Meanwhile, what robots.txt lets in</p>
+              <p className="dk-seo-ai-search-quiet">Not known: {robotsNote} Not read is not blocked.</p>
             </div>
           ) : null}
         </>

@@ -10,6 +10,7 @@ import { Absent } from "@/components/ui/Read";
 import { Tabs } from "@/components/ui/Tabs";
 import { ago } from "@/lib/format";
 import { cx } from "@/lib/cx";
+import { proposalLine } from "./look";
 import { ReviewButton } from "./Review";
 
 export type ApprovalTab = "waiting" | "approved" | "completed";
@@ -34,11 +35,10 @@ function Row({ icon, tone, title, sub, children }: { icon: IconName; tone: ChipT
   );
 }
 
-function what(p: ProposalRow): { title: string; sub: string } {
-  if (p.kind === "redirect") return { title: p.state === "waiting" ? "Create redirect" : "Redirect", sub: `${p.address} → ${p.after.to}` };
-  const fields = p.after.title !== undefined && p.after.description !== undefined ? "title and description" : p.after.title !== undefined ? "title" : "description";
-  return { title: p.state === "waiting" ? "Update metadata" : "Metadata", sub: `${p.address}: new ${fields}` };
-}
+const what = proposalLine;
+
+/** Each kind of change, by its icon. */
+const ICON: Record<ProposalRow["kind"], IconName> = { meta: "tag", redirect: "link", og: "image", index: "eye", canonical: "target", schema: "code" };
 
 function status(p: ProposalRow): string {
   if (p.state === "applied") return `Live since ${ago(p.appliedAt ?? p.decidedAt ?? p.createdAt)}, approved by ${p.decidedBy ?? "a person"}`;
@@ -90,10 +90,16 @@ export function Approvals({ data, tab, hrefFor, specimen }: { data: OperatorPayl
             return (
               <Row
                 key={`p${p.id}`}
-                icon={p.kind === "redirect" ? "link" : "tag"}
-                tone={p.state === "withdrawn" || p.state === "rejected" ? "quiet" : p.kind === "redirect" ? "warn" : "info"}
+                icon={ICON[p.kind]}
+                tone={p.state === "withdrawn" || p.state === "rejected" ? "quiet" : p.kind === "redirect" || (p.kind === "index" && p.after.noindex) ? "warn" : "info"}
                 title={w.title}
-                sub={tab === "waiting" ? (p.drift ? `${w.sub} · the page changed since; ask again` : w.sub) : `${w.sub} · ${status(p)}`}
+                sub={
+                  tab === "waiting"
+                    ? p.drift
+                      ? `${w.sub} · the page changed since; ask again`
+                      : w.sub
+                    : `${w.sub} · ${status(p)}${p.readBack && p.state === "applied" ? (p.readBack.ok ? " · the live page shows it" : " · the live page does not show it") : ""}`
+                }
               >
                 {tab === "waiting" || (p.state === "approved" && p.error) ? (
                   <>

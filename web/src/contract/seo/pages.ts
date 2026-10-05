@@ -35,7 +35,7 @@
  * Types only.
  */
 import type { Reading, Stat } from "../common";
-import type { NewTask, ProposalState } from "../operator";
+import type { NewTask, ProposalKind, ProposalState } from "../operator";
 import type { ReadinessCheck } from "./ai-search";
 import type { PageRef, Potential, Priority, Rate, RateStat, SeoHead } from "./common";
 import type { Serp } from "./opportunities";
@@ -282,8 +282,8 @@ export interface SeoPageSummary {
   readiness: Reading<{ checkedAt: string; pass: number; of: number; checks: ReadinessCheck[] }>;
   /** Open opportunities the engine found for this page. */
   opportunities: Reading<{ open: number; rows: { id: string; title: string; typeLabel: string; priority: Priority; potential: Potential | null }[] }>;
-  /** Title, description and redirect proposals for this address that are waiting, approved or applied. */
-  proposals: { id: number; kind: "meta" | "redirect"; state: ProposalState; href: string }[];
+  /** Proposals of every kind (title, share card, index, canonical, structured data, redirect) for this address that are waiting, approved or applied. */
+  proposals: { id: number; kind: ProposalKind; state: ProposalState; href: string }[];
 }
 
 export interface SummaryIndex {

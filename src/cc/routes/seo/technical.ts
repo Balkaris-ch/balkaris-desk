@@ -1,15 +1,16 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { db } from "../../../db.ts";
 import { me, type Vars } from "../../access.ts";
 import { status as jobStatus } from "../../scheduler.ts";
 import * as crux from "../../search/crux.ts";
 import * as gsc from "../../search/gsc.ts";
 import * as site from "../../site/index.ts";
-import { off, ok, reading, series, waiting } from "../../store.ts";
+import { kept, off, ok, reading, series, waiting } from "../../store.ts";
 import { scrub } from "../../system.ts";
-import type { JobListed, Reading } from "../../../../web/src/contract/common.ts";
+import type { ApiError, JobListed, Reading } from "../../../../web/src/contract/common.ts";
 import type { NewTask } from "../../../../web/src/contract/operator.ts";
 import type { ReadinessCheck } from "../../../../web/src/contract/seo/ai-search.ts";
+import type { GooglePanel } from "../../../../web/src/contract/seo/google.ts";
 import type {
   BrokenCheck,
   Indexation,
@@ -23,17 +24,19 @@ import type {
   SitemapCheck,
   SpeedRun,
   SpeedSweepInfo,
+  TechAsked,
   TechLine,
   TechPage,
   TechVitals,
   VitalFigure,
 } from "../../../../web/src/contract/seo/technical.ts";
 import { allOpportunities, clusterNames, rank, toRow } from "../../seo/engine.ts";
-import { coverageGroups, latestInspection, type InspectRow } from "../../seo/indexation.ts";
+import { accessNow, panel as googlePanel, REQUEST_LINE, siteSeen, inspectQuota } from "../../seo/google-actions.ts";
+import { coverageGroups, latestInspection, type InspectRow, type LatestInspection } from "../../seo/indexation.ts";
 import { daysOf } from "../../seo/rank.ts";
 import { siteReadiness } from "../../seo/readiness.ts";
 import { ownTitle, siteView, type SiteView } from "../../seo/site.ts";
-import { head, rangeFrom } from "./shared.ts";
+import { csvFile, head, rangeFrom } from "./shared.ts";
 
 /**
  * /api/v1/seo/technical — SEO › Technical (board 113, panel 7): the site's
@@ -42,6 +45,16 @@ import { head, rangeFrom } from "./shared.ts";
  * robots.txt, structured data, redirects and broken links.
  *
  *   GET /?range=7d|30d|90d|1y   the whole page (SeoTechnicalPayload)
+ *       &q=           narrows Issues by rule and Pages by score (a rule's title or id, a
+ *                     finding's words, a page's address or title contains it)
+ *       &sev=critical|warning|opportunity   Issues by rule: one severity
+ *       &index=indexed|not|unknown          Pages by score: by Google's newest answer
+ *       &device=mobile|desktop              Page speed: which of the daily lab runs
+ *   GET /export.csv?what=issues|pages|redirects|index (&q=&sev=&index=)
+ *                     the same lists as a file, every row, the filters applied
+ *
+ * An unknown filter value is read as "all" (and `asked` says how each was
+ * read), never refused: a link that carries an old value still opens the page.
  *
  * The page changes nothing here. Its buttons use doors that exist already:
  * POST /api/v1/seo/indexing/requested (a person marks a page submitted in
@@ -53,6 +66,12 @@ import { head, rangeFrom } from "./shared.ts";
  * indexing marked) and POST /api/v1/seo/opportunities/owner-task { task } (a
  * step from the audit marked done by whoever took it; the owner's own steps
  * by the owner only, which is why the payload says who is looking).
+ *
+ * WHAT THE DESK DOES AT GOOGLE ITSELF (submit a sitemap, inspect one address
+ * now, the Request indexing queue, IndexNow) is /api/v1/seo/google
+ * (src/cc/routes/seo/google.ts, src/cc/seo/google-actions.ts). This page
+ * draws its panel (`google`) from the same function that GET answers with,
+ * so both say the same; drawing it asks nobody outside the desk.
  *
  * WHERE EACH PANEL COMES FROM, and none asks anybody anything while the page
  * is drawn (the Chrome UX Report is read from the desk's own copy, kept a day):
@@ -115,21 +134,144 @@ function fixFor(rule: string): { label: string; task: NewTask } | null {
   return null;
 }
 
+/** The most pages one metadata task takes (src/cc/operator/packs.ts). */
+const META_MOST = 5;
+
+/**
+ * Pages that already have title-and-description work in hand: a proposal
+ * waiting for approval, or a metadata task queued or running that names them.
+ * Read once per request.
+ */
+function metaInHand(): { waiting: Set<string>; tasked: Set<string> } {
+  const waitingSet = new Set<string>();
+  const tasked = new Set<string>();
+  try {
+    for (const r of db.prepare("SELECT address FROM cc_proposals WHERE kind = 'meta' AND state = 'waiting'").all() as { address: string }[]) waitingSet.add(r.address);
+  } catch {
+    /* the operator's tables are not there yet: nothing is in hand */
+  }
+  try {
+    for (const r of db.prepare("SELECT options FROM cc_ai_tasks WHERE kind = 'metadata' AND state IN ('queued','running')").all() as { options: string }[]) {
+      try {
+        const o = JSON.parse(r.options) as { paths?: unknown };
+        if (Array.isArray(o.paths)) for (const p of o.paths) if (typeof p === "string") tasked.add(p);
+      } catch {
+        /* a task without readable options names no page */
+      }
+    }
+  } catch {
+    /* as above */
+  }
+  return { waiting: waitingSet, tasked };
+}
+
+/**
+ * The button under a rule's findings. For titles and descriptions it names
+ * the rule's OWN pages: unscoped, the operator picks any page breaking any
+ * title or description rule, so the button under "Title is cut in results"
+ * wrote for the long descriptions, and two presses under two rules queued
+ * the same task twice. Pages with a proposal waiting or a task open are left
+ * out, and with none left there is no button, only the reason.
+ */
+function scopedFix(rule: string, pages: string[], inHand: { waiting: Set<string>; tasked: Set<string> }): { fix: IssueGroup["fix"]; fixNote: string | null } {
+  const base = fixFor(rule);
+  if (!base) return { fix: null, fixNote: null };
+  if (base.task.kind !== "metadata") return { fix: base, fixNote: null };
+  const free = pages.filter((p) => !inHand.waiting.has(p) && !inHand.tasked.has(p));
+  if (!pages.length) return { fix: null, fixNote: null };
+  if (!free.length) {
+    const allWaiting = pages.every((p) => inHand.waiting.has(p));
+    return {
+      fix: null,
+      fixNote: allWaiting
+        ? `Every page of this rule already has a proposal waiting for approval (AI Operator › Approvals).`
+        : `Every page of this rule already has a proposal waiting or a task open in AI Operator.`,
+    };
+  }
+  const take = free.slice(0, META_MOST);
+  return {
+    fix: { label: `Propose for ${plural(take.length, "page")}`, task: { kind: "metadata", depth: "deep", paths: take } },
+    fixNote:
+      free.length > take.length
+        ? `For the first ${take.length} of ${free.length} pages; the rest once these are decided.`
+        : free.length < pages.length
+          ? `${plural(pages.length - free.length, "page")} of this rule already ${pages.length - free.length === 1 ? "has" : "have"} a proposal waiting or a task open.`
+          : null,
+  };
+}
+
 const SEV_RANK: Record<site.Severity, number> = { critical: 0, warning: 1, opportunity: 2 };
 
-/** Findings grouped by rule, worst first, each group with its pages and the crawl's own words. */
-function groups(list: site.Finding[]): IssueGroup[] {
-  const by = new Map<string, IssueGroup & { lines: { path: string | null; text: string }[] }>();
+/**
+ * When the newest crawl stored its findings, and whether a crawl ran before
+ * it: a finding first seen at the newest crawl is "new" only when there was
+ * an earlier crawl that did not find it (on the first crawl everything is).
+ */
+function freshMark(): (firstSeen: string) => boolean {
+  try {
+    const last = (db.prepare("SELECT MAX(last_seen) AS t FROM cc_issues").get() as { t: string | null }).t;
+    const earliest = (db.prepare("SELECT MIN(first_seen) AS t FROM cc_pages").get() as { t: string | null }).t;
+    if (!last || !earliest || earliest >= last) return () => false;
+    return (firstSeen) => firstSeen >= last;
+  } catch {
+    return () => false;
+  }
+}
+
+/** Findings grouped by rule, worst first, each group with its pages, the crawl's own words and which are new. */
+function groups(list: site.Finding[], inHand = metaInHand(), isNew = freshMark()): IssueGroup[] {
+  const by = new Map<string, IssueGroup & { lines: { path: string | null; text: string; firstSeen?: string }[]; fresh: number }>();
   for (const f of list) {
     const rule = site.RULES[f.rule];
-    const g = by.get(f.rule) ?? { rule: f.rule, title: rule.title, severity: f.severity, cost: rule.cost, count: 0, pages: [], area: rule.area, scope: rule.scope, lines: [], fix: fixFor(f.rule) };
+    const g = by.get(f.rule) ?? { rule: f.rule, title: rule.title, severity: f.severity, cost: rule.cost, count: 0, pages: [], area: rule.area, scope: rule.scope, lines: [], fresh: 0 };
     g.count++;
+    if (isNew(f.firstSeen)) g.fresh++;
     if (f.path && !g.pages.includes(f.path)) g.pages.push(f.path);
-    if (g.lines.length < 60) g.lines.push({ path: f.path, text: f.text });
+    if (g.lines.length < 60) g.lines.push({ path: f.path, text: f.text, firstSeen: f.firstSeen });
     by.set(f.rule, g);
   }
-  return [...by.values()].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.count - a.count || b.cost - a.cost);
+  return [...by.values()]
+    .map((g) => ({ ...g, ...scopedFix(g.rule, g.pages, inHand) }))
+    .sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.count - a.count || b.cost - a.cost);
 }
+
+/* ---------- the filters, held in the address ------------------------------------------------- */
+
+const SEVS = ["critical", "warning", "opportunity"] as const;
+const INDEX = ["indexed", "not", "unknown"] as const;
+
+/** The filters as given, each read as "all" when it is not one this page knows. */
+function askedOf(c: Context<Vars>): TechAsked {
+  const q = (c.req.query("q") ?? "").replace(/\s+/g, " ").trim().slice(0, 100);
+  const sev = c.req.query("sev");
+  const index = c.req.query("index");
+  return {
+    q,
+    sev: (SEVS as readonly string[]).includes(sev ?? "") ? (sev as TechAsked["sev"]) : "all",
+    index: (INDEX as readonly string[]).includes(index ?? "") ? (index as TechAsked["index"]) : "all",
+    device: c.req.query("device") === "desktop" ? "desktop" : "mobile",
+  };
+}
+
+const has = (q: string, ...texts: (string | null | undefined)[]): boolean => {
+  if (!q) return true;
+  const needle = q.toLowerCase();
+  return texts.some((t) => !!t && t.toLowerCase().includes(needle));
+};
+
+/** A rule's group that the filters leave: its severity, and the words in its title, id, pages or findings. */
+const groupMatches = (g: IssueGroup, a: TechAsked): boolean =>
+  (a.sev === "all" || g.severity === a.sev) && (has(a.q, g.title, g.rule) || g.pages.some((p) => has(a.q, p)) || (g.lines ?? []).some((l) => has(a.q, l.text, l.path)));
+
+/** Within a group that matched by its findings alone, only those findings. A group that matched by its title keeps them all. */
+function narrowed(g: IssueGroup, a: TechAsked): IssueGroup {
+  if (!a.q || has(a.q, g.title, g.rule)) return g;
+  const lines = (g.lines ?? []).filter((l) => has(a.q, l.text, l.path));
+  const pages = g.pages.filter((p) => has(a.q, p) || lines.some((l) => l.path === p));
+  return { ...g, lines, pages, count: lines.length };
+}
+
+const indexMatches = (p: TechPage, a: TechAsked): boolean => a.index === "all" || (a.index === "indexed" ? p.inIndex === true : a.index === "not" ? p.inIndex === false : p.inIndex === null);
 
 /** A job as the page shows it: the scheduler's record, notes scrubbed. Null when the job is not on this desk. */
 function job(name: string): JobListed | null {
@@ -161,8 +303,13 @@ function inspectedAt(day: string): string {
   return end && end.slice(0, 10) === day ? end : day;
 }
 
-/** Search Console's state, or why it has none: not connected (off, with the step) or not inspected yet. */
-function inspection(): { ok: true; day: string; at: string; rows: InspectRow[]; of: number | null } | { ok: false; why: Reading<never> } {
+/**
+ * Search Console's state, or why it has none: not connected (off, with the
+ * step) or not inspected yet. Each address's NEWEST answer (indexation.ts):
+ * on a day the check was cut short, the addresses it did not reach keep their
+ * earlier answer, so the figures are the site's and not a fragment of it.
+ */
+function inspection(): ({ ok: true; at: string } & LatestInspection) | { ok: false; why: Reading<never> } {
   const a = gsc.access();
   if (a.state !== "ok") return { ok: false, why: off("gsc", gsc.reasonFor(a), gsc.stepFor(a)) };
   const ins = latestInspection();
@@ -210,14 +357,19 @@ function checklist(view: SiteView, findings: Reading<site.Finding[]>, days: numb
       const yes = listed.filter((p) => p.indexable).length;
       return crawled(yes, { of: listed.length, tone: yes === listed.length ? "good" : "bad" });
     }),
-    line("in-index", "In Google's index", "Sitemap addresses Google's URL Inspection reported as indexed at its newest daily check. Not Search Console's Page indexing total, which no API gives.", "#indexing", () => {
+    line("in-index", "In Google's index", "Sitemap addresses Google's URL Inspection reported as indexed, each by its newest answer (the daily check, or “Inspect now”). Not Search Console's Page indexing total, which no API gives.", "#indexing", () => {
       const ins = inspection();
       if (!ins.ok) return ins.why;
       const indexed = ins.rows.filter((r) => r.indexed).length;
       const of = ins.of ?? ins.rows.length;
       const hist = series("gsc.indexed", days + 1);
       const before = hist.length > 1 && hist[0]!.day <= new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10) ? hist[0]!.value : null;
-      return ok({ count: indexed, of, previous: before, tone: indexed >= of ? "good" : "bad" }, "gsc", ins.at, `URL Inspection, ${ins.day}.`);
+      return ok(
+        { count: indexed, of, previous: before, tone: indexed >= of ? "good" : "bad" },
+        "gsc",
+        ins.at,
+        ins.complete ? `URL Inspection, ${ins.day}.` : `URL Inspection: the check of ${ins.day} reached ${ins.checked} of ${of} addresses; ${ins.carried} keep an earlier day's answer${ins.missing ? ` and ${ins.missing} have none (counted neither way)` : ""}.`,
+      );
     }),
     line(
       "broken",
@@ -244,7 +396,8 @@ function checklist(view: SiteView, findings: Reading<site.Finding[]>, days: numb
     line("descriptions", "Missing meta descriptions", "Pages without a meta description, by the crawl.", "#issues", () => byRules(LINE_RULES.descriptions), () => ({ label: "Propose", task: METADATA_TASK })),
     line("titles", "Missing title tags", "Pages without a title, by the crawl.", "#issues", () => byRules(LINE_RULES.titles), () => ({ label: "Propose", task: METADATA_TASK })),
     line("schema", "Missing structured data", "Pages with no structured data, structured data missing a required field, or structured data that is not valid JSON, by the crawl. Pages with only the site's own are listed under Structured data, not counted here.", "#schema", () => byRules(LINE_RULES.schema)),
-    line("duplicates", "Duplicate content", "Pages whose own text is the same as, or nearly the same as, another page's, by the crawl's comparison of each page's text.", "#issues", () => byRules(LINE_RULES.duplicates)),
+    /* Its own panel lists the groups and the pairs; "Issues by rule" lists only the findings. */
+    line("duplicates", "Duplicate content", "Pages whose own text is the same as, or nearly the same as, another page's, by the crawl's comparison of each page's text.", "#duplicates", () => byRules(LINE_RULES.duplicates)),
     line("slow", "Slow pages (LCP > 2.5 s)", "Pages of the daily PageSpeed test whose mobile lab Largest Contentful Paint is over 2.5 s, of the pages it measured. A lab run on Google's machines, not visitors' field data.", "#speed", () => {
       const runs = site.labRuns("mobile");
       if (runs.state !== "ok") return runs;
@@ -328,10 +481,11 @@ async function vitals(): Promise<TechVitals> {
   return { lcp: now("lcp"), inp: now("inp"), cls: now("cls"), tbt };
 }
 
-function speed(): SeoTechnicalPayload["speed"] {
-  const runs = site.labRuns("mobile");
+/** The daily lab runs for one device: the phone by default, the desktop runs (kept by the same sweep) on ?device=desktop. */
+function speed(device: TechAsked["device"] = "mobile"): SeoTechnicalPayload["speed"] {
+  const runs = site.labRuns(device);
   if (runs.state !== "ok") return runs;
-  const rated = (metric: "lcp" | "cls" | "tbt", v: number | null) => (v === null ? null : site.rate(metric, v, { kind: "lab", strategy: "mobile" }));
+  const rated = (metric: "lcp" | "cls" | "tbt", v: number | null) => (v === null ? null : site.rate(metric, v, { kind: "lab", strategy: device }));
   const rows: SpeedRun[] = runs.value
     .map((r) => ({
       path: r.path,
@@ -345,9 +499,9 @@ function speed(): SeoTechnicalPayload["speed"] {
       failure: r.failure,
     }))
     .sort((a, b) => (b.lcpMs ?? -1) - (a.lcpMs ?? -1) || a.path.localeCompare(b.path));
-  const lcpLimits = site.limitsFor("lcp", "lab", "mobile");
+  const lcpLimits = site.limitsFor("lcp", "lab", device);
   const measured = rows.filter((r) => r.lcpMs !== null);
-  const info: SpeedSweepInfo = { strategy: "mobile", lcpLimits, measured: measured.length, slow: measured.filter((r) => (r.lcpMs as number) > lcpLimits.good).length, failed: rows.filter((r) => r.failure || r.lcpMs === null).length };
+  const info: SpeedSweepInfo = { strategy: device, lcpLimits, measured: measured.length, slow: measured.filter((r) => (r.lcpMs as number) > lcpLimits.good).length, failed: rows.filter((r) => r.failure || r.lcpMs === null).length };
   return ok({ rows, ...info }, runs.source, runs.asOf, runs.note);
 }
 
@@ -367,9 +521,11 @@ function indexation(view: SiteView): Reading<Indexation> {
   const history = indexedLine.map((p) => ({ day: p.day, indexed: p.value, notIndexed: notLine.get(p.day) ?? 0 })).filter((p) => notLine.has(p.day));
 
   const coverage = new Map(ins.rows.map((r) => [r.path, r.coverage]));
+  /* Asked since ("Inspect now") and found indexed: nothing left to request; the engine clears the row at its next run. */
+  const nowIndexed = new Set(ins.rows.filter((r) => r.indexed).map((r) => r.path));
   const names = clusterNames();
   const queue: IndexRequest[] = allOpportunities()
-    .filter((o) => o.type === "not-indexed" && o.active)
+    .filter((o) => o.type === "not-indexed" && o.active && !nowIndexed.has(o.page ?? o.id.replace(/^not-indexed:/, "")))
     .map((o) => toRow(o, view, names))
     .filter((o) => o.state.state !== "dismissed" && o.state.state !== "done")
     .map((o) => {
@@ -392,11 +548,37 @@ function indexation(view: SiteView): Reading<Indexation> {
     .filter((r) => r.googleCanonical && r.userCanonical && canon(r.googleCanonical) !== canon(r.userCanonical))
     .map((r) => ({ path: r.path, declared: r.userCanonical, chosen: r.googleCanonical }));
 
+  let retryAt: string | null = null;
+  try {
+    retryAt = gsc.inspectRetryAt();
+  } catch {
+    retryAt = null;
+  }
+  const since = ins.later ? `; ${plural(ins.later, "address was", "addresses were")} asked about since` : "";
+  const whole = ins.complete
+    ? `newest: ${ins.day}${since}`
+    : `the check of ${ins.day} reached ${ins.checked} of ${ins.of ?? "the"} addresses, so ${ins.carried} keep the answer of an earlier day${ins.missing ? ` and ${ins.missing} have none, counted neither way` : ""}${since}`;
   return ok(
-    { day: ins.day, inspected: ins.rows.length, of: ins.of, indexed: ins.rows.filter((r) => r.indexed).length, groups, history, queue, canonicalDiffers },
+    {
+      day: ins.day,
+      inspected: ins.rows.length,
+      of: ins.of,
+      indexed: ins.rows.filter((r) => r.indexed).length,
+      complete: ins.complete,
+      checked: ins.checked,
+      carried: ins.carried,
+      later: ins.later,
+      wholeDay: ins.wholeDay,
+      missing: ins.missing,
+      retryAt,
+      groups,
+      history,
+      queue,
+      canonicalDiffers,
+    },
     "gsc",
     ins.at,
-    `Google's URL Inspection of every sitemap address, once a day (newest: ${ins.day}). Google's stored state: it changes when Google crawls the page again, not when the page changes.`,
+    `Google's URL Inspection of every sitemap address, once a day, each address by its newest answer (${whole}). Google's stored state: it changes when Google crawls the page again, not when the page changes.`,
   );
 }
 
@@ -437,6 +619,10 @@ function sitemapCheck(view: SiteView): Reading<SitemapCheck> {
       findings: m.issues.filter((i) => i.rule.startsWith("sitemap.") && i.rule !== "sitemap.blocked").map(ruleFinding),
       named,
       byKind: [...kinds.values()].sort((a, b) => b.addresses - a.addresses),
+      /* What the file really lists, so a person can see the addresses and dates without opening the XML. */
+      entries: [...entries]
+        .sort((a, b) => (b.lastmod ?? "").localeCompare(a.lastmod ?? "") || a.path.localeCompare(b.path))
+        .map((e) => ({ path: e.path, lastmod: e.lastmod, priority: e.priority })),
     },
     "crawl",
     m.at,
@@ -469,16 +655,36 @@ function llms(): SeoTechnicalPayload["llms"] {
   return ok(ready.llms, "crawl", ready.at, "Optional: Google says it is not needed, and no AI company's crawler documentation asks for it.");
 }
 
-/** The sitemaps Search Console knows: its own record, kept a day and read fresh by the daily inspection. */
-async function submitted(): Promise<SeoTechnicalPayload["submitted"]> {
-  const r = await gsc.sitemaps();
-  if (r.state !== "ok") return r;
+/**
+ * The sitemaps Search Console knows: its own record AS THE DESK KEPT IT. It
+ * used to go through gsc.sitemaps(), which asks Google again when the copy is
+ * older than 26 hours, so opening this page could send a request to Google.
+ * The page asks nobody: the copy is refreshed by the twice-daily Search
+ * Console job, after a sitemap is submitted, and by "Ask Google again" in the
+ * Google panel.
+ */
+function submitted(): SeoTechnicalPayload["submitted"] {
+  const a = gsc.access();
+  if (a.state !== "ok") return off("gsc", gsc.reasonFor(a), gsc.stepFor(a));
+  const had = kept<gsc.SitemapStatus[]>("gsc:sitemaps");
+  if (!had) return waiting("gsc", "Search Console's list of sitemaps has not been read on this desk yet. “Ask Google again” in the Google panel reads it now; the twice-daily Search Console job reads it by itself.");
+  if (!had.value.length) return waiting("gsc", "No sitemap has been submitted to this Search Console property. The Google panel below submits the site's own.");
   return ok(
-    { rows: r.value.map((s) => ({ path: s.path, lastSubmitted: s.lastSubmitted, lastDownloaded: s.lastDownloaded, isPending: s.isPending, isIndex: s.isIndex, warnings: s.warnings, errors: s.errors, submitted: s.submitted })) },
-    r.source,
-    r.asOf,
+    { rows: had.value.map((s) => ({ path: s.path, lastSubmitted: s.lastSubmitted, lastDownloaded: s.lastDownloaded, isPending: s.isPending, isIndex: s.isIndex, warnings: s.warnings, errors: s.errors, submitted: s.submitted })) },
+    "gsc",
+    had.at,
     "Search Console's own record of the sitemaps submitted to it: when Google last fetched each and how many addresses it counted. It is not how many are indexed.",
   );
+}
+
+/** Search Console's Sitemaps report for the property, where Google says what a sitemap's errors are (its API gives the count only). */
+function sitemapsReport(): string | null {
+  try {
+    const a = accessNow();
+    return a.connected && a.site ? `https://search.google.com/search-console/sitemaps?resource_id=${encodeURIComponent(a.site)}` : null;
+  } catch {
+    return null;
+  }
 }
 
 const SITE_KEYS = ["robots", "lastmod", "llms", "bing"];
@@ -542,6 +748,8 @@ function brokenCheck(view: SiteView): Reading<BrokenCheck> {
       inside: inside.value.map(linkRow),
       outside: outside.state === "ok" ? outside.value.map(linkRow) : [],
       unchecked: unchecked.state === "ok" ? unchecked.value.length : 0,
+      /* Which they are: a count alone left nobody able to open them and look. */
+      uncheckedRows: unchecked.state === "ok" ? unchecked.value.map(linkRow) : [],
       pagesDown: view.pages.filter((p) => p.status !== 200 && !(p.status >= 300 && p.status < 400)).map((p) => ({ path: p.path, status: p.status })),
     },
     "crawl",
@@ -550,15 +758,17 @@ function brokenCheck(view: SiteView): Reading<BrokenCheck> {
   );
 }
 
-function pages(view: SiteView): Reading<{ rows: TechPage[]; read: number; scored: number }> {
+/** Every page the crawl read, with Google's newest answer for it; `asked` narrows the rows, `read` and `scored` count them all. */
+function pages(view: SiteView, asked?: TechAsked): Reading<{ rows: TechPage[]; read: number; scored: number }> {
   if (!view.at) return waiting("crawl", NOT_CRAWLED);
   let index = new Map<string, InspectRow>();
   try {
+    /* Each address's newest answer, so a sitemap page the newest (cut-short) check did not reach keeps its earlier one. */
     index = new Map((latestInspection()?.rows ?? []).map((r) => [r.path, r]));
   } catch {
     /* the index column stays empty: said by the column's head */
   }
-  const rows: TechPage[] = view.pages.map((p) => {
+  const all: TechPage[] = view.pages.map((p) => {
     const g = index.get(p.path);
     return {
       path: p.path,
@@ -573,10 +783,44 @@ function pages(view: SiteView): Reading<{ rows: TechPage[]; read: number; scored
       opportunity: p.issues.opportunity,
       inIndex: g ? g.indexed : null,
       coverage: g?.coverage ?? null,
+      inIndexDay: g?.day ?? null,
     };
   });
-  rows.sort((a, b) => (a.score ?? 101) - (b.score ?? 101) || b.critical - a.critical || b.warning - a.warning || b.opportunity - a.opportunity || a.path.localeCompare(b.path));
-  return ok({ rows, read: rows.length, scored: rows.filter((r) => r.score !== null).length }, "crawl", view.at, "Each page's score by the crawl's stated rules (src/cc/site/rules.ts). Google's index state from its newest URL Inspection.");
+  all.sort((a, b) => (a.score ?? 101) - (b.score ?? 101) || b.critical - a.critical || b.warning - a.warning || b.opportunity - a.opportunity || a.path.localeCompare(b.path));
+  const rows = asked ? all.filter((p) => has(asked.q, p.path, p.title) && indexMatches(p, asked)) : all;
+  return ok(
+    { rows, read: all.length, scored: all.filter((r) => r.score !== null).length },
+    "crawl",
+    view.at,
+    "Each page's score by the crawl's stated rules (src/cc/site/rules.ts). Google's index state from its newest URL Inspection of each address.",
+  );
+}
+
+/** The crawl's findings by rule, narrowed by the filters; `total` is how many rules have findings before they were. */
+function issuesPanel(findings: Reading<site.Finding[]>, asked: TechAsked): SeoTechnicalPayload["issues"] {
+  if (findings.state !== "ok") return findings;
+  const every = groups(findings.value);
+  const rows = every.filter((g) => groupMatches(g, asked)).map((g) => narrowed(g, asked));
+  return ok({ rows, total: every.length }, "crawl", findings.asOf, "Every finding of the last crawl by the rules in src/cc/site/rules.ts, worst first.");
+}
+
+/** The Google panel; its own parts already fail one at a time, and this keeps the page standing if the whole of it throws. */
+async function google(): Promise<GooglePanel> {
+  try {
+    return await googlePanel();
+  } catch (e) {
+    const why = waiting<never>("gsc", failed(e));
+    return {
+      access: { connected: false, site: null, permission: null, canWrite: false, reason: failed(e), step: null },
+      site: siteSeen(),
+      sitemaps: why,
+      quota: inspectQuota(),
+      queue: why,
+      indexNow: waiting("repo", failed(e)),
+      requestLine: REQUEST_LINE,
+      recent: [],
+    };
+  }
 }
 
 /* ---------- the page -------------------------------------------------------------------------------- */
@@ -584,6 +828,7 @@ function pages(view: SiteView): Reading<{ rows: TechPage[]; read: number; scored
 routes.get("/", async (c) => {
   const range = rangeFrom(c);
   const days = daysOf(range);
+  const asked = askedOf(c);
   const view = siteView();
   const findings = quiet<site.Finding[]>("crawl", () => site.issues());
 
@@ -619,23 +864,93 @@ routes.get("/", async (c) => {
       const v = s.value;
       return ok({ finished: v.finished, pages: v.pages, inSitemap: v.inSitemap, critical: v.issues.critical, warning: v.issues.warning, opportunity: v.issues.opportunity }, "crawl", s.asOf, s.note);
     }),
-    issues: quiet("crawl", () => (findings.state === "ok" ? ok({ rows: groups(findings.value) }, "crawl", findings.asOf, "Every finding of the last crawl by the rules in src/cc/site/rules.ts, worst first.") : findings)),
+    issues: quiet("crawl", () => issuesPanel(findings, asked)),
     indexation: quiet("gsc", () => indexation(view)),
     sitemap: quiet("crawl", () => sitemapCheck(view)),
     robots: quiet("crawl", () => robots()),
     llms: quiet("crawl", () => llms()),
-    speed: quiet("psi", () => speed()),
+    speed: quiet("psi", () => speed(asked.device)),
     opportunities,
     checks,
     vitals: vit,
-    pages: quiet("crawl", () => pages(view)),
+    pages: quiet("crawl", () => pages(view, asked)),
     schema: quiet("crawl", () => schema(view, findings)),
     redirects: quiet("crawl", () => redirectsCheck(view, findings)),
     broken: quiet("crawl", () => brokenCheck(view)),
     siteChecks: quiet("crawl", () => siteChecks()),
-    submitted: await reading("gsc", () => submitted()),
+    submitted: quiet("gsc", () => submitted()),
     jobs: { crawl: job("crawl"), sitemap: job("sitemap"), speed: job("speed"), inspect: job("gsc-inspect"), readiness: job("seo-readiness") },
     viewer: { owner: !!me(c)?.owner },
+    google: await google(),
+    asked,
+    sitemapsHref: sitemapsReport(),
   };
   return c.json(body);
 });
+
+/* ---------- GET /export.csv ------------------------------------------------------------------ */
+
+const EXPORTS = ["issues", "pages", "redirects", "index"] as const;
+type ExportWhat = (typeof EXPORTS)[number];
+
+/**
+ * The page's lists as a file, every row (not the first 60 findings of a rule,
+ * not the first dozen pages), with the same ?q, ?sev and ?index as the page.
+ * A list that has nothing yet answers 409 with the reason, never an empty file
+ * that reads as "nothing is wrong".
+ */
+routes.get("/export.csv", (c) => {
+  const what = c.req.query("what") ?? "issues";
+  if (!(EXPORTS as readonly string[]).includes(what)) return c.json<ApiError>({ error: `What to export: ?what=${EXPORTS.join(", ")}.` }, 400);
+  const asked = askedOf(c);
+  const nothing = (r: Reading<unknown>): Response => c.json<ApiError>({ error: `There is nothing to export yet: ${r.state === "ok" ? "" : r.reason}` }, 409);
+
+  switch (what as ExportWhat) {
+    case "issues": {
+      const findings = quiet<site.Finding[]>("crawl", () => site.issues());
+      if (findings.state !== "ok") return nothing(findings);
+      const isNew = freshMark();
+      const wanted = new Set(groups(findings.value).filter((g) => groupMatches(g, asked)).map((g) => g.rule));
+      const titled = (f: site.Finding): boolean => has(asked.q, site.RULES[f.rule].title, f.rule);
+      const rows = findings.value
+        .filter((f) => wanted.has(f.rule) && (titled(f) || has(asked.q, f.text, f.path)))
+        .sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || a.rule.localeCompare(b.rule) || (a.path ?? "").localeCompare(b.path ?? ""))
+        .map((f) => [f.severity, f.rule, site.RULES[f.rule].title, f.path ?? "(the site)", f.text, site.RULES[f.rule].cost, f.firstSeen.slice(0, 10), isNew(f.firstSeen) ? "yes" : ""]);
+      return csvFile(c, "technical-issues", ["Severity", "Rule", "Rule title", "Page", "Finding", "Points it costs", "First seen", "New at the last crawl"], rows);
+    }
+    case "pages": {
+      const r = pages(siteView(), asked);
+      if (r.state !== "ok") return nothing(r);
+      return csvFile(
+        c,
+        "technical-pages",
+        ["Page", "Title", "Kind", "HTTP status", "In sitemap", "Indexable (crawl)", "Score", "Critical", "Warnings", "Opportunities", "In Google's index", "Google's words", "Google's answer of"],
+        r.value.rows.map((p) => [p.path, p.title, p.kindLabel, p.status, p.inSitemap ? "yes" : "no", p.indexable ? "yes" : "no", p.score, p.critical, p.warning, p.opportunity, p.inIndex === null ? "not inspected" : p.inIndex ? "yes" : "no", p.coverage, p.inIndexDay]),
+      );
+    }
+    case "redirects": {
+      const view = siteView();
+      const r = redirectsCheck(view, quiet<site.Finding[]>("crawl", () => site.issues()));
+      if (r.state !== "ok") return nothing(r);
+      return csvFile(
+        c,
+        "technical-redirects",
+        ["From", "To", "Promised by", "Outcome", "Status", "Lands on", "Hops", "Tried", "Remark"],
+        r.value.rows.filter((x) => has(asked.q, x.source, x.destination)).map((x) => [x.source, x.destination, x.by, x.outcome, x.status, x.lands, x.hops, x.tested, x.remark]),
+      );
+    }
+    case "index": {
+      const ins = inspection();
+      if (!ins.ok) return nothing(ins.why);
+      /* Every row here has an answer, so ?index=unknown leaves none: those addresses are in the pages export. */
+      const keep = (r: InspectRow): boolean => (asked.index === "all" ? true : asked.index === "indexed" ? r.indexed : asked.index === "not" ? !r.indexed : false);
+      const rows = ins.rows
+        .filter((r) => has(asked.q, r.path, r.coverage) && keep(r))
+        .map((r) => [r.path, r.url, r.indexed ? "yes" : "no", r.coverage, r.day, r.lastCrawl, r.googleCanonical, r.userCanonical, r.robots, r.indexing, r.link]);
+      return csvFile(c, "technical-index", ["Page", "Address", "In Google's index", "Google's words", "Answer of", "Last crawled by Google", "Google's canonical", "Declared canonical", "robots.txt", "Indexing allowed", "In Search Console"], rows);
+    }
+  }
+});
+
+/** Exported for a check (scripts/check-cc-seo-google.ts): the pure parts, so they are proved without a crawl. */
+export const parts = { scopedFix, groupMatches, narrowed };

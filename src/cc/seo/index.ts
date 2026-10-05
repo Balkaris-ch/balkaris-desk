@@ -1,5 +1,7 @@
 import type { Job } from "../scheduler.ts";
 import { jobs as seoJobs } from "./jobs.ts";
+/* The web layer's paid source registers itself here, so Settings lists DataForSEO (off, with its step) from the start. */
+import "./web/dataforseo.ts";
 
 /**
  * The SEO engine as a collector: what src/cc/index.ts loads beside GA4, the

@@ -7,21 +7,22 @@ const bars = (s: Stat) => <SparkBars data={s.series} />;
 
 /**
  * The five figures under the head, in board 113's places. The board's
- * "Total backlinks" is Bing's count of links (absent with its step until Bing
- * Webmaster is connected); its "Referring domains" the sites GA4 saw send
- * visitors; "Domain rating", "New" and "Lost backlinks" have no free, honest
- * source, so their places hold what this page is for: the profiles that
- * exist, whether they state one name, address and phone, and the steps only
- * the owner can take.
+ * "Total backlinks" is the linking pages a source names (Bing's index once
+ * connected; else Google's export as imported, or the pages the desk read
+ * itself), with what was found and lost in the period on its second line;
+ * its "Referring domains" the sites GA4 saw send visitors; "Domain rating"
+ * has no free, honest source, so its place and the two after it hold what
+ * this page is for: the profiles that exist, whether they state one name,
+ * address and phone, and the steps only the owner can take.
  */
 export function BlTiles({ tiles }: { tiles: BacklinksTiles }) {
   return (
     <Tiles count={5} className="dk-seo-bl-tiles">
       <Tile
-        label="Links Bing knows"
+        label="Links known"
         reading={tiles.links}
         chart={bars}
-        info="Inbound links in Bing Webmaster's index, counted once a day. Google gives no backlink figures by any API, so Bing's index is the one free source; it sees fewer links than Google does. “First reported” is the day the desk first saw Bing list a link, not the day it was made."
+        info="Pages on other sites that link to the website, as a source names them: Bing Webmaster's index once its key exists (counted daily); until then Search Console's Links export as last imported, or the pages the desk read itself, whichever is larger, never their sum. Found and lost are the desk's own readings of a linking page."
       />
       <Tile
         label="Sites that sent visitors"

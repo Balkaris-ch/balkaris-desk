@@ -4,18 +4,20 @@ import { Card } from "@/components/ui/Card";
 import { Empty } from "@/components/ui/Empty";
 import { Go } from "@/components/ui/Go";
 import { StatusDot } from "@/components/ui/StatusDot";
-import { clock, feedTime } from "@/lib/format";
+import { clock, feedTime, num } from "@/lib/format";
 
 /**
  * What the SEO jobs, and the people acting on what they found, wrote to the
- * desk's log lately, with the owner switching one of these jobs off or on.
- * "View all" opens the desk-wide log filtered to the same kinds.
+ * desk's log in the head's period, the newest twelve, with the owner
+ * switching one of these jobs off or on. "View all" opens the desk-wide log
+ * filtered to the same kinds.
  */
-export function Recent({ items, at, kinds }: { items: ActivityItem[]; at: string; kinds: string[] }) {
+export function Recent({ items, at, kinds, total, period }: { items: ActivityItem[]; at: string; kinds: string[]; total: number; period: string }) {
   return (
     <Card
       title="What they did lately"
       icon="clock"
+      sub={total > items.length ? `The newest ${num(items.length)} of ${num(total)} lines, ${period.toLowerCase()}.` : `${period}.`}
       right={<LinkButton href={`/automations?kinds=${encodeURIComponent(kinds.join(","))}#log`} size="xs">View all</LinkButton>}
     >
       {items.length ? (
@@ -47,7 +49,7 @@ export function Recent({ items, at, kinds }: { items: ActivityItem[]; at: string
         </ol>
       ) : (
         <Empty icon="inbox" title="Nothing yet" compact>
-          The SEO jobs have written nothing to the log yet: their first runs say what they found here.
+          The SEO jobs wrote nothing to the log in this period. A longer period at the top shows older lines.
         </Empty>
       )}
     </Card>

@@ -9,14 +9,15 @@ import { Stamp } from "@/components/ui/Stamp";
 import { Tooltip } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { DASH, num, shortDate } from "@/lib/format";
-import { byLabel, count, day, engineIcon, KIND_LABEL, langChip, safeHref, seenAs, shortUrl, shownHost, shownName, taskWho } from "./look";
+import { ActButton, MergeForm } from "./Act";
+import { byLabel, count, day, engineIcon, hrefWith, KIND_LABEL, langChip, lookHref, safeHref, seenAs, shortUrl, shownHost, shownName, taskWho } from "./look";
 
 /**
  * One competitor in detail, beside the list: what it shows next to what
  * Balkaris shows (each line says how both sides were read), where it
  * was seen, and its pages as the desk read them.
  */
-export function CompDetail({ reading, list, clear }: { reading: SeoCompetitorsPayload["selected"]; list: SeoCompetitorsPayload["list"]; clear: string | null }) {
+export function CompDetail({ reading, list, clear, base }: { reading: SeoCompetitorsPayload["selected"]; list: SeoCompetitorsPayload["list"]; clear: string | null; base: Record<string, string> }) {
   if (!reading) {
     /* Nothing is chosen because there is nothing to choose: the list's own reason and step say why, or the filters left no row. */
     if (list.state !== "ok") {
@@ -54,6 +55,17 @@ export function CompDetail({ reading, list, clear }: { reading: SeoCompetitorsPa
     return (
       <Card title="Competitor" icon="users" className="dk-seo-competitors-detail">
         <Absent reading={reading} />
+        {base.open ? (
+          <p className="dk-seo-competitors-note dk-seo-competitors-pad">
+            <Go href={lookHref(base, base.open)} scroll={false} className="dk-seo-competitors-task-link">
+              Look up {base.open}
+            </Go>{" "}
+            ·{" "}
+            <Go href={hrefWith(base, { open: undefined })} scroll={false} className="dk-seo-competitors-task-link">
+              Show the list's first
+            </Go>
+          </p>
+        ) : null}
       </Card>
     );
   }
@@ -77,8 +89,21 @@ export function CompDetail({ reading, list, clear }: { reading: SeoCompetitorsPa
           ) : (
             <span>Named without a site</span>
           )}
+          {site && host ? (
+            /* Technical's one-page audit of their home page (titles, headings, structured data); it reopens a kept audit or fills in the address. */
+            <Go href={`/seo/technical?audit=${encodeURIComponent(site)}#audit`} className="dk-seo-competitors-task-link" title="Audit their home page on Technical: one press there reads it">
+              Audit their page
+            </Go>
+          ) : null}
+          {host ? (
+            <Go href={lookHref(base, c.domain)} scroll={false} className="dk-seo-competitors-task-link" title="Their public facts beside Balkaris">
+              Beside Balkaris
+            </Go>
+          ) : null}
           {c.platform ? <Chip className="dk-seo-competitors-mini">platform</Chip> : null}
           {c.alsoNamed.length ? <span className="dk-seo-competitors-quiet">also named “{c.alsoNamed.join("”, “")}”</span> : null}
+          {c.decision?.watch ? <Chip tone="good" className="dk-seo-competitors-mini">watched, added by {c.decision.by}</Chip> : null}
+          {c.decision?.ignore ? <Chip className="dk-seo-competitors-mini">ignored by {c.decision.by}</Chip> : null}
         </span>
       }
       right={<Stamp reading={reading} />}
@@ -91,6 +116,8 @@ export function CompDetail({ reading, list, clear }: { reading: SeoCompetitorsPa
         <Fact label="AI cited" value={num(c.cited)} title="Times an AI answer cited its site as a source" />
         <Fact label="Searches" value={num(c.queries.length)} title="Searches and questions it was seen for" />
       </div>
+
+      <Decide d={d} base={base} />
 
       <section className="dk-seo-competitors-section" aria-label="Beside Balkaris">
         <h3 className="dk-seo-competitors-h">Beside Balkaris</h3>
@@ -105,9 +132,25 @@ export function CompDetail({ reading, list, clear }: { reading: SeoCompetitorsPa
         <Seen list={d.sightings} />
       </section>
 
-      <section className="dk-seo-competitors-section" aria-label="Its pages read">
+      {d.topics?.length ? (
+        <section className="dk-seo-competitors-section" aria-label="What its pages target">
+          <h3 className="dk-seo-competitors-h">What its pages target, in our clusters</h3>
+          <ul className="dk-seo-competitors-plain">
+            {d.topics.map((t) => (
+              <li key={t.cluster.key}>
+                <Go href={`/seo/content-gaps?cluster=${encodeURIComponent(t.cluster.key)}`} className="dk-seo-competitors-task-link" title="Open the cluster on Content Gaps">
+                  {t.cluster.name}
+                </Go>{" "}
+                <span className="dk-seo-competitors-quiet">{t.pages.map((p) => p.title ?? shortUrl(p.url)).join(" · ")}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      <section className="dk-seo-competitors-section" aria-label="Its pages">
         <h3 className="dk-seo-competitors-h">
-          Its pages read <span className="dk-seo-competitors-quiet">({num(d.pages.length)})</span>
+          Its pages <span className="dk-seo-competitors-quiet">({pagesLine(d.pages)})</span>
         </h3>
         <Pages d={d} />
       </section>
@@ -232,7 +275,7 @@ function SeenList({ list }: { list: Sighting[] }) {
 
 function Pages({ d }: { d: CompetitorDetail }) {
   if (!d.pages.length) {
-    return <p className="dk-seo-competitors-note">{d.competitor.platform ? "A platform's pages are not compared as a competitor's." : d.site ? "None of its pages is on the desk's list: only the top five organic results of a captured search are read." : "It was named without a site, so there is no page to read."}</p>;
+    return <p className="dk-seo-competitors-note">{d.competitor.platform ? "A platform's pages are not compared as a competitor's." : d.site ? "None of its pages is on the desk's list yet: Read its pages takes the ones of its sitemap that answer our clusters." : "It was named without a site, so there is no page to read."}</p>;
   }
   return (
     <ul className="dk-seo-competitors-pagelist">
@@ -256,7 +299,7 @@ function PageItem({ p }: { p: CompetitorPage }) {
         ) : (
           <span>{p.url}</span>
         )}
-        <Chip className="dk-seo-competitors-mini">{p.address === "home" ? "home page" : "page that ranks"}</Chip>
+        <Chip className="dk-seo-competitors-mini">{p.address === "home" ? "home page" : p.address === "topic" ? `its page for ${p.cluster?.name ?? "a cluster"}` : "page that ranks"}</Chip>
       </span>
       {p.error ? (
         <span className="dk-seo-competitors-note">
@@ -318,3 +361,51 @@ function PriceLine({ p }: { p: Pick<CompetitorPage, "priceStated" | "priceText" 
 }
 
 export { PriceLine };
+
+/** "3 read, 1 could not be read, 2 not read yet": only pages that answered count as read. */
+function pagesLine(pages: CompetitorPage[]): string {
+  const read = pages.filter((p) => p.fetchedAt && !p.error).length;
+  const failed = pages.filter((p) => p.error).length;
+  const waiting = pages.filter((p) => !p.fetchedAt).length;
+  return [`${num(read)} read`, failed ? `${num(failed)} could not be read` : "", waiting ? `${num(waiting)} not read yet` : ""].filter(Boolean).join(", ");
+}
+
+/**
+ * A person's word on this row: watch it, ignore it, count it as a platform or
+ * a site over the desk's list, merge it with another, read its pages. Kept by
+ * the desk with the name of who said it; the observations are never deleted.
+ */
+function Decide({ d, base }: { d: CompetitorDetail; base: Record<string, string> }) {
+  const c = d.competitor;
+  const key = c.domain;
+  const site = !key.startsWith("name:");
+  const dec = c.decision ?? null;
+  const kindLabel = dec?.kind ? "Platform by the desk's list" : c.platform ? "Count as a site" : "Count as a platform";
+  const kindTitle = dec?.kind
+    ? `You said ${dec.kind}; this gives the decision back to the desk's list.`
+    : c.platform
+      ? "Over the desk's list of platforms: its pages are read and compared as a competitor's."
+      : "A directory or platform, not a studio: its pages are not compared.";
+  return (
+    <div className="dk-seo-competitors-actions" aria-label="Your word on it">
+      {site && !dec?.watch ? <ActButton path="/watch" body={{ input: key }} label="Watch" icon="eye" title="Keeps it on the list as a competitor you chose, its home page read every week." /> : null}
+      {site && dec?.watch ? <ActButton path="/watch" body={{ input: key, watch: false }} label="Stop watching" icon="eye" /> : null}
+      <ActButton
+        path="/decide"
+        body={{ domain: key, ignore: !dec?.ignore }}
+        label={dec?.ignore ? "Stop ignoring" : "Ignore"}
+        icon={dec?.ignore ? "eye" : "x"}
+        title={dec?.ignore ? "Back on the list and in its counts." : "Hidden from the list and its counts (Shown: Ignored finds it); its observations are kept."}
+      />
+      <ActButton path="/decide" body={{ domain: key, kind: dec?.kind ? "auto" : c.platform ? "studio" : "platform" }} label={kindLabel} icon="tag" title={kindTitle} />
+      {site && !c.platform ? <ActButton path="/read" body={{ domain: key }} label="Read its pages" icon="sitemap" busyLabel="Reading its sitemap…" title="Reads its sitemap for the pages that answer our clusters, then reads them, two seconds apart." /> : null}
+      {site ? (
+        <Go href={lookHref(base, key)} scroll={false} className="dk-seo-competitors-task-link">
+          Look it up
+        </Go>
+      ) : null}
+      {d.mergeWith?.length ? <MergeForm domain={key} options={d.mergeWith} /> : null}
+      {d.merged?.map((m) => <ActButton key={m.key} path="/decide" body={{ domain: m.key, mergeInto: null }} label={`Count “${m.name}” apart again`} icon="minus" title={`Merged into this row by ${m.by}.`} />)}
+    </div>
+  );
+}

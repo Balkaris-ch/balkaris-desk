@@ -15,6 +15,10 @@ const BRAND = " | Balkaris";
 /** The page's own part of a title, as the website's overrides store it. */
 const ownOf = (t: string | null): string => (t ?? "").replace(/(?:\s*\|\s*|\s+[–—:-]\s+)Balkaris\s*$/i, "").trim();
 const chars = (s: string): number => [...s].length;
+/** The website's room for a whole title (its lib/seo.tsx TITLE_ROOM). */
+const SITE_TITLE_ROOM = 60;
+/** The title a page shows for its own part: the brand after it only where both fit (src/cc/operator/packs.ts shownTitle, as the website does since 3 October). */
+const shownOf = (own: string): string => (own.length + BRAND.length <= SITE_TITLE_ROOM ? `${own}${BRAND}` : own);
 
 /**
  * "Optimize": a person's own title and description for the page, with the
@@ -24,7 +28,26 @@ const chars = (s: string): number => [...s].length;
  * applied only when someone who can publish approves it. Or the operator
  * writes them instead (a metadata task), and they wait the same way.
  */
-export function MetaEditor({ path, url, title, description, titleLimit, descriptionLimit, answers200 }: { path: string; url: string; title: string | null; description: string | null; titleLimit: number; descriptionLimit: number; answers200: boolean }) {
+export function MetaEditor({
+  path,
+  url,
+  title,
+  description,
+  titleLimit,
+  descriptionLimit,
+  answers200,
+  askedAlready = null,
+}: {
+  path: string;
+  url: string;
+  title: string | null;
+  description: string | null;
+  titleLimit: number;
+  descriptionLimit: number;
+  answers200: boolean;
+  /** Why the operator is not asked again: a metadata task already queued, or proposals already waiting. Null when it may be. */
+  askedAlready?: string | null;
+}) {
   const { go, busy, message } = useSend();
   const ask = useSend();
   const [own, setOwn] = useState(ownOf(title));
@@ -32,8 +55,12 @@ export function MetaEditor({ path, url, title, description, titleLimit, descript
   const [why, setWhy] = useState("");
   const [made, setMade] = useState<number | null>(null);
   const [task, setTask] = useState<number | null>(null);
-  const shown = `${own.trim()}${BRAND}`;
+  /* What was last proposed from here: the same words again would only be refused as a twin. */
+  const [sentAs, setSentAs] = useState<string | null>(null);
+  const shown = shownOf(own.trim());
   const changed = own.trim() !== ownOf(title) || desc.trim() !== (description ?? "").trim();
+  const again = sentAs === `${own.trim()}
+${desc.trim()}`;
   const tLen = chars(shown);
   const dLen = chars(desc.trim());
   const host = (() => {
@@ -50,16 +77,18 @@ export function MetaEditor({ path, url, title, description, titleLimit, descript
         className="dk-seo-optimize-editor-form"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!changed) return;
+          if (!changed || again) return;
           void go<ProposalAnswer>("/api/v1/seo/optimize/propose", { path, title: own, description: desc, why: why.trim() || undefined }, (v) => {
             setMade(v.proposal.id);
+            setSentAs(`${own.trim()}
+${desc.trim()}`);
             return null;
           });
         }}
       >
         <label className="dk-field">
           <span className="dk-field-label">
-            Title <span className="dk-seo-optimize-quiet">(the website adds “{BRAND.trim()}”)</span>
+            Title <span className="dk-seo-optimize-quiet">(the website adds “{BRAND.trim()}” where the whole fits in {SITE_TITLE_ROOM})</span>
           </span>
           <input className="dk-input" value={own} maxLength={110} onChange={(e) => setOwn(e.target.value)} disabled={!answers200} />
           <span className={cx("dk-field-hint dk-num", tLen > titleLimit && "dk-tone-warn")}>
@@ -78,14 +107,15 @@ export function MetaEditor({ path, url, title, description, titleLimit, descript
           <input className="dk-input" value={why} maxLength={400} onChange={(e) => setWhy(e.target.value)} disabled={!answers200} />
         </label>
         <div className="dk-seo-optimize-editor-actions">
-          <button type="submit" className={buttonClass({ variant: "primary", size: "sm" })} disabled={busy || !changed || !answers200}>
+          <button type="submit" className={buttonClass({ variant: "primary", size: "sm" })} disabled={busy || !changed || again || !answers200}>
             <Icon name="check" size={14} />
             <span>{busy ? "Proposing…" : "Propose for approval"}</span>
           </button>
           <button
             type="button"
             className={buttonClass({ variant: "quiet", size: "sm" })}
-            disabled={ask.busy || !answers200}
+            disabled={ask.busy || !answers200 || !!askedAlready || task !== null}
+            title={askedAlready ?? undefined}
             onClick={() =>
               void ask.go<TaskAnswer>("/api/v1/operator/tasks", { kind: "metadata", paths: [path], depth: "deep" }, (v) => {
                 setTask(v.task.id);
@@ -127,6 +157,8 @@ export function MetaEditor({ path, url, title, description, titleLimit, descript
                 Follow it
               </Go>
             </>
+          ) : askedAlready ? (
+            askedAlready
           ) : answers200 ? (
             "Nothing here changes the live site: what you propose waits in AI Operator › Approvals."
           ) : (
@@ -146,7 +178,7 @@ export function MetaEditor({ path, url, title, description, titleLimit, descript
               <span className="dk-seo-optimize-result-url">{url}</span>
             </span>
           </span>
-          <span className="dk-seo-optimize-result-title">{own.trim() ? shown : "(no title)"}</span>
+          <span className="dk-seo-optimize-result-title">{changed ? (own.trim() ? shown : "(no title)") : (title ?? "(no title)")}</span>
           <span className="dk-seo-optimize-result-desc">{desc.trim() || "(no description)"}</span>
         </article>
         {changed ? <p className="dk-seo-optimize-note">Changed from what the crawl read on the live page.</p> : <p className="dk-seo-optimize-note">What the crawl read on the live page.</p>}

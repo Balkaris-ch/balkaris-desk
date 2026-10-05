@@ -7,9 +7,9 @@ import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { cx } from "@/lib/cx";
 import { num } from "@/lib/format";
-import { ActButton } from "./Act";
 import { LangMark, PRIORITY_TONE } from "./bits";
-import { actionWord } from "./RowAction";
+import { DEFAULT_RANGE, gapHref, seoHref } from "./href";
+import { RowAction } from "./RowAction";
 import "./overview.css";
 
 /**
@@ -17,9 +17,12 @@ import "./overview.css";
  * answers first, each with how much of it a page in its own language covers
  * and how many relevant phrases it holds. The board groups by industry; the
  * desk's clusters are topics, so the list is by topic, and the button asks
- * the operator for the brief of the missing page.
+ * the operator for the brief of the missing page. A brief already asked for
+ * shows "Queued" on its row (the opportunity's own state), never a second
+ * button or a bare link; a topic without a brief to ask for opens itself on
+ * SEO › Content Gaps.
  */
-export function Gaps({ reading }: { reading: Reading<GapsPanel> }) {
+export function Gaps({ reading, range = DEFAULT_RANGE, operate = true }: { reading: Reading<GapsPanel>; range?: string; operate?: boolean }) {
   const v = reading.state === "ok" ? reading.value : null;
   return (
     <Card
@@ -28,9 +31,9 @@ export function Gaps({ reading }: { reading: Reading<GapsPanel> }) {
       className="dk-seo-overview-panel dk-seo-overview-a-gaps"
       info="Clusters of real searches from the SEO audit’s keyword research, Search Console and Google Autocomplete. Coverage is the share of a cluster’s relevant phrases mapped to a page in the cluster’s own language; phrases is how many relevant phrases the cluster holds (counted, not a search volume). The site is English only, so every German cluster is a gap."
       sub={v ? `${num(v.gaps)} of ${num(v.clusters)} topics have no page · ${num(v.germanGaps)} of them German` : undefined}
-      right={v ? <LinkButton href="/seo/content-gaps" size="sm">View all</LinkButton> : null}
+      right={v ? <LinkButton href={seoHref("/seo/content-gaps", range)} size="sm">View all</LinkButton> : null}
       flush
-      footer={v ? <CardFoot href="/seo/content-gaps">View all content gaps</CardFoot> : undefined}
+      footer={v ? <CardFoot href={seoHref("/seo/content-gaps", range)}>View all content gaps</CardFoot> : undefined}
     >
       {v ? (
         <div className="dk-seo-overview-scroll">
@@ -64,10 +67,23 @@ export function Gaps({ reading }: { reading: Reading<GapsPanel> }) {
                       <span className="dk-num dk-seo-overview-cover-n">{r.coverage.of ? `${Math.round(share * 100)}%` : "—"}</span>
                     </td>
                     <td>
-                      {r.opportunityId ? (
-                        <ActButton id={r.opportunityId} label={actionWord("brief", "")} variant="quiet" title="The operator writes the brief for the missing page; a person writes and publishes it." />
+                      {r.action ? (
+                        <RowAction
+                          id={r.action.opportunityId}
+                          kind={r.action.actionKind}
+                          label={r.action.actionLabel}
+                          step={r.action.step}
+                          href={null}
+                          available={r.action.available}
+                          why={r.action.why}
+                          state={r.action.state}
+                          stateNote={r.action.stateNote}
+                          variant="quiet"
+                          range={range}
+                          operate={operate}
+                        />
                       ) : (
-                        <LinkButton href="/seo/content-gaps" size="xs" variant="quiet">
+                        <LinkButton href={gapHref(r.key, range)} size="xs" variant="quiet" aria-label={`View ${r.name} on Content Gaps`}>
                           View
                         </LinkButton>
                       )}

@@ -94,6 +94,27 @@ function pathParam(raw: string | undefined): string | null {
 }
 
 /**
+ * A part of an address (?pagepart=): "/insights/" for a section, "kosten" for
+ * every page with the word in its address. Lower case, as the site's paths
+ * are; a full address is cut to its path. Null when empty.
+ */
+function partParam(raw: string | undefined): string | null {
+  let s = (raw ?? "").trim().toLowerCase().slice(0, 80);
+  if (/^https?:\/\//.test(s)) {
+    try {
+      s = new URL(s).pathname;
+    } catch {
+      return null;
+    }
+  }
+  s = s.split(/[?#\s]/)[0] ?? "";
+  return s ? s : null;
+}
+
+/** Does a page (its path) pass the page filters: the one page, and the part of an address. */
+const pageOk = (n: { page: string | null; part: string | null }, path: string): boolean => (n.page === null || path === n.page) && (n.part === null || path.toLowerCase().includes(n.part));
+
+/**
  * What the search box asks of a query, as Search Console's own filter offers
  * it: plain words it must contain (every one), words with a minus in front it
  * must not contain ("-balkaris": everything but the brand), or, the whole box
@@ -133,11 +154,11 @@ function said(t: Terms): string {
  * page list or a page filter (without query words, which drop the withheld
  * queries anyway) is read live, where Google groups by page alone.
  */
-function liveWhy(a: Pick<ExplorerQuery, "dimension" | "country" | "q" | "page">): string | null {
+function liveWhy(a: Pick<ExplorerQuery, "dimension" | "country" | "q" | "page" | "part">): string | null {
   if (a.dimension === "country") return "Countries are read live from Search Console: the desk's daily copy keeps every country together and Switzerland alone.";
   if (a.dimension === "searchAppearance") return "Search appearance is read live from Search Console: the desk's daily copy does not keep it.";
   if (!SNAPSHOT_COUNTRIES.has(a.country)) return `${countryName(a.country)} is read live from Search Console: the desk's daily copy keeps every country together and Switzerland alone.`;
-  if ((a.dimension === "page" || a.page !== null) && !narrows(termsOf(a.q)))
+  if ((a.dimension === "page" || a.page !== null || a.part !== null) && !narrows(termsOf(a.q)))
     return "Pages are read live from Search Console: the desk's daily copy keeps pages per device, and Google leaves the impressions of withheld queries out of any answer that splits pages by device, so the copy's page figures are short.";
   return null;
 }
@@ -200,7 +221,8 @@ async function askedOf(c: Context<Vars>, paged: boolean): Promise<{ asked: Explo
   const device = (DEVICES as readonly string[]).includes(rawDevice) ? rawDevice : "all";
   const q = (r("q") ?? "").trim().replace(/\s+/g, " ").slice(0, 80);
   const page = pathParam(r("page"));
-  const source: ExplorerQuery["source"] = liveWhy({ dimension, country, q, page }) || r("source") === "live" ? "live" : "snapshots";
+  const part = partParam(r("pagepart"));
+  const source: ExplorerQuery["source"] = liveWhy({ dimension, country, q, page, part }) || r("source") === "live" ? "live" : "snapshots";
 
   /* A window by its dates when both are given and make sense; else the period's. */
   const start = r("start");
@@ -217,6 +239,9 @@ async function askedOf(c: Context<Vars>, paged: boolean): Promise<{ asked: Explo
     device,
     q,
     page,
+    part,
+    /* A page list's own filter: with any other dimension there is no address to stand against the site. */
+    offsite: dimension === "page" && r("offsite") === "1",
     sort,
     dir: r("dir") === "asc" ? "asc" : r("dir") === "desc" ? "desc" : firstDir(sort, dimension),
     offset: paged ? int(r("offset"), 0, 0, 100_000) : 0,
@@ -250,6 +275,8 @@ interface Narrow {
   /** What the query must contain, must not contain, or be. */
   terms: Terms;
   page: string | null;
+  /** What the page's address must contain. */
+  part: string | null;
 }
 
 type Group = "query" | "page" | "device" | "day" | "none";
@@ -260,7 +287,7 @@ type Group = "query" | "page" | "device" | "day" | "none";
  */
 function tableOf(group: Group, n: Narrow): string {
   const query = group === "query" || narrows(n.terms);
-  const page = group === "page" || n.page !== null;
+  const page = group === "page" || n.page !== null || n.part !== null;
   if (query && page) return "cc_seo_rank";
   if (query) return "cc_seo_rank_queries";
   if (page) return "cc_seo_rank_pages";
@@ -298,7 +325,7 @@ function whereOf(n: Narrow, start: string, end: string): { where: string[]; args
 function sums(group: Group, n: Narrow, start: string, end: string): Map<string, Sum> {
   const table = tableOf(group, n);
   const key = group === "none" ? "''" : group;
-  const withPage = n.page !== null && group !== "page";
+  const withPage = (n.page !== null || n.part !== null) && group !== "page";
   const { where, args } = whereOf(n, start, end);
   const rows = db
     .prepare(
@@ -307,9 +334,9 @@ function sums(group: Group, n: Narrow, start: string, end: string): Map<string, 
     .all(...args) as { k: string; p?: string; c: number; i: number; w: number }[];
   const out = new Map<string, Sum>();
   for (const r of rows) {
-    if (withPage && pathOf(String(r.p ?? "")) !== n.page) continue;
+    if (withPage && !pageOk(n, pathOf(String(r.p ?? "")))) continue;
     const k = group === "page" ? pathOf(String(r.k)) : String(r.k);
-    if (group === "page" && n.page !== null && k !== n.page) continue;
+    if (group === "page" && !pageOk(n, k)) continue;
     const s = out.get(k) ?? { c: 0, i: 0, w: 0 };
     add(s, { c: Number(r.c ?? 0), i: Number(r.i ?? 0), w: Number(r.w ?? 0) });
     out.set(k, s);
@@ -332,7 +359,7 @@ function tops(dimension: "query" | "page", n: Narrow, start: string, end: string
   const merged = new Map<string, { own: string; other: string; i: number; c: number }>();
   for (const r of rows) {
     const path = pathOf(r.page);
-    if (n.page !== null && path !== n.page) continue;
+    if (!pageOk(n, path)) continue;
     const own = dimension === "query" ? r.query : path;
     const other = dimension === "query" ? path : r.query;
     const k = `${own}\u0000${other}`;
@@ -399,6 +426,10 @@ function earlyOf(queries: readonly { impressions: number }[]): EarlySignals | nu
   return gsc.earlySignals({ own: queries, all: queries }, gsc.FLOOR.opportunities, EARLY_AFTER(gsc.FLOOR.opportunities));
 }
 
+/** The page filters in words, for a note: "the page /work", "addresses containing “/insights/”". */
+const pagesSaid = (a: Pick<ExplorerQuery, "page" | "part">): string =>
+  [a.page ? `the page ${a.page}` : "", a.part ? `pages whose address contains “${a.part}”` : ""].filter(Boolean).join(" among ");
+
 /** What a window cut short says of itself. */
 const cutNote = (askedEnd: string | null, end: string): string =>
   askedEnd ? `The window asked for ran to ${askedEnd}; ${end} is the newest day Google has finished counting, so the days after it are left out rather than counted as zeros.` : "";
@@ -411,7 +442,7 @@ const WITHHELD_BEFORE = (start: string, end: string): string =>
 
 function fromSnapshots(a: ExplorerQuery, span: SeoSpan, askedEnd: string | null): Reading<ExplorerResult> {
   const terms = termsOf(a.q);
-  const n: Narrow = { country: a.country as Country, device: a.device, terms, page: a.page };
+  const n: Narrow = { country: a.country as Country, device: a.device, terms, page: a.page, part: a.part };
   const byQuery = narrows(terms);
   const group: Group = a.dimension === "date" ? "day" : (a.dimension as Group);
 
@@ -442,12 +473,11 @@ function fromSnapshots(a: ExplorerQuery, span: SeoSpan, askedEnd: string | null)
       return { key, label: labelOf(a.dimension, key), ...figuresOf(s), previous, early: !!early && s.i < early.standard, top: top?.get(key) ?? null };
     });
   rows = ordered(rows, a);
-  const offset = within(a.offset, rows.length, a.limit);
 
   const notes = [HISTORY_NOTE];
   if (a.country === "che") notes.push("Searches made in Switzerland only.");
   if (a.device !== "all") notes.push(`${DEVICE_LABEL[a.device] ?? a.device} only.`);
-  if (byQuery || a.page) notes.push(`Narrowed to ${[byQuery ? said(terms) : "", a.page ? `the page ${a.page}` : ""].filter(Boolean).join(" on ")}: the figures are those of the queries Google reports, so they are lower than the totals with no filter.`);
+  if (byQuery || a.page || a.part) notes.push(`Narrowed to ${[byQuery ? said(terms) : "", pagesSaid(a)].filter(Boolean).join(" on ")}: the figures are those of the queries Google reports, so they are lower than the totals with no filter.`);
   else if (a.dimension === "query") notes.push("Query rows do not add up to the totals: Google withholds rare queries.");
   if (span.historyFrom && span.historyFrom > span.start) notes.push(`The history covers this window from ${span.historyFrom}: Google's figures for the property begin then.`);
   if (askedEnd) notes.push(cutNote(askedEnd, span.end));
@@ -465,12 +495,13 @@ function fromSnapshots(a: ExplorerQuery, span: SeoSpan, askedEnd: string | null)
       previousTotals: before ? figuresOf(before) : null,
       days: dayLine(byDay, span.start, span.end),
       total: rows.length,
-      offset,
-      rows: rows.slice(offset, offset + a.limit),
+      offset: 0,
+      rows,
       complete: true,
       note: notes.join(" "),
       early,
       topLabel: a.dimension === "query" && a.page === null ? "Top page" : a.dimension === "page" ? "Top query" : null,
+      offsite: null,
     },
     "gsc",
     historyAt(),
@@ -489,11 +520,13 @@ function liveFilters(a: ExplorerQuery): gsc.Filter[] {
   for (const w of t.words) out.push({ dimension: "query", operator: "contains", expression: w });
   for (const w of t.not) out.push({ dimension: "query", operator: "notContains", expression: w });
   if (t.exact !== null) out.push({ dimension: "query", operator: "equals", expression: t.exact });
+  const host = reEscape(new URL(siteBase()).host.replace(/^www\./, ""));
   if (a.page) {
-    const host = reEscape(new URL(siteBase()).host.replace(/^www\./, ""));
     const tail = a.page === "/" ? "/?" : `${reEscape(a.page)}/?`;
     out.push({ dimension: "page", operator: "includingRegex", expression: `^https?://(www\\.)?${host}${tail}$` });
   }
+  /* Part of the PATH, not of the whole address: "balkaris" would otherwise match every page by its host. RE2, so (?i) for the case. */
+  if (a.part) out.push({ dimension: "page", operator: "includingRegex", expression: `(?i)^https?://(www\\.)?${host}[^?#]*${reEscape(a.part)}` });
   if (a.country !== "all") out.push({ dimension: "country", operator: "equals", expression: a.country });
   if (a.device !== "all") out.push({ dimension: "device", operator: "equals", expression: a.device });
   return out;
@@ -573,7 +606,7 @@ async function fromLive(a: ExplorerQuery, range: SeoRange, span: SeoSpan | null,
   const early = queryRows && queryRows.state === "ok" ? earlyOf(queryRows.value.rows) : null;
 
   /* The top column needs the rows that carry both a query and a page: only the snapshots have them, for the countries they keep. */
-  const n: Narrow = { country: (SNAPSHOT_COUNTRIES.has(a.country) ? a.country : "all") as Country, device: a.device, terms: termsOf(a.q), page: a.page };
+  const n: Narrow = { country: (SNAPSHOT_COUNTRIES.has(a.country) ? a.country : "all") as Country, device: a.device, terms: termsOf(a.q), page: a.page, part: a.part };
   const topFor = span && SNAPSHOT_COUNTRIES.has(a.country) ? (a.dimension === "query" && a.page === null ? "query" : a.dimension === "page" ? "page" : null) : null;
   const top = topFor && span ? tops(topFor, n, start, end) : null;
 
@@ -583,16 +616,16 @@ async function fromLive(a: ExplorerQuery, range: SeoRange, span: SeoSpan | null,
     return { key, label: labelOf(a.dimension, key), ...figuresOf(s), previous, early: !!early && s.i < early.standard, top: top?.get(key) ?? null };
   });
   rows = ordered(rows, a);
-  const offset = within(a.offset, rows.length, a.limit);
 
   const notes = [rowsNow.note ?? "", liveWhy(a) ?? "Read live from Search Console, as asked.", "Each answer is kept six hours."];
   if (a.country === "che") notes.push("Searches made in Switzerland only.");
   if (a.device !== "all") notes.push(`${DEVICE_LABEL[a.device] ?? a.device} only.`);
   if (a.dimension === "searchAppearance") notes.push("Only results Google shows in a special form (rich results, videos, FAQ and the like) have a search appearance; plain results are in none of these rows.");
   if (a.dimension === "country") notes.push("The country is the searcher's, as Google reads it.");
+  if (a.page || a.part) notes.push(`Narrowed to ${pagesSaid(a)}.`);
   if (byQuery) notes.push("Narrowed by query words: the figures are those of the queries Google reports.");
   else if (a.dimension === "query") notes.push("Query rows do not add up to the totals: Google withholds rare queries.");
-  const pages = a.dimension === "page" || a.page !== null;
+  const pages = a.dimension === "page" || a.page !== null || a.part !== null;
   const split = a.dimension === "device" || a.dimension === "country" || a.device !== "all" || a.country !== "all";
   if (pages && split && !byQuery) notes.push("Google leaves the impressions of withheld queries out when pages are combined with a device or a country, so these page figures can be lower than the same page's figures without that filter.");
   if (askedEnd) notes.push(cutNote(askedEnd, end));
@@ -612,12 +645,13 @@ async function fromLive(a: ExplorerQuery, range: SeoRange, span: SeoSpan | null,
       previousTotals: beforeTotal ? figuresOf(beforeTotal) : null,
       days: liveDays(byDay, start, end, span?.historyFrom ?? null),
       total: rows.length,
-      offset,
-      rows: rows.slice(offset, offset + a.limit),
+      offset: 0,
+      rows,
       complete: rowsNow.value.complete,
       note: notes.filter(Boolean).join(" "),
       early,
       topLabel: topFor === "query" ? "Top page" : topFor === "page" ? "Top query" : null,
+      offsite: null,
     },
     "gsc",
     rowsNow.asOf,
@@ -708,26 +742,52 @@ function standingOf(path: string, site: SiteView, indexed: Map<string, boolean>)
   return { state: p.inSitemap ? "listed" : "not-listed", to: null, indexed: inIndex };
 }
 
-/** The page rows of a result with what the website has at each address. Other dimensions pass through. */
-function withStanding(result: Reading<ExplorerResult>, dimension: ExplorerDimension, stand: Reading<gsc.IndexStand>): Reading<ExplorerResult> {
-  if (result.state !== "ok" || dimension !== "page") return result;
-  let site: SiteView;
+/** The crawl's view of the site, or null when it cannot be read. */
+function siteOrNull(): SiteView | null {
   try {
-    site = view();
+    return view();
   } catch {
-    return result;
+    return null;
   }
-  const indexed = new Map<string, boolean>(stand.state === "ok" ? stand.value.rows.map((r) => [r.path, r.indexed]) : []);
-  return {
-    ...result,
-    value: {
-      ...result.value,
-      rows: result.value.rows.map((row) => {
+}
+
+/** An address the website no longer has as a page: what ?offsite=1 keeps. */
+const offSite = (s: PageStanding | undefined): boolean => !!s && (s.state === "redirects" || s.state === "gone" || s.state === "unknown");
+
+/**
+ * The rows as listed: for the Pages list, each address set against the
+ * website (and, asked, only those it no longer has), then the page of the
+ * list that was asked, an offset past the end brought back to the last page.
+ * Standing and the filter come BEFORE paging, so "Not on the site" counts and
+ * pages the whole list, not the 25 rows on screen. `paged` false: every row
+ * (the export).
+ */
+function listedRows(result: Reading<ExplorerResult>, a: ExplorerQuery, stand: Reading<gsc.IndexStand>, paged: boolean): Reading<ExplorerResult> {
+  if (result.state !== "ok") return result;
+  let rows = result.value.rows;
+  let offsite: number | null = null;
+  let note = result.value.note;
+  if (a.dimension === "page") {
+    const site = siteOrNull();
+    if (site && site.pages.length) {
+      const indexed = new Map<string, boolean>(stand.state === "ok" ? stand.value.rows.map((r) => [r.path, r.indexed]) : []);
+      rows = rows.map((row) => {
         const standing = standingOf(row.key, site, indexed);
         return standing ? { ...row, site: standing } : row;
-      }),
-    },
-  };
+      });
+      offsite = rows.filter((r) => offSite(r.site)).length;
+    }
+    if (a.offsite) {
+      rows = rows.filter((r) => offSite(r.site));
+      note = `${note} ${
+        offsite === null
+          ? "The desk's crawler has not read the website yet, so it cannot tell which addresses the site no longer has: nothing is listed."
+          : "Listed: only the addresses the website no longer has as a page (it redirects, answered 404 or 410, or the crawl knows no page there). The figures above are every page's."
+      }`;
+    }
+  }
+  const offset = paged ? within(a.offset, rows.length, a.limit) : 0;
+  return { ...result, value: { ...result.value, note, offsite, total: rows.length, offset, rows: paged ? rows.slice(offset, offset + a.limit) : rows } };
 }
 
 /* ---------- sitemaps, history ---------------------------------------------------------------- */
@@ -747,6 +807,19 @@ function listedOf(): SeoSearchConsolePayload["listed"] {
     return null;
   }
 }
+
+/** The paths the website's sitemap lists by the desk's own last read of it: which inspected addresses are the sitemap's. Null before the first read. */
+function sitemapPaths(): Set<string> | null {
+  try {
+    const s = lastSitemap();
+    return s && s.entries.length ? new Set(s.entries.map((e) => e.path)) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Where Google has each sitemap address: the newest result the desk holds for each (gsc.ts indexStand). */
+const standing = (): Promise<Reading<gsc.IndexStand>> => reading("gsc", () => gsc.indexStand(sitemapPaths()));
 
 /** The desk's own last read of the website's sitemap (src/cc/site/sitemap.ts), or null before the first. */
 function ownSitemapOf(): SeoSearchConsolePayload["ownSitemap"] {
@@ -910,10 +983,10 @@ routes.get("/", async (c) => {
     explore(asked, range, window, LIVE_ROWS),
     sitemapsOf(),
     optionsOf(range, window.span, asked).catch((): ExplorerOptions => ({ pages: [], countries: [{ key: "all", label: "All countries", impressions: null, live: false }], brand: brandWord(), days: null })),
-    reading("gsc", () => gsc.indexStand()),
+    standing(),
   ]);
   const inspection = await inspectionOf(inspectionAsked, stand).catch((e: unknown) => ({ table: waiting<InspectionTable>("gsc", failed(e)), asked: inspectionAsked }));
-  const result = withStanding(explored, asked.dimension, stand);
+  const result = listedRows(explored, asked, stand, true);
   /* What the result was really read for: a live answer may carry Search Console's own window, and an offset past the end is the last page. */
   const answered: ExplorerQuery = result.state === "ok" ? { ...asked, start: result.value.start, end: result.value.end, source: result.value.source, offset: result.value.offset } : asked;
   return c.json<SeoSearchConsolePayload>({
@@ -950,12 +1023,13 @@ routes.get("/export.csv", async (c) => {
   const { asked, range, window } = await askedOf(c, false);
   const explored = await explore(asked, range, window, LIVE_ROWS);
   if (explored.state !== "ok") return c.json({ error: `There is nothing to export: ${explored.reason}` }, 409);
-  const got = asked.dimension === "page" ? withStanding(explored, "page", await reading("gsc", () => gsc.indexStand())) : explored;
+  const stand: Reading<gsc.IndexStand> = asked.dimension === "page" ? await standing() : waiting("gsc", "Not read for this export.");
+  const got = listedRows(explored, asked, stand, false);
   if (got.state !== "ok") return c.json({ error: "There is nothing to export." }, 409);
   const r = got.value;
   /* A day has no window before, so the Dates export carries no empty "before" columns. */
   const before = r.previous && asked.dimension !== "date" ? `${r.previous.start} to ${r.previous.end}` : null;
-  const standing = asked.dimension === "page" && r.rows.some((x) => x.site);
+  const withSite = asked.dimension === "page" && r.rows.some((x) => x.site);
   const headRow = [
     HEAD[asked.dimension],
     ...(asked.dimension === "country" ? ["Code"] : []),
@@ -965,7 +1039,7 @@ routes.get("/export.csv", async (c) => {
     "Average position",
     ...(before ? [`Clicks before (${before})`, "Impressions before", "Average position before"] : []),
     ...(r.topLabel ? [r.topLabel] : []),
-    ...(standing ? ["On the website", "In Google's index"] : []),
+    ...(withSite ? ["On the website", "In Google's index"] : []),
   ];
   const lines = [headRow.map(cell).join(",")];
   for (const x of r.rows) {
@@ -979,13 +1053,22 @@ routes.get("/export.csv", async (c) => {
         x.position ?? "",
         ...(before ? [x.previous?.clicks ?? "", x.previous?.impressions ?? "", x.previous?.position ?? ""] : []),
         ...(r.topLabel ? [x.top ?? ""] : []),
-        ...(standing ? [x.site ? STANDING[x.site.state] : "", x.site?.indexed == null ? "" : x.site.indexed ? "yes" : "no"] : []),
+        ...(withSite ? [x.site ? STANDING[x.site.state] : "", x.site?.indexed == null ? "" : x.site.indexed ? "yes" : "no"] : []),
       ]
         .map(cell)
         .join(","),
     );
   }
-  const narrowed = [asked.country !== "all" ? asked.country : "", asked.device !== "all" ? asked.device.toLowerCase() : "", asked.q ? "filtered" : "", asked.page ? "page" : ""].filter(Boolean).join("-");
+  const narrowed = [
+    asked.country !== "all" ? asked.country : "",
+    asked.device !== "all" ? asked.device.toLowerCase() : "",
+    asked.q ? "filtered" : "",
+    asked.page ? "page" : "",
+    asked.part ? "section" : "",
+    asked.offsite ? "off-site" : "",
+  ]
+    .filter(Boolean)
+    .join("-");
   c.header("content-type", "text/csv; charset=utf-8");
   c.header("content-disposition", `attachment; filename="balkaris-search-console-${asked.dimension}-${r.start}-${r.end}${narrowed ? `-${narrowed}` : ""}.csv"`);
   c.header("cache-control", "no-store");
@@ -993,4 +1076,4 @@ routes.get("/export.csv", async (c) => {
 });
 
 /* For the check (scripts/check-cc-seo-search-console.ts): the pure parts. */
-export const parts = { tableOf, liveFilters, ordered, labelOf, pathParam, firstDir, termsOf, within, standingOf, liveDays };
+export const parts = { tableOf, liveFilters, ordered, labelOf, pathParam, partParam, firstDir, termsOf, within, standingOf, liveDays };

@@ -1,4 +1,5 @@
 import type { NewTask } from "@/contract/operator";
+import type { NapTruth } from "@/contract/seo/backlinks";
 import type { OwnerTaskRow } from "@/contract/seo/common";
 import { Chip } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
@@ -47,8 +48,14 @@ const DRAFT: NewTask = {
  * first, each with its exact step, its impact and effort as the audit judged
  * them, and "Mark done", which a person presses when it is done. Never a
  * button that pretends to take the step. ?task= opens one.
+ *
+ * Every step stays listed once it is done, so a mistaken last "Mark done"
+ * can be opened again here and a ?task= link still lands on its row. The
+ * decision about the one true name, address and phone is marked done with
+ * the values the owner recorded as its note, so the decision says what was
+ * decided.
  */
-export function NeedsYou({ tasks, open }: { tasks: OwnerTaskRow[]; open: string | null }) {
+export function NeedsYou({ tasks, open, truth }: { tasks: OwnerTaskRow[]; open: string | null; truth: NapTruth | null }) {
   const todo = tasks.filter((t) => !t.done);
   const done = tasks.filter((t) => t.done);
   return (
@@ -70,7 +77,12 @@ export function NeedsYou({ tasks, open }: { tasks: OwnerTaskRow[]; open: string 
       }
     >
       {tasks.length ? (
-        todo.length ? (
+        <>
+          {todo.length ? null : (
+            <Empty icon="check-circle" title="Nothing about profiles waits for you" compact>
+              Every step here is marked done. The weekly check keeps reading the profiles; a step marked by mistake can be opened again below.
+            </Empty>
+          )}
           <ol className="dk-seo-bl-needlist">
             {[...todo, ...done].map((t) => (
               <li key={t.id} id={taskAnchor(t.id)} className={cx("dk-seo-bl-need", t.done && "dk-seo-bl-need--done")}>
@@ -86,6 +98,7 @@ export function NeedsYou({ tasks, open }: { tasks: OwnerTaskRow[]; open: string 
                   <div className="dk-seo-bl-need-body">
                     <Step text={t.step} />
                     {t.why ? <p className="dk-seo-bl-need-why">Why: {t.why}</p> : null}
+                    {t.note ? <p className="dk-seo-bl-need-why">Note: {t.note}</p> : null}
                     <p className="dk-seo-bl-quiet">
                       {t.from}
                       {t.opportunities ? ` · ${num(t.opportunities)} opportunit${t.opportunities === 1 ? "y waits" : "ies wait"} on it` : ""}
@@ -93,15 +106,11 @@ export function NeedsYou({ tasks, open }: { tasks: OwnerTaskRow[]; open: string 
                     </p>
                   </div>
                 </details>
-                <MarkDone id={t.id} done={t.done} />
+                <MarkDone id={t.id} done={t.done} note={t.id === "nap-decision" && truth ? `Agreed: ${[truth.name, truth.address, truth.phone].filter(Boolean).join(" · ")}` : null} />
               </li>
             ))}
           </ol>
-        ) : (
-          <Empty icon="check-circle" title="Nothing about profiles waits for you" compact>
-            Every step here is marked done. The weekly check keeps reading the profiles.
-          </Empty>
-        )
+        </>
       ) : (
         <Empty icon="inbox" title="No owner step is recorded yet" compact>
           The steps come in with the SEO audit’s import.

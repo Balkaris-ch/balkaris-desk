@@ -96,18 +96,19 @@ export default async function SeoPageOptimizationPage({ searchParams }: { search
                     <PerformancePanel data={data} />
                     <PotentialPanel reading={data.potential} data={data} path={path} range={keep} />
                   </div>
-                  <QuickActions actions={data.quick} runnerLine={data.operator.runner.line} />
-                  {serp ? <SearchPreview serp={serp} crawl={crawl} query={topQuery} editHref={optimizeHref(path, keep, "optimize")} /> : null}
+                  {/* Keyed by the page: what one page's buttons and boxes hold never stays on the next page opened. */}
+                  <QuickActions key={path} actions={data.quick} runnerLine={data.operator.runner.line} />
+                  {serp ? <SearchPreview key={path} serp={serp} crawl={crawl} query={topQuery} editHref={optimizeHref(path, keep, "optimize")} /> : null}
                   <CompetitorsPanel data={data} />
                 </>
               ) : tab === "optimize" ? (
-                <OptimizeView data={data} />
+                <OptimizeView key={path} data={data} />
               ) : tab === "keywords" ? (
                 <KeywordsView data={data} />
               ) : tab === "content" ? (
                 <ContentView data={data} />
               ) : tab === "links" ? (
-                <LinksView data={data} />
+                <LinksView data={data} range={keep} />
               ) : tab === "technical" ? (
                 <TechnicalView data={data} />
               ) : (
@@ -125,7 +126,7 @@ export default async function SeoPageOptimizationPage({ searchParams }: { search
 
         {path && data.page.state === "ok" ? (
           <div className="dk-seo-optimize-aside">
-            <OperatorColumn operator={data.operator} suggestions={data.suggestions} asked={data.asked} proposals={data.proposals} path={path} />
+            <OperatorColumn key={path} operator={data.operator} suggestions={data.suggestions} asked={data.asked} proposals={data.proposals} path={path} />
           </div>
         ) : null}
       </div>

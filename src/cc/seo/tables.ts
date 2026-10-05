@@ -621,3 +621,23 @@ for (const [column, type] of [
 /* The result itself beside a sighting read from a result page: its title and its address. */
 addColumn("cc_seo_sightings", "title", "TEXT");
 addColumn("cc_seo_sightings", "url", "TEXT");
+
+/* SEO › Competitors: a person's word on who is a competitor (watch, ignore, platform or studio, the same
+   company as another key), and a captured search filed under a cluster by hand (cluster NULL = under none). */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS cc_seo_comp_decisions (
+    domain      TEXT PRIMARY KEY,
+    watch       INTEGER NOT NULL DEFAULT 0,
+    ignore      INTEGER NOT NULL DEFAULT 0,
+    kind        TEXT,
+    merged_into TEXT,
+    by          TEXT NOT NULL,
+    at          TEXT NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS cc_seo_comp_filing (
+    query   TEXT PRIMARY KEY,
+    cluster TEXT,
+    by      TEXT NOT NULL,
+    at      TEXT NOT NULL
+  );
+`);

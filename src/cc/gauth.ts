@@ -12,6 +12,11 @@ import { readFileSync } from "node:fs";
  * property and (once Fini adds it) a user on the Search Console property. It
  * has no project roles and can change nothing anywhere. The key file is on the
  * box at /opt/balkaris-desk/ga4.json and is never in this repository.
+ *
+ * ONE WRITE, SINCE 5 OCTOBER 2026. The account is a Full user of the Search
+ * Console property, and `searchConsoleWrite` below is asked for only when a
+ * person presses "Submit to Google" for one of the website's own sitemaps
+ * (src/cc/seo/google-actions.ts). Every read still uses a read-only token.
  */
 
 export const SCOPES = {

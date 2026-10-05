@@ -238,13 +238,19 @@ async function post<T>(o: FetchWork, path: string, body: unknown): Promise<T> {
  * taken (fetched or refused), false when there was none or the door did not
  * answer. Never throws.
  */
+/** The last "no task" reason said: a box without the door answers 404 every twenty seconds, and once in the log is enough. */
+let lastQuiet = "";
+
 export async function fetchOnce(o: FetchWork): Promise<boolean> {
   const say = o.log ?? ((line: string) => console.log(line));
   let t: FetchTask | null;
   try {
     t = (await post<{ task: FetchTask | null }>(o, "/fetch/next", { name: o.name })).task;
+    lastQuiet = "";
   } catch (e) {
-    say(`fetch: no task this time (${e instanceof Error ? e.message : String(e)})`);
+    const why = e instanceof Error ? e.message : String(e);
+    if (why !== lastQuiet) say(`fetch: no task this time (${why}${/ 404$/.test(why) ? ": the desk runs a build without the fetch door" : ""})`);
+    lastQuiet = why;
     return false;
   }
   if (!t || typeof t.id !== "number") return false;

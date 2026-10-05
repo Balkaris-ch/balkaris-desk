@@ -1,6 +1,6 @@
 "use server";
 
-import type { NewTask, TaskAnswer } from "@/contract/operator";
+import type { NewTask, ProposalAnswer, TaskAnswer } from "@/contract/operator";
 import { askPost } from "@/lib/api";
 
 export type Queued = { ok: true; id: number; title: string } | { ok: false; message: string };
@@ -35,4 +35,22 @@ export async function queueTask(task: NewTask): Promise<Queued> {
   }
   const a = await askPost<TaskAnswer>("/api/v1/operator/tasks", clean);
   return a.ok ? { ok: true, id: a.value.task.id, title: a.value.task.title } : { ok: false, message: a.message };
+}
+
+export type Proposed = { ok: true; id: number; line: string } | { ok: false; message: string };
+
+/**
+ * An address the website no longer has, which Google still counts: propose a
+ * redirect from it to a live page (POST /api/v1/operator/proposals, the AI
+ * Operator's own door). It waits in AI Operator › Approvals; nothing reaches
+ * the website until a person approves it. The desk server applies its own
+ * rules (not from a live page, not to a dead one) and says why when it refuses.
+ */
+export async function proposeRedirect(from: string, to: string): Promise<Proposed> {
+  const f = typeof from === "string" ? from.trim() : "";
+  const t = typeof to === "string" ? to.trim() : "";
+  if (!PATH.test(f)) return { ok: false, message: "That is not an address of the website to redirect from." };
+  if (!PATH.test(t)) return { ok: false, message: "Give the page to send it to as an address of the website, such as /about." };
+  const a = await askPost<ProposalAnswer>("/api/v1/operator/proposals", { from: f, to: t });
+  return a.ok ? { ok: true, id: a.value.proposal.id, line: `A redirect from ${a.value.proposal.address} to ${a.value.proposal.after.to ?? t} waits for approval (#${a.value.proposal.id}).` } : { ok: false, message: a.message };
 }

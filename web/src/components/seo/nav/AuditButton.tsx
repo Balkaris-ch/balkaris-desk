@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import type { JobListed } from "@/contract/common";
@@ -10,6 +11,7 @@ import { useLive } from "@/lib/live";
 import { buttonClass } from "@/components/ui/Button";
 import { Icon } from "@/components/ui/icons";
 import { runFullAudit } from "./actions";
+import { AUDITS_HREF, auditHref } from "./pages";
 
 /** A job of the audit that was already running when the page was drawn: its start, on the desk server's clock. */
 export interface RunningStep {
@@ -48,7 +50,8 @@ type Phase =
   | { kind: "idle" }
   | { kind: "asking" }
   | { kind: "watching"; source: Source; crawlOnly: boolean }
-  | { kind: "over"; line: string; tone: "good" | "warn" }
+  /* `href`: the audit's own page (what it ran and what it found), when the desk keeps a record of it. */
+  | { kind: "over"; line: string; tone: "good" | "warn"; href?: string }
   | { kind: "refused"; message: string };
 
 const EVERY = 2_000;
@@ -146,7 +149,7 @@ function endLine(seen: StepView[], crawlOnly: boolean): { line: string; tone: "g
   /* Skipped for the reason the desk gave (fresh enough, not connected, switched off): one is named, several counted. */
   const skipped = seen.filter((s) => s.where === "skipped");
   const one = skipped.length === 1 && skipped[0]!.note ? ` (${skipped[0]!.title}: ${skipped[0]!.note})` : "";
-  return { line: `Audit finished at ${at}: ${done} ${done === 1 ? "step" : "steps"} run${skipped.length ? `, ${skipped.length} skipped${one}` : ""}. The pages show what it found.`, tone: "good" };
+  return { line: `Audit finished at ${at}: ${done} ${done === 1 ? "step" : "steps"} run${skipped.length ? `, ${skipped.length} skipped${one}` : ""}.`, tone: "good" };
 }
 
 /**
@@ -169,6 +172,17 @@ export function AuditButton({ audit, running }: { audit: AuditRun | null; runnin
   const [seen, setSeen] = useState<{ steps: StepView[]; over: boolean } | null>(() => (audit ? { steps: stepsOf(audit), over: false } : null));
   const [, start] = useTransition();
   const since = useRef(Date.now());
+
+  /* An audit started elsewhere (the list of audits, another person) while this page is open: the layout,
+     drawn again, hands it over running, and the button follows it as if it had been pressed here. */
+  const followed = useRef(audit?.id ?? null);
+  useEffect(() => {
+    if (!audit || audit.id === followed.current || phase.kind === "asking" || phase.kind === "watching") return;
+    followed.current = audit.id;
+    since.current = Date.now();
+    setPhase({ kind: "watching", source: { kind: "run", id: audit.id, steps: [] }, crawlOnly: false });
+    setSeen({ steps: stepsOf(audit), over: false });
+  }, [audit, phase.kind]);
 
   const ask = () => {
     if (phase.kind === "asking" || phase.kind === "watching") return;
@@ -210,10 +224,18 @@ export function AuditButton({ audit, running }: { audit: AuditRun | null; runnin
   useEffect(() => {
     if (phase.kind !== "watching" || !seen) return;
     if (seen.over) {
-      setPhase({ kind: "over", ...endLine(seen.steps, phase.crawlOnly) });
+      setPhase({ kind: "over", ...endLine(seen.steps, phase.crawlOnly), ...(phase.source.kind === "run" ? { href: auditHref(phase.source.id) } : {}) });
       router.refresh();
     } else if (Date.now() - since.current > PATIENCE) {
-      setPhase({ kind: "over", line: "Still running after half an hour. It carries on; come back to this page later for what it found.", tone: "warn" });
+      setPhase({
+        kind: "over",
+        line:
+          phase.source.kind === "run"
+            ? "Still running after half an hour. It carries on; its own page follows it to the end."
+            : "Still running after half an hour. It carries on; come back to this page later for what it found.",
+        tone: "warn",
+        ...(phase.source.kind === "run" ? { href: auditHref(phase.source.id) } : {}),
+      });
     }
   }, [seen, phase, router]);
 
@@ -248,6 +270,17 @@ export function AuditButton({ audit, running }: { audit: AuditRun | null; runnin
       <p id="dk-seo-nav-said" className={cx("dk-seo-nav-said", line && `dk-seo-nav-said--${line.tone}`)} role="status" title={line?.text}>
         {line?.text ?? ""}
       </p>
+      {/* Its own line, so the two-line clamp on the sentence above can never hide it. At rest, the way to
+          the audits kept (what each ran and found, and the deep audit). */}
+      {phase.kind === "over" && phase.href ? (
+        <Link href={phase.href} prefetch={false} className="dk-seo-nav-said-link">
+          What the audit found
+        </Link>
+      ) : phase.kind === "idle" ? (
+        <Link href={AUDITS_HREF} prefetch={false} className="dk-seo-nav-said-link dk-seo-nav-said-link--quiet">
+          Past audits
+        </Link>
+      ) : null}
       {phase.kind === "watching" && phase.source.kind === "jobs" ? <WatchJobs steps={phase.source.steps} onSeen={onSeen} /> : null}
       {phase.kind === "watching" && phase.source.kind === "run" ? <WatchRun id={phase.source.id} onSeen={onSeen} onMissing={onMissing} /> : null}
     </div>

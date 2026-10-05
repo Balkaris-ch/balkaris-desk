@@ -3,6 +3,7 @@ import type { SeoSearchConsolePayload, SitemapRow } from "@/contract/seo/search-
 import { Chip } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Go } from "@/components/ui/Go";
 import { Stamp } from "@/components/ui/Stamp";
 import { PanelAbsent } from "@/components/seo/bits";
 import { ago, fullDate, num } from "@/lib/format";
@@ -25,21 +26,77 @@ function SitemapState({ s }: { s: SitemapRow }) {
 }
 
 /**
+ * The desk's own last read of the website's sitemap (every fifteen minutes):
+ * what the file answered and what is wrong with it as far as the desk checks.
+ * Google's API counts a sitemap's errors and never says what they are, so this
+ * is the nearest the desk can come to saying it, with the Technical tab for
+ * the whole of it.
+ */
+function OwnRead({ own }: { own: NonNullable<SeoSearchConsolePayload["ownSitemap"]> }) {
+  return (
+    <div className="dk-seo-gsc-map dk-seo-gsc-own">
+      <div className="dk-seo-gsc-map-head">
+        <p className="dk-seo-gsc-map-path">The desk’s own read</p>
+        {own.status !== 200 ? (
+          <Chip tone="bad">{own.status ? `Answered ${own.status}` : "Not answering"}</Chip>
+        ) : own.issues.length ? (
+          <Chip tone="warn">
+            {num(own.issues.length)} {own.issues.length === 1 ? "problem" : "problems"}
+          </Chip>
+        ) : (
+          <Chip tone="good">No problem found</Chip>
+        )}
+      </div>
+      <p className="dk-seo-gsc-own-said">
+        Read <time dateTime={own.at} suppressHydrationWarning>{ago(own.at)}</time>
+        {own.status === 200 ? "" : `, and the website ${own.status ? `answered ${own.status}` : "did not answer"}`}: {num(own.addresses)} {own.addresses === 1 ? "address" : "addresses"}
+        {own.entriesAt ? ` as the file was last read whole, ${ago(own.entriesAt)}` : ""}
+        {own.issues.length ? ":" : "."}
+      </p>
+      {own.issues.length ? (
+        <ul className="dk-seo-gsc-own-issues">
+          {own.issues.map((i) => (
+            <li key={i}>{i}</li>
+          ))}
+        </ul>
+      ) : null}
+      <Go href="/seo/technical" className="dk-seo-gsc-own-link">
+        Every check of the sitemap on Technical
+      </Go>
+    </div>
+  );
+}
+
+/**
  * The sitemaps Search Console knows for the property and what it made of
  * each (Search Console's Sitemaps report, read through its API), set beside
- * the desk's own count of the addresses the website's sitemap lists today.
+ * the desk's own count of the addresses the website's sitemap lists (beside
+ * that one file only) and the desk's own read of it.
  */
-export function Sitemaps({ reading, listed, href }: { reading: SeoSearchConsolePayload["sitemaps"]; listed: SeoSearchConsolePayload["listed"]; href: string | null }) {
+export function Sitemaps({
+  reading,
+  listed,
+  own,
+  href,
+}: {
+  reading: SeoSearchConsolePayload["sitemaps"];
+  listed: SeoSearchConsolePayload["listed"];
+  own: SeoSearchConsolePayload["ownSitemap"];
+  href: string | null;
+}) {
   return (
     <Card
       title="Sitemaps"
       icon="sitemap"
       className="dk-seo-gsc-sitemaps"
-      info="The sitemaps submitted to Search Console, when Google last read each, how many addresses it found in it and the errors and warnings it reported. Read through Search Console's API; the desk's own count of the addresses the website's sitemap lists is from its daily index check."
+      info="The sitemaps submitted to Search Console, when Google last read each, how many addresses it found in it and the errors and warnings it reported. Read through Search Console's API, which gives the number of errors but not what they are; Search Console's own Sitemaps report (Open) shows them. Beside the website's own sitemap: the desk's count of the addresses it lists, from the daily index check, and the desk's own read of the file."
       right={href ? <LinkButton href={href} size="sm" iconRight="external">Open</LinkButton> : null}
     >
       {reading.state !== "ok" ? (
-        <PanelAbsent reading={reading} />
+        <>
+          <PanelAbsent reading={reading} />
+          {own ? <OwnRead own={own} /> : null}
+        </>
       ) : (
         <div className="dk-seo-gsc-maps">
           {reading.value.map((s) => (
@@ -55,7 +112,12 @@ export function Sitemaps({ reading, listed, href }: { reading: SeoSearchConsoleP
                   <dt>Addresses Google found</dt>
                   <dd className="dk-num">
                     {num(s.submitted)}
-                    {listed ? <span className="dk-seo-gsc-facts-of"> · the site lists {num(listed.addresses)}</span> : null}
+                    {listed && fileOf(s.path) === listed.file ? (
+                      <span className="dk-seo-gsc-facts-of" title={`The desk counted ${num(listed.addresses)} addresses in this file at its index check on ${fullDate(listed.day)}.`}>
+                        {" "}
+                        · the site lists {num(listed.addresses)}
+                      </span>
+                    ) : null}
                   </dd>
                 </div>
                 <div>
@@ -73,8 +135,14 @@ export function Sitemaps({ reading, listed, href }: { reading: SeoSearchConsoleP
                   </dd>
                 </div>
               </dl>
+              {s.errors > 0 || s.warnings > 0 ? (
+                <p className="dk-seo-gsc-map-said">
+                  Google’s API gives how many, not what they are: {href ? <Go href={href}>Search Console’s Sitemaps report</Go> : "Search Console’s Sitemaps report"} names them.
+                </p>
+              ) : null}
             </div>
           ))}
+          {own ? <OwnRead own={own} /> : null}
           <Stamp reading={reading} />
         </div>
       )}

@@ -41,3 +41,18 @@ export const pageHref = (path: string, range = DEFAULT_RANGE): string => seoHref
 
 /** SEO › Keywords filtered to one phrase: where a query of this page opens. */
 export const keywordHref = (phrase: string, range = DEFAULT_RANGE): string => seoHref(`/seo/keywords?q=${encodeURIComponent(phrase)}`, range);
+
+/** One cluster opened on SEO › Content Gaps, in its clusters view (whose groups are the clusters themselves). */
+export const gapHref = (key: string, range = DEFAULT_RANGE): string => seoHref(`/seo/content-gaps?view=clusters&open=${encodeURIComponent(key)}`, range);
+
+/**
+ * SEO › Opportunities showing what one chip of Priority Opportunities shows:
+ * its types and its priority, as that page reads them (?type=a,b&priority=high).
+ */
+export function opportunitiesHref(f: { types: readonly string[] | null; priority: string | null }, range = DEFAULT_RANGE): string {
+  const p = new URLSearchParams();
+  if (f.types?.length) p.set("type", f.types.join(","));
+  if (f.priority) p.set("priority", f.priority);
+  const q = p.toString();
+  return seoHref(`/seo/opportunities${q ? `?${q}` : ""}`, range);
+}

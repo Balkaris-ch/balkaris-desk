@@ -1,0 +1,426 @@
+/*
+ * Google and the other search engines (components/seo/google/): the panel on
+ * SEO › Technical and the buttons other tabs may import. Every class starts
+ * dk-seo-google-; every value is a token from styles/tokens.css, or one of
+ * the sizes named here. They are named on every root these parts can have:
+ * the panel, and a button or form another tab draws on its own.
+ */
+
+.dk-seo-google,
+.dk-seo-google-act,
+.dk-seo-google-form-wrap {
+  --dk-seo-google-side-w: 420px;   /* sitemaps and IndexNow beside the queue, at full width */
+  --dk-seo-google-list-h: 520px;   /* the queue scrolls inside the panel past this */
+  --dk-seo-google-field-w: 360px;  /* an address typed in */
+  --dk-seo-google-key-w: 104px;    /* the names in Google's answer: "Rich results" */
+}
+
+.dk-seo-google {
+  container-type: inline-size;
+}
+
+.dk-seo-google-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x12);
+  min-width: 0;
+}
+
+.dk-seo-google-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, var(--dk-seo-google-side-w));
+  gap: var(--x24);
+  align-items: start;
+}
+
+.dk-seo-google-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x20);
+  min-width: 0;
+}
+
+.dk-seo-google-queue {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x8);
+  min-width: 0;
+}
+
+.dk-seo-google-h3 {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin: 0 0 var(--x6);
+  color: var(--ink);
+  font-size: var(--t-body);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-google-h3-n {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-regular);
+}
+
+.dk-seo-google-quiet,
+.dk-seo-google-line {
+  margin: 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-google-line {
+  color: var(--ink-2);
+}
+
+.dk-seo-google-quiet-inline {
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+/* Whether the website answers: green when it does, amber when the look is old, red when it does not. */
+.dk-seo-google-site {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--x8);
+  margin: 0;
+  padding: var(--x8) var(--x10);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-google-site > svg {
+  flex: none;
+  margin-top: var(--x2);
+}
+
+.dk-seo-google-site--ok > svg {
+  color: var(--green);
+}
+
+.dk-seo-google-site--stale {
+  border-color: var(--amber-edge);
+  background: var(--amber-ground);
+}
+
+.dk-seo-google-site--stale > svg {
+  color: var(--amber);
+}
+
+.dk-seo-google-site--bad {
+  border-color: var(--red-edge);
+  background: var(--red-ground);
+  color: var(--ink);
+}
+
+.dk-seo-google-site--bad > svg {
+  color: var(--red);
+}
+
+/* ---------- rows: the queue and the sitemaps ---------- */
+
+.dk-seo-google-rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-google-queue > .dk-seo-google-rows {
+  max-height: var(--dk-seo-google-list-h);
+  overflow-y: auto;
+}
+
+.dk-seo-google-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: var(--x10);
+  padding: var(--x8) 0;
+  border-top: var(--x1) solid var(--line);
+}
+
+.dk-seo-google-row--done .dk-seo-google-path {
+  color: var(--ink-3);
+}
+
+.dk-seo-google-row-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-google-path {
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: var(--t-small);
+  overflow-wrap: anywhere;
+}
+
+a.dk-seo-google-path:hover {
+  color: var(--green);
+}
+
+.dk-seo-google-row-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x6);
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+.dk-seo-google-row-acts {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-google-links {
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-google-links--good {
+  color: var(--ink-3);
+}
+
+.dk-seo-google-links--warn {
+  color: var(--amber);
+}
+
+.dk-seo-google-links--bad {
+  color: var(--red);
+}
+
+.dk-seo-google-ext {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  white-space: nowrap;
+}
+
+.dk-seo-google-ext:hover {
+  color: var(--green);
+}
+
+.dk-seo-google-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin: var(--x6) 0 0;
+}
+
+.dk-seo-google-more > summary {
+  padding: var(--x6) 0;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  cursor: pointer;
+}
+
+.dk-seo-google-paths {
+  margin: 0;
+  padding: 0 0 var(--x6);
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  overflow-wrap: anywhere;
+}
+
+.dk-seo-google-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x8);
+  margin: var(--x8) 0;
+}
+
+/* ---------- a button and its sentence ---------- */
+
+.dk-seo-google-act {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--x4);
+  min-width: 0;
+}
+
+.dk-seo-google-said {
+  max-width: var(--tip-w);
+  margin: 0;
+  color: var(--green);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+  text-align: right;
+}
+
+.dk-seo-google-said--bad {
+  color: var(--red);
+}
+
+.dk-seo-google-form-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  min-width: 0;
+}
+
+.dk-seo-google-form {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  max-width: var(--dk-seo-google-field-w);
+}
+
+.dk-seo-google-form .dk-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.dk-seo-google-form-wrap > .dk-seo-google-said {
+  text-align: left;
+}
+
+/* ---------- Google's answer for one address ---------- */
+
+.dk-seo-google-answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x6);
+  width: 100%;
+  max-width: calc(var(--dk-seo-google-field-w) + var(--x40));
+  padding: var(--x10) var(--x12);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  text-align: left;
+}
+
+.dk-seo-google-answer-head {
+  display: flex;
+  align-items: center;
+  gap: var(--x8);
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--t-small);
+}
+
+.dk-seo-google-answer-was,
+.dk-seo-google-answer-text {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-google-answer-text b {
+  color: var(--ink);
+  font-weight: var(--w-medium);
+}
+
+.dk-seo-google-answer-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-label);
+  line-height: var(--lh-snug);
+}
+
+.dk-seo-google-answer-facts li {
+  display: grid;
+  grid-template-columns: var(--dk-seo-google-key-w) minmax(0, 1fr);
+  gap: var(--x8);
+  color: var(--ink-2);
+}
+
+.dk-seo-google-answer-k {
+  color: var(--ink-4);
+}
+
+.dk-seo-google-answer-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--x8);
+  margin: 0;
+  color: var(--ink-4);
+  font-size: var(--t-label);
+}
+
+/* ---------- done here lately ---------- */
+
+.dk-seo-google-deeds {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dk-seo-google-deed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  padding: var(--x6) 0 var(--x6) var(--x10);
+  border-left: var(--x2) solid var(--line);
+  color: var(--ink-2);
+  font-size: var(--t-small);
+}
+
+.dk-seo-google-deed--good {
+  border-left-color: var(--green);
+}
+
+.dk-seo-google-deed--warn {
+  border-left-color: var(--amber);
+}
+
+.dk-seo-google-deed--bad {
+  border-left-color: var(--red);
+}
+
+/* ---------- narrow: one column ---------- */
+
+@container (max-width: 860px) {
+  .dk-seo-google-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@container (max-width: 520px) {
+  .dk-seo-google-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dk-seo-google-row-acts {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .dk-seo-google-act {
+    align-items: flex-start;
+  }
+
+  .dk-seo-google-said {
+    text-align: left;
+  }
+}

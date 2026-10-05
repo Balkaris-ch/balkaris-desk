@@ -314,13 +314,16 @@ export interface Indexation {
   indexed: number;
   /** False when the check on `day` did not reach every sitemap address. */
   complete?: boolean;
-  /** Answers from `day` or newer, and answers carried from an earlier day. */
+  /** How far the check on `day` reached; answers carried from an earlier day; answers a person asked for since ("Inspect now"). */
   checked?: number;
   carried?: number;
+  later?: number;
   /** The newest day whose check reached every address; null when none has. */
   wholeDay?: string | null;
   /** Sitemap addresses with no answer in the last week: not known, counted neither way. */
   missing?: number;
+  /** When the desk asks for the check again after one that failed today (an hour later, three times at most); null when none is owed. */
+  retryAt?: string | null;
   /** One group per coverage state Google reports, with Google's meaning and the fix. */
   groups: CoverageGroup[];
   /** Indexed and not indexed per day, from the desk's daily checks. */

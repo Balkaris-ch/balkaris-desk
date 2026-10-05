@@ -18,8 +18,9 @@ function Answer({ said }: { said: Said }) {
         {said.ok && said.id !== null ? (
           <>
             {" "}
-            <Go href={`/operator?result=${said.id}#response`} className="dk-seo-competitors-said-link">
-              View
+            {/* A queued brief has no answer yet: the operator shows its queue, where the task waits and then finishes. */}
+            <Go href="/operator#current-tasks" className="dk-seo-competitors-said-link">
+              See the queue
             </Go>
           </>
         ) : null}

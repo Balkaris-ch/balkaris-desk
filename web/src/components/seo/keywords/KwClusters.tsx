@@ -9,8 +9,10 @@ import { Stamp } from "@/components/ui/Stamp";
 import { Table, type Column } from "@/components/ui/Table";
 import { cx } from "@/lib/cx";
 import { DASH, num, shortDate } from "@/lib/format";
-import { BASE, keptFields, keywordsHref, oppsForCluster, optimizeHref, type Place } from "./href";
+import { LinkButton } from "@/components/ui/Button";
+import { BASE, clustersCsvHref, keptFields, keywordsHref, oppsForCluster, optimizeHref, type Place } from "./href";
 import { BriefButton, ClusterMenu, TrackPhrase } from "./KwAct";
+import { Topics } from "./KwWeb";
 import { KwHead } from "./KwBar";
 import { Pager } from "./Pager";
 import { INTENT_LABEL, INTENT_TONE, langLabel, pos, PRIORITY_LABEL, PRIORITY_TONE } from "./look";
@@ -133,6 +135,7 @@ function columns(place: Place): Column<KeywordClusterRow>[] {
             name={c.name}
             lang={c.lang}
             page={c.page}
+            mappedByPerson={c.mappedBy === "person"}
             phrasesHref={keywordsHref(place, { view: "keywords", cluster: c.key, lang: "all", intent: "all", q: "" })}
             opportunities={c.opportunities}
             oppsHref={oppsForCluster(c.key)}
@@ -180,13 +183,28 @@ export function KwClusters({ data, place }: { data: SeoKeywordsPayload; place: P
           title={`Topic clusters${r?.state === "ok" ? ` (${num(r.value.total)})` : ""}`}
           info="The topics the SEO audit grouped the searches into, one per language, with its priority and order of attack. A topic with no page of its language is a gap: every German topic while the site is English only. Mapping a topic to a page is kept as a person's choice. Impressions are Search Console's for the site, not search volume: no free source gives volume."
           middle={
-            r?.state === "ok" && r.value.total ? (
-              <span className="dk-seo-kw-head-line">
-                {num(r.value.gaps)} of {num(r.value.total)} {r.value.total === 1 ? "has" : "have"} no page of {r.value.total === 1 ? "its" : "their"} language
-              </span>
-            ) : null
+            <>
+              {r?.state === "ok" && r.value.total ? (
+                <span className="dk-seo-kw-head-line">
+                  {num(r.value.gaps)} of {num(r.value.total)} {r.value.total === 1 ? "has" : "have"} no page of {r.value.total === 1 ? "its" : "their"} language
+                </span>
+              ) : null}
+              {a.q || a.lang !== "all" || a.intent !== "all" ? (
+                <Go href={keywordsHref(place, { q: "", lang: "all", intent: "all" })} scroll={false} replace className="dk-seo-kw-reset">
+                  Clear filters
+                </Go>
+              ) : null}
+            </>
           }
-          actions={<TrackPhrase />}
+          actions={
+            <>
+              <TrackPhrase />
+              <Topics />
+              <LinkButton href={clustersCsvHref(place)} icon="download" size="sm" title="Download the topics as filtered, every matching one, as CSV">
+                Export
+              </LinkButton>
+            </>
+          }
         />
         <div className="dk-seo-kw-filters dk-seo-kw-filters--clusters">
           <label className="dk-seo-kw-find">
@@ -202,6 +220,8 @@ export function KwClusters({ data, place }: { data: SeoKeywordsPayload; place: P
               { value: "all", label: "All languages" },
               { value: "de", label: "German" },
               { value: "en", label: "English" },
+              { value: "fr", label: "French" },
+              { value: "it", label: "Italian" },
             ]}
           />
           <Select

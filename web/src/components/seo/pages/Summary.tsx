@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import type { Reading } from "@/contract/common";
 import type { Priority } from "@/contract/seo/common";
-import type { QuickAction, SeoPageSummary, SummaryIssue } from "@/contract/seo/pages";
+import type { PageSpeed, QuickAction, SeoPageSummary, SummaryIndex, SummaryIssue } from "@/contract/seo/pages";
 import { Ring } from "@/components/charts";
 import { Badge, Chip, type ChipTone } from "@/components/ui/Badge";
 import { LinkButton } from "@/components/ui/Button";
@@ -10,12 +10,13 @@ import { Empty } from "@/components/ui/Empty";
 import { Go } from "@/components/ui/Go";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { Absent } from "@/components/ui/Read";
+import { InspectNowButton } from "@/components/seo/google/actions";
 import { Stamp } from "@/components/ui/Stamp";
 import { Thumb } from "@/components/ui/Thumb";
 import { Info } from "@/components/ui/Tooltip";
 import { cx } from "@/lib/cx";
 import { ago, bytes, DASH, fullDate, num, shortDate } from "@/lib/format";
-import { optimizeHref, pagesHref, type Place } from "./href";
+import { opportunitiesHref, optimizeHref, pagesHref, type Place } from "./href";
 import { KindChip, rateCell } from "./PagesList";
 import { QueueButton } from "./QueueButton";
 import { ShowOnOpen } from "./ShowOnOpen";
@@ -84,10 +85,33 @@ function IssueRow({ i }: { i: SummaryIssue }) {
   );
 }
 
-function Overview({ s }: { s: SeoPageSummary }) {
+/**
+ * What an empty issue list says. Only a page Google has in its index and on
+ * which no rule fired has "no issue"; for any other the sentence says what is
+ * not known (never inspected, kept out of search on purpose) instead of
+ * claiming Google has it.
+ */
+function NoIssue({ s }: { s: SeoPageSummary }) {
+  const idx = s.index;
+  if (idx.state === "ok" && idx.value.indexed) {
+    return (
+      <Empty icon="check-circle" title="No issue found" compact className="dk-seo-pages-noissue">
+        Google has it in its index and no rule of the crawl fired on it.
+      </Empty>
+    );
+  }
+  return (
+    <Empty icon="info" title="No finding of the crawl" compact className="dk-seo-pages-noissue">
+      No rule of the crawl fired on it. Google’s index: {idx.state === "ok" ? "not indexed" : idx.reason}
+    </Empty>
+  );
+}
+
+function Overview({ s, place }: { s: SeoPageSummary; place: Place }) {
   const issues = s.issues;
   const opps = s.opportunities;
   const waitingProposals = s.proposals.filter((p) => p.state === "waiting");
+  const path = s.row.page.path;
   return (
     <div className="dk-seo-pages-ov">
       <div className="dk-seo-pages-ov-top">
@@ -104,7 +128,7 @@ function Overview({ s }: { s: SeoPageSummary }) {
           ) : (
             <p className="dk-seo-pages-small dk-seo-pages-score-note">The crawl’s rules only.</p>
           )}
-          <LinkButton href={optimizeHref(s.row.page.path)} variant="good" size="sm" block title="Page Optimization: improve this page step by step">
+          <LinkButton href={optimizeHref(path, place.range)} variant="good" size="sm" block title="Page Optimization: improve this page step by step">
             Optimize
           </LinkButton>
         </div>
@@ -121,7 +145,8 @@ function Overview({ s }: { s: SeoPageSummary }) {
       <div className="dk-seo-pages-box dk-seo-pages-issues-box">
         <div className="dk-seo-pages-h-row">
           <h3 className="dk-seo-pages-h">SEO issues {issues.state === "ok" ? <span className="dk-seo-pages-h-n dk-num">({issues.value.length})</span> : null}</h3>
-          <Go href={optimizeHref(s.row.page.path)} className="dk-seo-pages-more">
+          {/* Page Optimization lists every finding with its cost on its Technical tab. */}
+          <Go href={optimizeHref(path, place.range, "technical")} className="dk-seo-pages-more">
             View all
           </Go>
         </div>
@@ -134,17 +159,19 @@ function Overview({ s }: { s: SeoPageSummary }) {
             ))}
           </ul>
         ) : (
-          <Empty icon="check-circle" title="No issue found" compact className="dk-seo-pages-noissue">
-            Google has it in its index and no rule of the crawl fired on it.
-          </Empty>
+          <NoIssue s={s} />
         )}
-        {issues.state === "ok" && issues.value.length > 6 ? <p className="dk-seo-pages-small">{issues.value.length - 6} more on Page Optimization.</p> : null}
+        {issues.state === "ok" && issues.value.length > 6 ? (
+          <p className="dk-seo-pages-small">
+            <Go href={optimizeHref(path, place.range, "technical")}>{issues.value.length - 6} more on Page Optimization</Go>
+          </p>
+        ) : null}
       </div>
 
       <p className="dk-seo-pages-small dk-seo-pages-ov-foot">
         {opps.state === "ok" ? (
           opps.value.open ? (
-            <Go href={`/seo/opportunities?page=${encodeURIComponent(s.row.page.path)}`}>
+            <Go href={opportunitiesHref(place.range, { page: path })}>
               {`${num(opps.value.open)} open opportunit${opps.value.open === 1 ? "y" : "ies"} for this page`}
             </Go>
           ) : (
@@ -180,39 +207,93 @@ function Fact({ term, children, wide }: { term: string; children: ReactNode; wid
 
 const lengthTone = (n: number, limit: number) => (n === 0 ? "bad" : n > limit ? "warn" : "good");
 
+/** Google's own words for its robots, fetch and indexing states, as people say them. */
+const GOOGLE_WORDS: Record<string, string> = {
+  ALLOWED: "allowed",
+  DISALLOWED: "blocked by robots.txt",
+  SUCCESSFUL: "fetched",
+  SOFT_404: "a soft 404",
+  BLOCKED_ROBOTS_TXT: "blocked by robots.txt",
+  NOT_FOUND: "not found (404)",
+  ACCESS_DENIED: "access denied (401)",
+  SERVER_ERROR: "server error (5xx)",
+  REDIRECT_ERROR: "a redirect error",
+  ACCESS_FORBIDDEN: "forbidden (403)",
+  BLOCKED_4XX: "a 4xx answer",
+  INTERNAL_CRAWL_ERROR: "Google's own crawl error",
+  INVALID_URL: "an invalid address",
+  INDEXING_ALLOWED: "allowed",
+  BLOCKED_BY_META_TAG: "noindex in a meta tag",
+  BLOCKED_BY_HTTP_HEADER: "noindex in an HTTP header",
+  BLOCKED_BY_ROBOTS_TXT: "blocked by robots.txt",
+};
+const said = (w: string | null): string => (w ? (GOOGLE_WORDS[w] ?? w.toLowerCase().replace(/_/g, " ")) : DASH);
+
+/**
+ * Google's stored state of one address: its verdict in its own words, what
+ * that means and fixes, the day it was read and, from the same inspection,
+ * the canonical Google chose against the one the page declared and the
+ * robots, fetch and indexing states. Drawn in the summary's SEO view and in
+ * an address looked up live. Given the path, "Inspect now" asks Google's URL
+ * Inspection at once (the Google actions, one of the day's 2,000), also when
+ * no stored answer exists yet.
+ */
+export function IndexFacts({ idx, path }: { idx: Reading<SummaryIndex>; path?: string }) {
+  const now = path ? <InspectNowButton path={path} compact /> : null;
+  if (idx.state !== "ok")
+    return (
+      <>
+        <Absent reading={idx} form="tile" />
+        {now}
+      </>
+    );
+  const v = idx.value;
+  return (
+    <>
+      <p className="dk-seo-pages-line">
+        <Badge tone={v.indexed ? "good" : "bad"} dot>
+          {v.indexed ? "Indexed" : "Not indexed"}
+        </Badge>
+        <span>{v.coverage ?? "Google gave no words for it"}</span>
+      </p>
+      <p className="dk-seo-pages-small">{v.meaning}</p>
+      {!v.indexed ? <p className="dk-seo-pages-small dk-seo-pages-fix">{v.fix}</p> : null}
+      {v.liveSaysIndex === true && /noindex/i.test(v.coverage ?? "") ? <p className="dk-seo-pages-small dk-seo-pages-fix">The live page says index now: Google’s record is stale.</p> : null}
+      <dl className="dk-seo-pages-facts">
+        <Fact term="Checked">
+          {shortDate(v.day)}
+          {v.day < v.newest ? <span className="dk-seo-pages-small"> · the check of {shortDate(v.newest)} did not reach it</span> : v.day > v.newest ? <span className="dk-seo-pages-small"> · asked by hand</span> : null}
+        </Fact>
+        <Fact term="Google last crawled">{v.lastCrawl ? fullDate(v.lastCrawl) : "never"}</Fact>
+        <Fact term="Robots.txt">{said(v.robots)}</Fact>
+        <Fact term="Fetch">{said(v.fetchState)}</Fact>
+        <Fact term="Indexing">{said(v.indexing)}</Fact>
+        <Fact term="Canonical Google chose" wide>
+          {v.googleCanonical ?? "none named"} {v.canonicalOk === true ? <Chip tone="good">the page’s own</Chip> : v.canonicalOk === false ? <Chip tone="bad">differs</Chip> : null}
+        </Fact>
+        {v.canonicalOk === false ? (
+          <Fact term="Canonical the page declared" wide>
+            {v.userCanonical ?? "none"}
+          </Fact>
+        ) : null}
+      </dl>
+      {v.link ? (
+        <LinkButton href={v.link} size="xs" icon="external">
+          Inspect in Search Console
+        </LinkButton>
+      ) : null}
+      {now}
+    </>
+  );
+}
+
 function SeoPane({ s }: { s: SeoPageSummary }) {
-  const idx = s.index;
   const serp = s.serp;
   return (
     <div className="dk-seo-pages-pane">
       <section className="dk-seo-pages-box">
         <h3 className="dk-seo-pages-h">Google’s index</h3>
-        {idx.state !== "ok" ? (
-          <Absent reading={idx} form="tile" />
-        ) : (
-          <>
-            <p className="dk-seo-pages-line">
-              <Badge tone={idx.value.indexed ? "good" : "bad"} dot>
-                {idx.value.indexed ? "Indexed" : "Not indexed"}
-              </Badge>
-              <span>{idx.value.coverage ?? "Google gave no words for it"}</span>
-            </p>
-            <p className="dk-seo-pages-small">{idx.value.meaning}</p>
-            {!idx.value.indexed ? <p className="dk-seo-pages-small dk-seo-pages-fix">{idx.value.fix}</p> : null}
-            {idx.value.liveSaysIndex === true && /noindex/i.test(idx.value.coverage ?? "") ? (
-              <p className="dk-seo-pages-small dk-seo-pages-fix">The live page says index now: Google’s record is stale.</p>
-            ) : null}
-            <dl className="dk-seo-pages-facts">
-              <Fact term="Checked">{shortDate(idx.value.day)}</Fact>
-              <Fact term="Google last crawled">{idx.value.lastCrawl ? fullDate(idx.value.lastCrawl) : "never"}</Fact>
-            </dl>
-            {idx.value.link ? (
-              <LinkButton href={idx.value.link} size="xs" icon="external">
-                Inspect in Search Console
-              </LinkButton>
-            ) : null}
-          </>
-        )}
+        <IndexFacts idx={s.index} path={s.row.page.path} />
       </section>
       <section className="dk-seo-pages-box">
         <h3 className="dk-seo-pages-h">Title and description</h3>
@@ -332,10 +413,45 @@ function TechPane({ s }: { s: SeoPageSummary }) {
           {v.schemaTypes.length ? v.schemaTypes.join(", ") : "none"}
         </Fact>
       </dl>
-      <p className="dk-seo-pages-small">
-        One fetch by the desk’s crawl from its own server, {ago(v.crawledAt)}: a hint about speed, not a measurement. PageSpeed measures a fixed list of pages on Site Health.
-      </p>
+      <p className="dk-seo-pages-small">One fetch by the desk’s crawl from its own server, {ago(v.crawledAt)}: a hint about speed, not a measurement.</p>
+      <section className="dk-seo-pages-box">
+        <h3 className="dk-seo-pages-h">
+          PageSpeed
+          <Info text="Google's PageSpeed Insights: Lighthouse run on Google's machines (a lab test, not real visitors). The desk measures a fixed list of pages each day; Site Health shows them all." />
+        </h3>
+        <Speed reading={s.speed} />
+      </section>
     </div>
+  );
+}
+
+/** A lab score as the speed table tints it: Lighthouse's own bands (90 and up good, under 50 poor). */
+const scoreTone = (n: number | null): ChipTone => (n === null ? "quiet" : n >= 90 ? "good" : n >= 50 ? "warn" : "bad");
+
+function Speed({ reading }: { reading: Reading<PageSpeed> }) {
+  if (reading.state !== "ok") return <Absent reading={reading} form="tile" />;
+  return (
+    <>
+      <ul className="dk-seo-pages-speed">
+        {reading.value.runs.map((r) => (
+          <li key={r.strategy}>
+            <span className="dk-seo-pages-speed-kind">{r.strategy === "mobile" ? "Mobile" : "Desktop"}</span>
+            {r.failure ? (
+              <span className="dk-seo-pages-small">The run failed: {r.failure}</span>
+            ) : (
+              <>
+                <Chip tone={scoreTone(r.performance)}>{r.performance === null ? DASH : num(r.performance)}</Chip>
+                <span className="dk-seo-pages-small dk-num">
+                  LCP {r.lcpMs === null ? DASH : `${num(r.lcpMs / 1000, 1)} s`} · CLS {r.cls === null ? DASH : num(r.cls, 2)} · TBT {r.tbtMs === null ? DASH : `${num(r.tbtMs)} ms`}
+                </span>
+              </>
+            )}
+            <span className="dk-seo-pages-small">{ago(r.at)}</span>
+          </li>
+        ))}
+      </ul>
+      <Stamp reading={reading} />
+    </>
   );
 }
 
@@ -373,7 +489,7 @@ function LinksPane({ s, place }: { s: SeoPageSummary; place: Place }) {
   );
 }
 
-function PerfPane({ s }: { s: SeoPageSummary }) {
+function PerfPane({ s, place }: { s: SeoPageSummary; place: Place }) {
   const r = s.row;
   const o = s.opportunities;
   return (
@@ -383,6 +499,12 @@ function PerfPane({ s }: { s: SeoPageSummary }) {
         <Fact term="Impressions">{num(r.impressions)}</Fact>
         <Fact term="CTR">{rateCell(r.ctr)}</Fact>
         <Fact term="Position">{r.position === null ? DASH : num(r.position, 1)}</Fact>
+        {/* GA4 is read only when the list shows or sorts by Organic sessions: then the visits its searches brought are here too. */}
+        {r.organic ? (
+          <Fact term="Organic sessions (GA4)" wide>
+            {num(r.organic.sessions)} began here from search, {num(r.organic.engaged)} engaged <span className="dk-seo-pages-small">· consenting visitors only</span>
+          </Fact>
+        ) : null}
       </dl>
       <section className="dk-seo-pages-box">
         <h3 className="dk-seo-pages-h">Open opportunities</h3>
@@ -392,7 +514,7 @@ function PerfPane({ s }: { s: SeoPageSummary }) {
           <ul className="dk-seo-pages-opps">
             {o.value.rows.map((x) => (
               <li key={x.id}>
-                <Go href={`/seo/opportunities?open=${encodeURIComponent(x.id)}`}>{x.title}</Go>
+                <Go href={opportunitiesHref(place.range, { open: x.id })}>{x.title}</Go>
                 <span className="dk-seo-pages-small">
                   {x.typeLabel} · {LEVEL[x.priority].text}
                   {x.potential ? ` · our estimate +${num(x.potential.clicksPerMonth, 1)} clicks a month` : ""}
@@ -467,12 +589,12 @@ export function SummaryPanel({ reading, place }: { reading: Reading<SeoPageSumma
           { key: "performance", label: "Performance" },
         ]}
       >
-        <Overview key={path} s={s} />
+        <Overview key={path} s={s} place={place} />
         <SeoPane key={path} s={s} />
         <ContentPane key={path} s={s} />
         <TechPane key={path} s={s} />
         <LinksPane key={path} s={s} place={place} />
-        <PerfPane key={path} s={s} />
+        <PerfPane key={path} s={s} place={place} />
       </Switch>
     </section>
   );

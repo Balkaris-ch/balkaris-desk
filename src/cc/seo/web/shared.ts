@@ -1,5 +1,8 @@
+import type { WebAllowance, WebLang } from "../../../../web/src/contract/seo/common.ts";
 import { countOn, setCount } from "../../search/shared.ts";
 import { setState, state, today } from "../../store.ts";
+
+export type { WebLang };
 
 /**
  * What the web layer's modules have in common: the four languages, a clock a
@@ -11,7 +14,6 @@ import { setState, state, today } from "../../store.ts";
  */
 
 /** The languages Switzerland searches in. */
-export type WebLang = "de" | "en" | "fr" | "it";
 export const WEB_LANGS: readonly WebLang[] = ["de", "en", "fr", "it"];
 
 /** A language as the web layer takes it, or the fallback when it is none of the four. */
@@ -31,6 +33,9 @@ export const clock = {
   now: (): number => Date.now(),
   sleep: (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)),
 };
+
+/** Now as the tables write it, by the clock above (so the check's moved clock moves every stamp too). */
+export const stamp = (): string => new Date(clock.now()).toISOString();
 
 /* ---------- one request at a time to a host ------------------------------------------------- */
 
@@ -65,13 +70,7 @@ export function resetPace(): void {
 
 /* ---------- an allowance that starts again each day ------------------------------------------ */
 
-export interface Allowance {
-  used: number;
-  cap: number;
-  left: number;
-  /** The Zurich day the count belongs to. */
-  day: string;
-}
+export type Allowance = WebAllowance;
 
 export function allowance(key: string, cap: number): Allowance {
   const day = today();
@@ -157,4 +156,11 @@ export function hostOf(url: string): string | null {
 export const bare = (host: string): string => host.toLowerCase().replace(/^www\./, "");
 
 /** What went wrong, short enough to show and without an address in it. */
-export const said = (e: unknown): string => (e instanceof Error ? (e.name === "TimeoutError" ? "no answer in time" : e.message) : String(e)).split(/\r?\n/)[0]!.slice(0, 160);
+export const said = (e: unknown): string => {
+  if (!(e instanceof Error)) return String(e).split(/\r?\n/)[0]!.slice(0, 160);
+  if (e.name === "TimeoutError") return "no answer in time";
+  /* Node's fetch says only "fetch failed"; the reason is in its cause (ECONNRESET, ENOTFOUND, a TLS fault). */
+  const cause = (e as { cause?: { code?: string; message?: string } }).cause;
+  const why = e.message === "fetch failed" && cause ? `the connection failed (${cause.code ?? cause.message ?? "no reason given"})` : e.message;
+  return why.split(/\r?\n/)[0]!.slice(0, 160);
+};

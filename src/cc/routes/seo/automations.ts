@@ -1,20 +1,21 @@
 import { Hono } from "hono";
 import { db } from "../../../db.ts";
-import type { Vars } from "../../access.ts";
+import { me, requireOwner, type Vars } from "../../access.ts";
 import { runnerState } from "../../operator/queue.ts";
 import { status } from "../../scheduler.ts";
+import * as gsc from "../../search/gsc.ts";
 import { sources } from "../../sources.ts";
 import { activity, off, ok, reading, today, waiting } from "../../store.ts";
 import { scrub, scrubItem } from "../../system.ts";
 import type { ActivityItem, Reading, SourceId, SourceStatus } from "../../../../web/src/contract/common.ts";
 import type { AutomationRun, FinishedRun, JobSource } from "../../../../web/src/contract/automations.ts";
-import type { SeoAutomationSplit, SeoAutomationsPayload, SeoJobRuns, SeoJobState, SeoJobsDay, SeoJobsPeriod, SeoScheduler } from "../../../../web/src/contract/seo/automations.ts";
+import type { SeoAutomationSplit, SeoAutomationsPayload, SeoDigests, SeoJobRuns, SeoJobState, SeoJobsDay, SeoJobsPeriod, SeoScheduler } from "../../../../web/src/contract/seo/automations.ts";
 import type { OperatorPanel, OwnerTaskRow, SeoJob, SeoRange } from "../../../../web/src/contract/seo/common.ts";
 import { IMPORT_KINDS, lastImport } from "../../seo/aisearch.ts";
 import { runsBegin, runsOf, runsSince, runTally, seoJobs, standings, WATCH, watchPending, watchState, type Standing } from "../../seo/jobs.ts";
 import { ownerTasks } from "../../seo/owner.ts";
 import { daysOf } from "../../seo/rank.ts";
-import { head, rangeFrom, SEO_KINDS } from "./shared.ts";
+import { body, head, rangeFrom, SEO_KINDS } from "./shared.ts";
 
 /**
  * /api/v1/seo/automations — SEO › Automations: the jobs the SEO section runs
@@ -24,6 +25,8 @@ import { head, rangeFrom, SEO_KINDS } from "./shared.ts";
  *   GET  /?range=…            the whole page (SeoAutomationsPayload, web/src/contract/seo/automations.ts);
  *                             the range is the window of the `period` panel and of each job's period counts
  *   GET  /export.csv?range=…  every run of these jobs that started in the window, as CSV
+ *   POST /digest              { telegram: boolean }  the owner says whether the week's summary
+ *                             (src/cc/seo/jobs-digest.ts) is sent to him on Telegram → { ok, line }
  *
  * Nothing else: running a job now is the core API's POST /api/v1/jobs/:name/run
  * (with its floor between two asks), switching one off or on is
@@ -71,6 +74,21 @@ const ABOUT: Record<string, { source: SourceId | null; reads: string; writes: st
   "seo-research": { source: null, reads: "Google Autocomplete, at most one request a second, within the week's budget.", writes: "New phrases in the keyword table, unjudged until a person or a rule sorts them." },
   "seo-competitors": { source: null, reads: "Competitors' public pages captured for our topics: robots.txt first and obeyed, two seconds between requests to one site.", writes: "What each page says (title, heading, words, language, structured data, a stated price), in the desk." },
   "seo-presence": { source: null, reads: "The studio's known profile and listing addresses, once each.", writes: "Whether each one exists, in the desk." },
+  "seo-rank-check": {
+    source: null,
+    reads: "Google's results for each target phrase not checked in six days: through DataForSEO when it is connected, otherwise fetched by the studio workstation from its own line, a few a day.",
+    writes: "Who ranks for each phrase, with Balkaris's own place, as sightings on the Competitors page, in the desk.",
+  },
+  "seo-digest": {
+    source: null,
+    reads: "Only the desk's own tables: the runs, the opportunities, the index check, the keyword table, the owner tasks and the log.",
+    writes: "The week's summary on this page; sent to the owner on Telegram when he asked for it.",
+  },
+  "seo-backlinks": {
+    source: "ga4",
+    reads: "GA4's sessions by referring address, Bing's linking pages once Bing is connected, and each linking page itself (robots.txt first, at most 40 pages a run).",
+    writes: "The sites and pages that link to the website, and whether each link is followed, in the desk.",
+  },
   crawl: { source: "crawl", reads: "Every page of the website, in the sitemap and out of it.", writes: "Each page's facts, links and findings, and the site score, in the desk." },
   sitemap: { source: "crawl", reads: "The website's sitemap.xml and robots.txt.", writes: "The sitemap's addresses and what was added or removed, in the desk." },
   "gsc-daily": { source: "gsc", reads: "Search Console's search figures for the last 7, 30 and 90 days, read-only.", writes: "The figures the screens show, kept in the desk." },
@@ -459,6 +477,56 @@ function recent(jobs: SeoJob[], since: string): ActivityItem[] {
     .map(scrubItem);
 }
 
+/* ---------- where a step done by hand is done ------------------------------------------- */
+
+/**
+ * The screen each browser step is done on, read from its id and its words:
+ * Search Console's report for the property the desk reads (its Pages report,
+ * URL Inspection, Sitemaps, Performance), and Brave's submit form. A step
+ * that names none gets no link. Search Console's only while the desk knows
+ * the property, so a link never lands on Google's property picker.
+ */
+function stepLinks(tasks: OwnerTaskRow[]): Record<string, { label: string; href: string }[]> {
+  let site: string | null = null;
+  try {
+    const a = gsc.access();
+    site = a.state === "ok" && a.site ? a.site : null;
+  } catch {
+    site = null;
+  }
+  const sc = (kind: string, label: string) => (site ? [{ label, href: `https://search.google.com/search-console/${kind}?resource_id=${encodeURIComponent(site)}` }] : []);
+  const out: Record<string, { label: string; href: string }[]> = {};
+  for (const t of tasks) {
+    const words = `${t.id} ${t.step}`.toLowerCase();
+    const links: { label: string; href: string }[] = [];
+    if (/generative.ai|performance/.test(words)) links.push(...sc("performance/search-analytics", "Search Console › Performance"));
+    if (/validate|indexing\s*>\s*pages|noindex/.test(words)) links.push(...sc("index", "Search Console › Pages"));
+    if (/request.indexing|url inspection/.test(words)) links.push(...sc("inspect", "Search Console › URL Inspection"));
+    if (/sitemap|feed\.xml/.test(words)) links.push(...sc("sitemaps", "Search Console › Sitemaps"));
+    if (/brave/.test(words)) links.push({ label: "Brave › Submit a URL", href: "https://search.brave.com/submit-url" });
+    out[t.id] = links;
+  }
+  return out;
+}
+
+/* ---------- the week, in short --------------------------------------------------------- */
+
+/** The summaries the seo-digest job kept, and the owner's say on Telegram. Loaded on demand, so a fault there costs this panel only. */
+async function digest(): Promise<Reading<SeoDigests>> {
+  return reading<SeoDigests>("desk", async () => {
+    const d = await import("../../seo/jobs-digest.ts");
+    const list = d.digests();
+    const t = d.telegram();
+    if (!list.length) {
+      return waiting(
+        "desk",
+        `No summary is written yet. The job "Write the week's SEO summary" writes the first one an hour after the desk starts, then every week; Run now on its row writes one at once.${t.on ? "" : " The owner can have it sent to him on Telegram."}`,
+      );
+    }
+    return ok({ list, telegram: t, job: "seo-digest" }, "desk", list[0]!.at, "Counted from the desk's own tables when the summary was written.");
+  });
+}
+
 /* ---------- the page ------------------------------------------------------------------ */
 
 async function page(range: SeoRange): Promise<SeoAutomationsPayload> {
@@ -521,10 +589,32 @@ async function page(range: SeoRange): Promise<SeoAutomationsPayload> {
     scheduler: scheduler(now),
     period: await reading<SeoJobsPeriod>("desk", () => period(jobs, range, now)),
     recentInPeriod: count(`SELECT COUNT(*) AS n FROM cc_activity WHERE at >= ? AND kind IN (${SEO_KINDS.map(() => "?").join(",")})`, since, ...SEO_KINDS),
+    stepLinks: stepLinks(chromeTasks),
+    digest: await digest(),
   };
 }
 
 routes.get("/", async (c) => c.json<SeoAutomationsPayload>(await page(rangeFrom(c))));
+
+/* ---------- POST /digest --------------------------------------------------------------------- */
+
+/**
+ * The owner says whether the week's summary is sent to him on Telegram. His
+ * alone: it is his chat. Answers { ok, line } in a sentence, or { error }.
+ */
+routes.post("/digest", requireOwner, async (c) => {
+  const b = await body(c);
+  if (typeof b.telegram !== "boolean") return c.json({ error: 'Send { "telegram": true } or { "telegram": false }.' }, 400);
+  const d = await import("../../seo/jobs-digest.ts");
+  d.setTelegram(b.telegram, me(c).name);
+  const t = d.telegram();
+  const line = b.telegram
+    ? t.ready
+      ? "The week's summary will be sent to you on Telegram when it is written."
+      : "Switched on, but the desk cannot reach you on Telegram yet: its bot or your chat is not set. The summary stays on this page until then."
+    : "The week's summary stays on this page; it is no longer sent on Telegram.";
+  return c.json({ ok: true, line });
+});
 
 /* ---------- GET /export.csv ------------------------------------------------------------------- */
 

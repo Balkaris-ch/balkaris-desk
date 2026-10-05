@@ -1,5 +1,5 @@
 import type { ChipTone } from "@/components/ui/Badge";
-import type { Priority, Rate } from "@/contract/seo/common";
+import type { KeywordVolume, Priority, Rate, WebLang } from "@/contract/seo/common";
 import type { Intent, KeywordFlag, KeywordRow, KeywordSource, KeywordStatus, PositionBand } from "@/contract/seo/keywords";
 import { DASH, num, percent } from "@/lib/format";
 
@@ -25,12 +25,12 @@ export const INTENT_TONE: Record<Intent, ChipTone> = {
   navigational: "quiet",
 };
 
-export const LANG_LABEL: Record<string, string> = { de: "German", en: "English" };
+export const LANG_LABEL: Record<string, string> = { de: "German", en: "English", fr: "French", it: "Italian" };
 export const langLabel = (l: string | null): string => (l ? (LANG_LABEL[l] ?? l.toUpperCase()) : "Language not known");
 
 export const SOURCE_LABEL: Record<KeywordSource, string> = {
   gsc: "Search Console",
-  autocomplete: "Google Autocomplete",
+  autocomplete: "Web research",
   audit: "SEO audit",
   manual: "Added by a person",
 };
@@ -96,4 +96,16 @@ export function primaryOf(r: KeywordRow): "optimize" | "view" | "brief" {
   if (!r.page || !r.pageKnown) return "brief";
   if (r.position !== null && r.position <= 3) return "view";
   return "optimize";
+}
+
+/** A row's language as the web layer takes it: German when the desk does not know it. */
+export const webLang = (l: string | null): WebLang => (l === "en" || l === "fr" || l === "it" ? l : "de");
+
+/** A demand figure as a cell prints it: the number, or the Planner's range, named by its source. */
+export function volumeCell(v: KeywordVolume | null): string {
+  if (!v) return DASH;
+  const from = v.source === "planner" ? "Keyword Planner" : "DataForSEO";
+  if (v.volume !== null) return `${num(v.volume)} (${from})`;
+  if (v.low !== null) return `${num(v.low)}–${v.high === null ? "?" : num(v.high)} (${from})`;
+  return DASH;
 }

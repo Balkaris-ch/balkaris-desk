@@ -8,6 +8,9 @@ import { SeoRefused } from "@/components/seo/nav/Refused";
 import { KwClusters } from "@/components/seo/keywords/KwClusters";
 import { KwKit } from "@/components/seo/keywords/KwAct";
 import { KwList } from "@/components/seo/keywords/KwList";
+import { KwOpen } from "@/components/seo/keywords/KwOpen";
+import { KwResearch } from "@/components/seo/keywords/KwResearch";
+import { KwSerpCard } from "@/components/seo/keywords/KwSerp";
 import { KwTileRow } from "@/components/seo/keywords/KwTiles";
 import { SourcesCard, TargetsCard } from "@/components/seo/keywords/KwUnder";
 import "@/components/seo/keywords/keywords.css";
@@ -18,7 +21,34 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 /** What the address may carry to the desk server; anything else in it is ignored. */
-const PASSED = ["view", "lang", "intent", "cluster", "source", "status", "band", "shown", "target", "flag", "page", "q", "sort", "dir", "corder", "offset", "limit"] as const;
+const PASSED = [
+  "view",
+  "lang",
+  "where",
+  "device",
+  "moved",
+  "intent",
+  "cluster",
+  "source",
+  "status",
+  "band",
+  "shown",
+  "target",
+  "flag",
+  "page",
+  "q",
+  "sort",
+  "dir",
+  "corder",
+  "offset",
+  "limit",
+  "open",
+  "research",
+  "rlang",
+  "rmodes",
+  "serp",
+  "slang",
+] as const;
 
 /**
  * SEO › Keywords (board 113, panel 4): every phrase the desk knows, from
@@ -59,7 +89,11 @@ export default async function SeoKeywordsPage({ searchParams }: { searchParams: 
   return (
     <KwKit pages={pages} pagesWhy={data.sitePages.state === "ok" ? null : data.sitePages.reason} clusters={data.topics}>
       <div className="dk-seo-kw">
-        <KwTileRow tiles={data.tiles} />
+        {/* The owner's first complaint: research on the web comes first. */}
+        <KwResearch lookup={data.lookup} place={place} />
+        {data.serp ? <KwSerpCard view={data.serp} place={place} /> : null}
+        <KwTileRow tiles={data.tiles} place={place} />
+        {data.open ? <KwOpen open={data.open} place={place} /> : null}
         {data.asked.view === "clusters" ? <KwClusters data={data} place={place} /> : <KwList data={data} place={place} />}
         <Grid cols="1.5fr 1fr" mid="1fr 1fr">
           <TargetsCard data={data} place={place} />

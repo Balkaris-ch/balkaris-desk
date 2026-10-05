@@ -5,7 +5,7 @@ import type { Person } from "../../../people.ts";
 import { me, type Vars } from "../../access.ts";
 import { createTask } from "../../operator/queue.ts";
 import { addTodo } from "../../operator/todos.ts";
-import { note, off, ok, reading, setState, state as kept, today, waiting } from "../../store.ts";
+import { note, off, ok, reading, setState, state as kept, waiting } from "../../store.ts";
 import type { Reading, Stat } from "../../../../web/src/contract/common.ts";
 import type { NewTask, TaskState } from "../../../../web/src/contract/operator.ts";
 import type { OpportunityAnswer, OpportunityRow, OwnerTaskRow, Priority, SeoSpan } from "../../../../web/src/contract/seo/common.ts";
@@ -36,7 +36,7 @@ import type {
 import type { KeywordStatus } from "../../../../web/src/contract/seo/keywords.ts";
 import { competitorNames, competitorPages, ENGINE_LABEL, sightings, type CompPageRow, type SightingRow } from "../../seo/competitors.ts";
 import { act, allOpportunities, clusterNames, opportunity, toRow } from "../../seo/engine.ts";
-import { clusters, keywords, setClusterPage, setKeywordStatus, shownPages, type Cluster, type Keyword } from "../../seo/keywords.ts";
+import { clusters, keywords, setKeywordStatus, shownPages, type Cluster, type Keyword } from "../../seo/keywords.ts";
 import { ownerTasks, type OwnerTask } from "../../seo/owner.ts";
 import { queryFigures, spanOf } from "../../seo/rank.ts";
 import { pageReadiness } from "../../seo/readiness.ts";
@@ -44,7 +44,7 @@ import { PRIORITY_RANK } from "../../seo/rules.ts";
 import { ownTitle, siteView, type SiteView } from "../../seo/site.ts";
 import { json, now } from "../../seo/tables.ts";
 import { answers, langOf as langOfWords, normal, pageWords } from "../../seo/words.ts";
-import { body, head, historyAbsent, historyAt, int, rangeFrom } from "./shared.ts";
+import { body, csvFile, head, historyAbsent, historyAt, int, rangeFrom } from "./shared.ts";
 
 /**
  * /api/v1/seo/content-gaps: SEO › Content Gaps (board 113, panel 5).
@@ -897,11 +897,14 @@ function keywordRows(w: World, q: GapQuery): Keyword[] {
  * own Search Console history, the window asked) where the history names no
  * page, or the page it showed does not carry every word of the search in its
  * title, heading or address (words.answers, the rule the mapping uses). Listed
- * whatever a person has judged: a search nobody judged yet is exactly the gap
- * this view exists to show. Null without the history.
+ * whether judged or not: a search nobody judged yet is exactly the gap this
+ * view exists to show. Only a search a person judged NOT relevant is left
+ * out, and counted (`judgedOut`): the person said it is not the studio's, and
+ * listing it as a gap would overrule them. Null without the history.
  */
-function consoleRows(w: World, q: GapQuery | null): ConsoleGap[] | null {
+function consoleRows(w: World, q: GapQuery | null): { rows: ConsoleGap[]; judgedOut: number } | null {
   if (!w.figures || !w.span) return null;
+  let judgedOut = 0;
   const shown = new Map<string, string>();
   for (const [query, path] of shownPages(w.span.start, w.span.end)) if (!shown.has(normal(query))) shown.set(normal(query), path);
   const byPhrase = new Map(w.kw.map((k) => [k.phrase, k]));
@@ -914,6 +917,10 @@ function consoleRows(w: World, q: GapQuery | null): ConsoleGap[] | null {
     /* A page the crawl does not know cannot be compared: it is listed as shown, and its words as not read. */
     if (path && page && answers(query, pageWords({ path: page.path, title: page.title, h1: page.h1 }))) continue;
     const k = byPhrase.get(query) ?? null;
+    if (k?.status === "irrelevant") {
+      judgedOut++;
+      continue;
+    }
     const c = k?.cluster ? w.byKey.get(k.cluster) : undefined;
     let brief: BriefState | null = null;
     if (c) {
@@ -934,14 +941,14 @@ function consoleRows(w: World, q: GapQuery | null): ConsoleGap[] | null {
     });
   }
   const own = (a: ConsoleGap, b: ConsoleGap): number => b.impressions - a.impressions || (a.position ?? 999) - (b.position ?? 999) || a.query.localeCompare(b.query);
-  if (!q) return out.sort(own);
+  if (!q) return { rows: out.sort(own), judgedOut };
   const need = needles(q.q);
   const rows = out.filter((r) => (q.lang === "all" || r.lang === q.lang) && (!need.length || carries(`${r.query} ${r.shown ?? ""}`, need)));
   const flip = q.dir === "asc" ? 1 : -1;
-  if (q.sort === "position") return rows.sort((a, b) => lacking(a.position, b.position, byNumber, flip) || own(a, b));
-  if (q.sort === "phrase") return rows.sort((a, b) => byText(a.query, b.query) * flip);
-  if (q.sort === "impressions") return rows.sort((a, b) => (a.impressions - b.impressions) * flip || own(a, b));
-  return rows.sort(own);
+  if (q.sort === "position") return { rows: rows.sort((a, b) => lacking(a.position, b.position, byNumber, flip) || own(a, b)), judgedOut };
+  if (q.sort === "phrase") return { rows: rows.sort((a, b) => byText(a.query, b.query) * flip), judgedOut };
+  if (q.sort === "impressions") return { rows: rows.sort((a, b) => (a.impressions - b.impressions) * flip || own(a, b)), judgedOut };
+  return { rows: rows.sort(own), judgedOut };
 }
 
 /* ---------- the two largest gaps ----------------------------------------------------------- */
@@ -1113,7 +1120,7 @@ const COVERAGE_NOTE =
 const VOLUME_NOTE =
   "No search volume and no difficulty: no free source gives them. “Autocomplete” beside a phrase means Google completes it, so people search it, not how often. Keyword Planner ranges come only from the owner's Google Ads account (Needs you).";
 const CONSOLE_NOTE =
-  "Searches Google showed the site for in the period where the desk's history names no page, or the page shown does not carry every word of the search (places aside) in its title, heading or address. Google withholds rare queries, so the list is what it reports, not every search. Listed whatever a person has judged.";
+  "Searches Google showed the site for in the period where the desk's history names no page, or the page shown does not carry every word of the search (places aside) in its title, heading or address. Google withholds rare queries, so the list is what it reports, not every search. Listed whether judged or not; a search a person judged not relevant is left out.";
 const RIVALS_NOTE =
   "Competitor sites the desk read a page of (one request every two seconds per site, robots.txt obeyed), with the topics each was seen for in the captured results. A ranking page is the address that was in the results; a home page was read because the capture named the site and not the address, and says what the site is, not how it answers the search. “Seen” counts the captured results the site appeared in.";
 
@@ -1223,7 +1230,7 @@ routes.get("/", async (c) => {
   let consoleAll: ConsoleGap[] | null = null;
   if (world) {
     try {
-      consoleAll = consoleRows(world, null);
+      consoleAll = consoleRows(world, null)?.rows ?? null;
     } catch {
       consoleAll = null;
     }
@@ -1233,9 +1240,10 @@ routes.get("/", async (c) => {
     consoleReading = !world
       ? absent()
       : await reading("gsc", () => {
-          const rows = consoleRows(world, q);
-          if (!rows) return historyAbsent<Paged<ConsoleGap>>();
-          return ok(slice(rows, q, (x) => x), "gsc", newest(world.at.search, world.at.crawl), `${CONSOLE_NOTE} ${world.span ? `Window: ${world.span.start} to ${world.span.end}.` : ""} ${madeFrom(world)}`);
+          const got = consoleRows(world, q);
+          if (!got) return historyAbsent<Paged<ConsoleGap>>();
+          const out = got.judgedOut ? ` ${plural(got.judgedOut, "search", "searches")} a person judged not relevant ${got.judgedOut === 1 ? "is" : "are"} left out.` : "";
+          return ok(slice(got.rows, q, (x) => x), "gsc", newest(world.at.search, world.at.crawl), `${CONSOLE_NOTE}${out} ${world.span ? `Window: ${world.span.start} to ${world.span.end}.` : ""} ${madeFrom(world)}`);
         });
   }
 
@@ -1324,13 +1332,6 @@ routes.get("/", async (c) => {
 
 /* ---------- GET /export.csv -------------------------------------------------------------------- */
 
-const cell = (v: unknown): string => {
-  if (v === null || v === undefined) return "";
-  let s = String(v);
-  /* A spreadsheet runs a cell that starts like a formula. */
-  if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
-  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-};
 const yes = (b: boolean | null): string => (b === null ? "" : b ? "yes" : "no");
 
 /**
@@ -1389,7 +1390,7 @@ routes.get("/export.csv", async (c) => {
     }
     name = "search-console";
     headRow = ["Search", "Language", `Impressions (Search Console, ${window})`, "Clicks", "Average position", "Page Google showed", "Why it is listed", "Judged", "Cluster", "Brief"];
-    rows = list.map((x) => [x.query, x.lang, x.impressions, x.clicks, x.position, x.shown, x.why === "no-page" ? "no page named" : "the page shown lacks the words", x.keyword ? x.keyword.status : "not in the keyword table", x.keyword?.cluster?.name, briefWord(x.brief)]);
+    rows = list.rows.map((x) => [x.query, x.lang, x.impressions, x.clicks, x.position, x.shown, x.why === "no-page" ? "no page named" : "the page shown lacks the words", x.keyword ? x.keyword.status : "not in the keyword table", x.keyword?.cluster?.name, briefWord(x.brief)]);
   } else if (q.view === "competitors") {
     headRow = ["Site", "Name", "Times seen", "Topics seen for", "Page read", "Kind of page", "Title", "Words", "Language", "States a price", "Read on"];
     for (const s of competitorSites(w, r, q)) for (const p of s.pages) rows.push([s.domain, s.name, s.seen, s.topics.map((t) => t.name).join("; "), p.url, p.address === "ranking" ? "ranking page" : "home page", p.title, p.words || null, p.lang, yes(p.priceStated), p.fetchedAt?.slice(0, 10)]);
@@ -1410,12 +1411,8 @@ routes.get("/export.csv", async (c) => {
       rows = d.competitors.rows.map((p) => [p.domain, p.url, p.address === "ranking" ? "ranking page" : "home page", p.title, p.words || null, p.lang, yes(p.priceStated), p.cluster?.name, p.query, p.seen, p.fetchedAt?.slice(0, 10)]);
     }
   }
-  const lines = [headRow.map(cell).join(","), ...rows.map((row) => row.map(cell).join(","))];
-  return c.body(`${lines.join("\r\n")}\r\n`, 200, {
-    "content-type": "text/csv; charset=utf-8",
-    "content-disposition": `attachment; filename="balkaris-content-gaps-${name}-${today()}.csv"`,
-    "cache-control": "no-store",
-  });
+  /* The section's one way to answer a CSV: the byte-order mark Excel needs, formula-safe cells. */
+  return csvFile(c, `content-gaps-${name}`, headRow, rows);
 });
 
 /* ---------- changes ------------------------------------------------------------------------------ */
@@ -1602,7 +1599,9 @@ routes.post("/judge", async (c) => {
   const line = !moved.length
     ? `${what} ${found.length === 1 ? "was" : "were"} judged ${JUDGED_AS[status]} already.`
     : `${what} judged ${JUDGED_AS[status]}${moved.length < found.length ? ` (${moved.length} changed, the rest were so already)` : ""}. ${
-        status === "relevant" ? "A relevant phrase counts here: as answered when a page of its language is mapped to it, else as a gap." : "It no longer counts as a gap here; Keywords still lists it."
+        status === "relevant"
+          ? "A relevant phrase counts here: as answered when a page of its language is mapped to it, else as a gap."
+          : `Only relevant phrases count here, so ${found.length === 1 ? "it is" : "they are"} not ${found.length === 1 ? "a gap" : "gaps"}; Keywords keeps ${found.length === 1 ? "it" : "them"}.`
       }`;
   if (moved.length) {
     note("seo-action", `Judged ${what} ${JUDGED_AS[status]}`, {
@@ -1650,11 +1649,16 @@ routes.post("/map", async (c) => {
 
   if (typeof b.cluster === "string" && b.cluster.trim()) {
     const cl = cls.find((x) => x.key === (b.cluster as string).trim()) ?? fail(404, `There is no cluster ${b.cluster}.`);
-    if (cl.page === path) {
+    if (cl.page === path && cl.mappedBy === "person") {
       c.set("did", null);
       return c.json<GapChanged>({ ok: true, line: path ? `${quote(cl.name)} is mapped to ${path} already.` : `${quote(cl.name)} has no page already.`, changed: 0 });
     }
-    setClusterPage(cl.key, path, by.name);
+    /*
+     * Written with the person's name even when no page answers it: setClusterPage
+     * clears the name with the page, and the desk's rule (keywords.remap) and the
+     * next import then put a page back that the person had just taken away.
+     */
+    db.prepare("UPDATE cc_seo_clusters SET page = ?, mapped_by = ?, updated_at = ? WHERE key = ?").run(path, by.name, now(), cl.key);
     const other = !!path && !!page?.lang && page.lang !== cl.lang;
     const line = !path
       ? `${quote(cl.name)} has no page again: it counts as a gap.`

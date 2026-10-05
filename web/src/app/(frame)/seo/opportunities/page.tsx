@@ -8,6 +8,7 @@ import { SeoRefused } from "@/components/seo/nav/Refused";
 import { DETAIL_TABS, OppDetail, type DetailTab } from "@/components/seo/opportunities/OppDetail";
 import { OppList } from "@/components/seo/opportunities/OppList";
 import { OppTiles } from "@/components/seo/opportunities/OppTiles";
+import { Inputs } from "@/components/seo/opportunities/Inputs";
 import { KeywordCluster, RankingPotential, Related } from "@/components/seo/opportunities/Lower";
 import { paramsOf } from "@/components/seo/opportunities/look";
 import "@/components/seo/opportunities/opps.css";
@@ -18,7 +19,7 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 const one = (v: string | string[] | undefined): string | undefined => (Array.isArray(v) ? v[0] : v);
 
 /** The params the desk server reads (contract/seo/opportunities.ts); `tab` is this page's own. */
-const PASSED = ["type", "priority", "state", "active", "action", "page", "cluster", "q", "sort", "offset", "limit", "open"] as const;
+const PASSED = ["country", "type", "priority", "state", "active", "action", "page", "cluster", "keyword", "q", "sort", "offset", "limit", "open"] as const;
 
 /**
  * SEO › Opportunities (boards 111, 109, 114). The head, the period and the
@@ -26,7 +27,9 @@ const PASSED = ["type", "priority", "state", "active", "action", "page", "cluste
  * (GET /api/v1/seo/opportunities) draws the page: the six figures, the list
  * with its filters, and one opportunity in detail (?open=, else the list's
  * first row) with its keyword cluster, its ranking potential and the
- * opportunities related to it. ?tab= picks the detail's tab.
+ * opportunities related to it. ?tab= picks the detail's tab. Under the
+ * figures, what the list is made from: each source the rules read, and
+ * whether it was read whole, in part, or not at all.
  *
  * Should the desk not answer for this page (its server code not loaded, a
  * failure), the page says so in place and the head and tabs stay.
@@ -59,7 +62,8 @@ export default async function SeoOpportunitiesPage({ searchParams }: { searchPar
 
   return (
     <div className="dk-seo-opps">
-      <OppTiles tiles={data.tiles} curve={data.curve} />
+      <OppTiles tiles={data.tiles} curve={data.curve} asked={data.asked} />
+      <Inputs reading={data.inputs} />
       {/* The list, the detail beside it as tall as the list and the three panels under it; on a narrower page the detail comes straight after the list. */}
       <div className="dk-seo-opps-main">
         <div className="dk-seo-opps-main-grid">
