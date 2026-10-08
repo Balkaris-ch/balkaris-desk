@@ -76,6 +76,23 @@ const RULES: Rule[] = [
     },
   },
   {
+    /* The writer's own checks (draft.ts guard): the link is fine, the draft was not. */
+    test: /never names .*source is not credited/i,
+    why: {
+      reason: "The article the local model wrote did not name the creator, and the desk never publishes someone's work without crediting them.",
+      next: "Try it again: each try is a new draft. If it keeps failing, add a note with the creator's name when you share the link.",
+      fault: "desk",
+    },
+  },
+  {
+    test: /12-word run is lifted from the source|last paragraph repeats the first/i,
+    why: {
+      reason: "The draft copied a whole sentence from the source, or ended by repeating how it began, so the desk threw it away.",
+      next: "Try it again: each try is a new draft.",
+      fault: "desk",
+    },
+  },
+  {
     test: /unsupported host|not a valid url|no (tiktok|instagram|youtube) (video id|shortcode)/i,
     why: {
       reason: "The desk does not recognise this as an article, TikTok, Instagram or YouTube link.",

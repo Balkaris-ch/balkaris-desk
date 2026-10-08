@@ -471,7 +471,12 @@ export function guard(post: DraftPost, input: DraftInput, floor = 320): void {
      any English sentence and so checked nothing at all. */
   const named = input.publication ?? publicationName(input.site);
   const token = (input.credit ?? named).toLowerCase().replace(/^the /, "").replace(/^@/, "");
-  if (!ours.includes(token) && !ours.includes(input.site.toLowerCase())) {
+  /* A handle is written the way a person reads it: "@sabrina_ramonov" comes back
+     as "Sabrina Ramonov" (link 24, 8 October 2026: three drafts refused for
+     crediting her by name). So the handle with its _ . - read as spaces, or run
+     together, counts as naming her too. */
+  const spoken = [token, token.replace(/[_.-]+/g, " ").trim(), token.replace(/[_.-]+/g, "")].filter((t) => t.length >= 3);
+  if (!spoken.some((t) => ours.includes(t)) && !ours.includes(input.site.toLowerCase())) {
     throw new Error(`the draft never names ${named}, so the source is not credited`);
   }
 }
