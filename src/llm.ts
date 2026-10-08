@@ -95,7 +95,19 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
     clearTimeout(timer);
   }
 
-  if (!res.ok) throw new Error(`Ollama ${res.status}: ${(await res.text()).slice(0, 300)}`);
+  if (!res.ok) {
+    const said = (await res.text()).slice(0, 300);
+    /* The 26b needs about 17 GB of the card's 24. When another program holds
+       the rest (8 October 2026: DaVinci Resolve, 7 GB), Ollama cannot load it
+       and says only "error loading model: vector", three times, and the link
+       sticks. The 12b fits beside it: write with that rather than not at all.
+       The answer names the model it came from, so the draft records it. */
+    if (model === WRITE_MODEL && model !== QUICK_MODEL && /error loading model|llama-server process has terminated|out of memory|unable to allocate/i.test(said)) {
+      console.log(`  ${model} would not load (graphics memory taken by another program?): writing with ${QUICK_MODEL} instead`);
+      return ask(prompt, { ...opts, model: QUICK_MODEL });
+    }
+    throw new Error(`Ollama ${res.status}: ${said}`);
+  }
 
   const json = (await res.json()) as {
     message?: { content?: string };
