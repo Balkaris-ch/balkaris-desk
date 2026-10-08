@@ -560,6 +560,13 @@ async function autoPublish(draftId: number, linkId: number): Promise<void> {
     db.prepare("UPDATE links SET state = 'listed', updated_at = datetime('now') WHERE id = ?").run(linkId);
     log("auto.published", { draft: draftId, sha: out.sha, by: by.name }, linkId);
 
+    /* The site builds in about two minutes; then the sitemap job finds the new
+       page, crawls it and hands the sitemap to Google (cc/site/sitemap.ts).
+       Asked twice in case the build is slow; a read that finds nothing new is cheap. */
+    for (const minutes of [3, 7]) {
+      setTimeout(() => void import("./cc/scheduler.ts").then((s) => s.runNow("sitemap")).catch(() => {}), minutes * 60_000).unref();
+    }
+
     if (l.from_chat) {
       const url = `${SITE_BASE}/insights/${d.slug}`;
       await send(
@@ -1291,8 +1298,17 @@ app.post("/tg/:secret", async (c) => {
             `and write it up as a piece for the journal. You approve it before anything is published.\n\n` +
             `I ask how to write it: the standard way, as a long read, from the technical side, or short and in plain words. ` +
             `A word beside the link answers before I ask: <i>long</i>, <i>tech</i>, <i>simple</i>.\n\n` +
+            `/insights the journal at a glance · /inbox what is stuck and why · /top the most-read articles · /status the queue.\n\n` +
             `The desk is at ${esc(process.env.DESK_URL ?? "https://desk.balkaris.ch")}.`,
         );
+        return;
+      }
+
+      /* The Insights page, in the chat (src/botdata.ts). In a group a command may carry the bot's name: /top@insight_balkaris_bot. */
+      const command = /^\/(insights|inbox|top)(@\w+)?\b/.exec(text)?.[1];
+      if (command) {
+        const { insightsSummary, inboxLines, topArticles } = await import("./botdata.ts");
+        await send(chat, command === "insights" ? insightsSummary() : command === "inbox" ? inboxLines() : await topArticles());
         return;
       }
 
@@ -1308,7 +1324,7 @@ app.post("/tg/:secret", async (c) => {
       }
 
       if (!firstUrl(text)) {
-        await send(chat, "Send me a link to an article and I will take it from there. /status tells you what is in the queue.");
+        await send(chat, "Send me a link to an article and I will take it from there. /insights, /inbox and /top tell you how the journal is doing; /status what is in the queue.");
         return;
       }
 

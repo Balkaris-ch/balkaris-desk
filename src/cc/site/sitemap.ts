@@ -349,6 +349,37 @@ export function sitemap(): Reading<SitemapRead> {
   return ok(v, "crawl", had.at, `Read from ${siteHost()}/sitemap.xml and /robots.txt.${older}`);
 }
 
+/**
+ * A new page in the sitemap is read and handed to Google at once, not the
+ * next day (Fini, 8 October 2026: "they need to be crawled instantly when
+ * they get published").
+ *
+ *   - the desk's own crawl runs now, so the new page's title, words and
+ *     checks are on the SEO screens within minutes;
+ *   - the sitemap is submitted to Google again, which is the one thing that
+ *     makes Google fetch it sooner (there is no API to request indexing of an
+ *     ordinary page). Bing and the IndexNow engines are told by the website's
+ *     own deploy (its search workflow), so the desk does not tell them twice.
+ *
+ * Imported when needed: the scheduler and the Google actions import this
+ * folder, and a top-level import back would be a cycle. A refusal from
+ * Google (no write access yet) is said in the job's line and costs nothing.
+ */
+async function whenAdded(): Promise<string> {
+  const said: string[] = [];
+  const { runNow } = await import("../scheduler.ts");
+  if (runNow("crawl")) said.push("crawl asked for");
+  try {
+    const google = await import("../seo/google-actions.ts");
+    const desk = { telegram: 0, name: "The desk", email: null, author: "balkaris", canPublish: false, owner: false, revoked: false, seesLeads: false, grants: null, invitedAt: null } as unknown as import("../../people.ts").Person;
+    await google.submitSitemap("/sitemap.xml", desk);
+    said.push("sitemap submitted to Google");
+  } catch (e) {
+    said.push(`Google not told: ${e instanceof Error ? e.message : String(e)}`.slice(0, 160));
+  }
+  return `; ${said.join("; ")}`;
+}
+
 export const sitemapJob: Job = {
   name: "sitemap",
   title: "Read the sitemap and robots.txt",
@@ -358,6 +389,7 @@ export const sitemapJob: Job = {
     const { read, added, removed } = await refreshSitemap();
     const change = added.length || removed.length ? `, ${added.length} added, ${removed.length} removed` : "";
     const faults = read.issues.length ? `, ${read.issues.length} problem${read.issues.length === 1 ? "" : "s"}` : ", valid";
-    return `${read.entries.length} addresses${change}${faults}`;
+    const after = added.length ? await whenAdded() : "";
+    return `${read.entries.length} addresses${change}${faults}${after}`;
   },
 };
