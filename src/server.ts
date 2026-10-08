@@ -1140,12 +1140,19 @@ interface TgMessage {
  * it was. The alternative was asking Fini to read a numeric id out of an API
  * response before the thing could be used once, and a brand-new bot with an
  * unlisted username is not something a stranger finds in the minutes between
- * deploy and first message. Everyone after the owner is let in by `desk_allow`
- * rows, which the owner adds with /allow.
+ * deploy and first message. Everyone after the owner is let in by
+ * `chat.allowed` rows in the events log.
+ *
+ * A GROUP IS LET IN BY WHO WRITES, NOT BY ITS ID (Fini, 8 October 2026: "Only
+ * me and Tiho can answer or talk to it", in the group "Balkaris Insights").
+ * Telegram gives a private chat the person's own id, so the owner and every
+ * allowed private chat are also allowed PEOPLE: their message is taken in any
+ * group they share with the bot, and anybody else's is ignored there.
  */
-function mayUse(chatId: number): { ok: boolean; claimed?: boolean } {
+function mayUse(chatId: number, fromId?: number): { ok: boolean; claimed?: boolean } {
   const env = Number(process.env.TELEGRAM_OWNER_ID ?? 0);
   if (env && chatId === env) return { ok: true };
+  if (fromId && fromId !== chatId && mayUse(fromId).ok) return { ok: true };
 
   const owner = db.prepare("SELECT detail FROM events WHERE what = 'owner.claimed' ORDER BY id LIMIT 1").get() as
     | { detail: string }
@@ -1189,7 +1196,7 @@ async function chooseFormat(q: TgCallback): Promise<void> {
   try {
     const chat = q.message?.chat.id;
     const m = /^f:(\d+):([a-z]+)$/.exec(q.data ?? "");
-    if (!chat || !m || !isFormat(m[2]) || !mayUse(chat).ok) return void (await answer(q.id));
+    if (!chat || !m || !isFormat(m[2]) || !mayUse(chat, q.from.id).ok) return void (await answer(q.id));
 
     const id = Number(m[1]);
     const format = m[2];
@@ -1241,10 +1248,16 @@ app.post("/tg/:secret", async (c) => {
   const text = (msg.text ?? msg.caption ?? "").trim();
   const name = msg.from?.first_name ?? msg.from?.username ?? "someone";
 
-  const may = mayUse(chat);
+  /* In a group the bot answers only what is for it: a link, a command, or a
+     message that names it. "Group created", a new photo and two people talking
+     are not, and a refusal there would be said to everybody in the group. */
+  const group = msg.chat.type !== "private";
+  if (group && !firstUrl(text) && !text.startsWith("/") && !/@\w*bot\b/i.test(text)) return c.json({ ok: true });
+
+  const may = mayUse(chat, msg.from?.id);
   if (!may.ok) {
-    log("telegram.refused", { chat, name });
-    await send(chat, "This bot belongs to Balkaris and is not open. Ask Fini to add you.");
+    log("telegram.refused", { chat, from: msg.from?.id ?? null, name });
+    if (!group) await send(chat, "This bot belongs to Balkaris and is not open. Ask Fini to add you.");
     return c.json({ ok: true });
   }
 
