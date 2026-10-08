@@ -1,6 +1,7 @@
 import { db, lastBeat, log } from "./db.ts";
 import { extract, ExtractError, firstUrl } from "./extract.ts";
 import { match } from "./match.ts";
+import { languageOf, notEnglish } from "./language.ts";
 import { serviceName, TOPICS } from "./catalogue.ts";
 import { edit, esc, send, type Keyboard } from "./telegram.ts";
 import { isSocial, platformOf } from "./social/shape.ts";
@@ -263,6 +264,22 @@ export async function takeLink(
     const id = Number(info.lastInsertRowid);
     log("link.unreadable", { url, why }, id);
     await say(`Kept it, but I could not read it: ${esc(why)}.\n\nIt is on the desk if you want to look.`);
+    return { id, already: false };
+  }
+
+  /* English sources only (language.ts). Refused here, before a job exists, so the workstation never starts on it. */
+  const lang = languageOf(`${piece.title}\n${piece.text}`);
+  if (!lang.english) {
+    const why = notEnglish(lang);
+    const info = db
+      .prepare("INSERT INTO links (url, from_chat, from_user, from_name, note, title, site, words, state, error) VALUES (?,?,?,?,?,?,?,?,'failed',?)")
+      .run(url, who.chat ?? null, who.user ?? null, who.name ?? null, who.note ?? null, piece.title, piece.site, piece.words, why);
+    const id = Number(info.lastInsertRowid);
+    log("link.not-english", { url, language: lang.code }, id);
+    await say(
+      `Not taken: ${esc(why)}.\n\nShare the English original, or an English article on the same subject. ` +
+        `Everything shared here becomes a public article on balkaris.ch, so share what is useful for Balkaris and its clients.`,
+    );
     return { id, already: false };
   }
 

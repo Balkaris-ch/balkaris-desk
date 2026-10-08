@@ -8,6 +8,7 @@ import { makePreview, type Preview } from "./preview.ts";
 import { transcribeVideo } from "./transcribe.ts";
 import type { Platform, SourceRecord } from "./types.ts";
 import { ask, QUICK_MODEL } from "../llm.ts";
+import { notEnglish, spokenLanguage } from "../language.ts";
 
 /**
  * A social link becomes the same thing an article link becomes: a title, some
@@ -283,6 +284,10 @@ export async function takeSocial(input: string): Promise<SocialMaterial> {
         "upstream_failed",
       );
     }
+
+    /* English sources only: the workstation's own model (Whisper) names the language it heard. */
+    const heard = spokenLanguage(spoken.language);
+    if (!heard.english) throw new ResolveError(notEnglish(heard), "upstream_failed");
 
     const author = source.authorHandle;
     const caption = source.caption;

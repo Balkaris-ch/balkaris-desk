@@ -76,6 +76,14 @@ const RULES: Rule[] = [
     },
   },
   {
+    test: /it is in (.+?), not English/i,
+    why: (m) => ({
+      reason: `It is in ${m[1]}, and the Balkaris journal is written from English sources only, so nothing was started.`,
+      next: "Share the English original, or an English article or video on the same subject.",
+      fault: "link",
+    }),
+  },
+  {
     /* The writer's own checks (draft.ts guard): the link is fine, the draft was not. */
     test: /never names .*source is not credited/i,
     why: {
