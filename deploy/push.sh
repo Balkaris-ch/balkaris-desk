@@ -132,7 +132,15 @@ systemctl is-active balkaris-desk
 systemctl is-active balkaris-desk-web
 
 # Both must answer on loopback BEFORE Caddy is pointed at them.
-curl -fsS -m 10 -o /dev/null http://127.0.0.1:3400/health
+# The server needs longer than four seconds once its routes grew (8 October
+# 2026: it answered after about eight, and the deploy stopped here with the
+# Caddy step undone though nothing was wrong). Up to 40 seconds, then a failure.
+up=0
+for try in $(seq 1 20); do
+  if curl -fsS -m 5 -o /dev/null http://127.0.0.1:3400/health; then up=1; break; fi
+  sleep 2
+done
+[ "$up" = 1 ] || { echo "✗ the server did not answer /health within 40 s"; journalctl -u balkaris-desk -n 30 --no-pager; exit 1; }
 code=$(curl -s -m 10 -o /dev/null -w '%{http_code}' http://127.0.0.1:3401/)
 case "$code" in
   200|302|303|307|308|401) echo "  interface answers ($code)" ;;
