@@ -9,6 +9,7 @@ import { Tabs } from "@/components/ui/Tabs";
 import { Thumb } from "@/components/ui/Thumb";
 import { ago } from "@/lib/format";
 import { hrefOf, type View } from "./href";
+import { DismissButton } from "./DismissButton";
 import { RetryButton } from "./RetryButton";
 import { STATUS_WORD } from "./status";
 
@@ -69,8 +70,11 @@ export function InboxPanel({ data, view }: { data: InsightsPayload; view: View }
                       </p>
                     ) : null}
                   </div>
-                  {r.canRetry ? (
-                    <RetryButton linkId={r.linkId} />
+                  {r.canRetry || r.canDismiss ? (
+                    <span className="dk-insights-inbox-acts">
+                      {r.canRetry ? <RetryButton linkId={r.linkId} /> : null}
+                      {r.canDismiss ? <DismissButton linkId={r.linkId} /> : null}
+                    </span>
                   ) : (
                     <LinkButton href={r.href} size="xs" variant="quiet">
                       Open

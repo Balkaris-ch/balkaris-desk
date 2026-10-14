@@ -63,6 +63,8 @@ export interface InsightRow {
   draftId: number | null;
   /** The existing retry action applies: a stuck job, or a link that could not be read. */
   canRetry: boolean;
+  /** True when the link may be taken off the Inbox (POST /api/v1/insights/dismiss/:link). */
+  canDismiss: boolean;
   /**
    * Why it is stuck or could not be read, in one line: the most informative
    * line of the error (src/cc/system.ts `whyLine`), not its first.
@@ -156,6 +158,7 @@ export interface InboxRow {
   href: string;
   status: InsightStatus;
   canRetry: boolean;
+  canDismiss: boolean;
   /** As in `InsightRow`: the most informative line, and the whole text for the hover. */
   problem: string | null;
   problemFull: string | null;

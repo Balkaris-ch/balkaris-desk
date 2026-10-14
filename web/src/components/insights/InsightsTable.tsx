@@ -18,6 +18,7 @@ import { cx } from "@/lib/cx";
 import { compact, DASH, fullDate, num, sourceLabel } from "@/lib/format";
 import { SOURCE_ICON } from "./InboxPanel";
 import { ctrText } from "./rate";
+import { DismissButton } from "./DismissButton";
 import { RetryButton } from "./RetryButton";
 import { RowStatus, STATUS_OPTIONS } from "./status";
 import { TableSearch } from "./TableSearch";
@@ -199,8 +200,11 @@ export function InsightsTable({ title, rows, total, ga4, gsc, searchEarly, conve
     head: <span className="dk-sr">Actions</span>,
     align: "right",
     cell: (r) =>
-      r.canRetry && r.linkId !== null ? (
-        <RetryButton linkId={r.linkId} compact />
+      (r.canRetry || r.canDismiss) && r.linkId !== null ? (
+        <span className="dk-insights-inbox-acts">
+          {r.canRetry ? <RetryButton linkId={r.linkId} compact /> : null}
+          {r.canDismiss ? <DismissButton linkId={r.linkId} compact /> : null}
+        </span>
       ) : r.liveUrl && r.source.key !== "site" ? (
         <LinkButton href={r.liveUrl} variant="ghost" size="xs" icon="external" aria-label={`Read “${r.title}” on balkaris.ch`} title="Read it on balkaris.ch" />
       ) : null,

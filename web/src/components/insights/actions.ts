@@ -24,6 +24,16 @@ export async function createInsight(_before: CreateResult, form: FormData): Prom
 
 export type RetryResult = { ok: boolean; message: string } | null;
 
+/** Remove from the Inbox: a stuck or unreadable link stops being asked for, and moves to Archive. */
+export async function dismissLink(_before: RetryResult, form: FormData): Promise<RetryResult> {
+  const id = String(form.get("link") ?? "");
+  if (!/^\d+$/.test(id)) return { ok: false, message: "No such link." };
+  const a = await askPost(`/api/v1/insights/dismiss/${id}`);
+  if (!a.ok) return { ok: false, message: a.message };
+  revalidatePath("/insights");
+  return { ok: true, message: "Removed from the Inbox." };
+}
+
 /** Try it again: a stuck job, or a link that could not be read, goes back in the queue. */
 export async function retryLink(_before: RetryResult, form: FormData): Promise<RetryResult> {
   const id = String(form.get("link") ?? "");

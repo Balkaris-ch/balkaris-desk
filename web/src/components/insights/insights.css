@@ -883,3 +883,10 @@
     justify-content: flex-start;
   }
 }
+
+/* Retry and Remove side by side on a stuck row. */
+.dk-insights-inbox-acts {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x6);
+}

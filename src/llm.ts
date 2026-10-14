@@ -35,7 +35,17 @@ export interface AskOptions {
    * model that fits beside ComfyUI and Whisper on the card.
    */
   images?: string[];
+  /** How many times this call has already waited for Ollama to come back. Internal. */
+  waited?: number;
 }
+
+/* Ollama updates itself (Fini, 14 October 2026: keep it so). While it does,
+   its server is gone for a minute or two and every call fails with "not
+   answering", which used to spend a job's three attempts in seconds. A call
+   now waits for it: half a minute at a time, five times, starting it if it
+   is not running (ensure.ts), and only then fails. */
+const OLLAMA_WAITS = 5;
+const OLLAMA_WAIT_MS = Number(process.env.OLLAMA_WAIT_MS ?? 30_000);
 
 export interface AskResult {
   text: string;
@@ -54,8 +64,68 @@ function assertLocal(model: string): void {
   }
 }
 
+/**
+ * How many answers each model has given in this process. A caller that makes
+ * several calls (the writer makes one per section) compares it before and
+ * after, so a draft records the model that really wrote it, the 12b included
+ * when the 26b could not load (`modelsSince`).
+ */
+const answered = new Map<string, number>();
+export const answeredSoFar = (): Map<string, number> => new Map(answered);
+/** The models that answered since `before` was taken, joined for a label: "gemma4:26b + gemma4:12b-it-qat". */
+export function modelsSince(before: Map<string, number>, fallback: string): string {
+  const used = [...answered].filter(([m, n]) => n > (before.get(m) ?? 0)).map(([m]) => m);
+  return used.length ? used.join(" + ") : fallback;
+}
+
+/* ---------- does the 26b fit right now? ------------------------------------
+ * 14 October 2026: with another program on the card (DaVinci Resolve, a game)
+ * the 26b either fails to load at once or loads half onto the processor and
+ * then takes four minutes to time out. Ask first: if it is not loaded already
+ * and the card has less free memory than it needs, write with the 12b
+ * straight away. Asked at most once a minute; if the card cannot be asked,
+ * the 26b is tried as before. */
+const WRITE_MODEL_MIB = Number(process.env.WRITE_MODEL_MIB ?? 17_500);
+let fits: { at: number; ok: boolean; why: string } | null = null;
+
+async function writeModelFits(): Promise<{ ok: boolean; why: string }> {
+  if (fits && Date.now() - fits.at < 60_000) return fits;
+  let ok = true;
+  let why = "";
+  try {
+    const ps = (await (await fetch(`${OLLAMA_URL}/api/ps`, { signal: AbortSignal.timeout(5_000) })).json()) as { models?: { name?: string; model?: string; size_vram?: number }[] };
+    const loaded = (ps.models ?? []).some((m) => m.name === WRITE_MODEL || m.model === WRITE_MODEL);
+    if (!loaded) {
+      const { execFile } = await import("node:child_process");
+      const free = await new Promise<number | null>((resolve) =>
+        execFile("nvidia-smi", ["--query-gpu=memory.free", "--format=csv,noheader,nounits"], { timeout: 5_000, windowsHide: true }, (e, out) =>
+          resolve(e ? null : Number(String(out).trim().split(/\r?\n/)[0])),
+        ),
+      );
+      /* What Ollama holds for another model (the 12b, say) it gives back to load the 26b, so it counts as free. */
+      const ollamaHolds = Math.round((ps.models ?? []).reduce((s, m) => s + (m.size_vram ?? 0), 0) / 1048576);
+      if (free !== null && Number.isFinite(free) && free + ollamaHolds < WRITE_MODEL_MIB) {
+        ok = false;
+        why = `${free + ollamaHolds} MB free on the graphics card and ${WRITE_MODEL} needs about ${WRITE_MODEL_MIB}`;
+      }
+    }
+  } catch {
+    /* Ollama's list or the card could not be asked: try the 26b, as before this check existed. */
+  }
+  fits = { at: Date.now(), ok, why };
+  return fits;
+}
+
 export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskResult> {
-  const model = opts.model ?? WRITE_MODEL;
+  const asked = opts.model ?? WRITE_MODEL;
+  let model = asked;
+  if (asked === WRITE_MODEL && WRITE_MODEL !== QUICK_MODEL) {
+    const f = await writeModelFits();
+    if (!f.ok) {
+      console.log(`  ${WRITE_MODEL} does not fit now (${f.why}): writing with ${QUICK_MODEL}`);
+      model = QUICK_MODEL;
+    }
+  }
   assertLocal(model);
 
   const started = Date.now();
@@ -86,6 +156,24 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
     });
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
+    /* The 26b loaded half onto the processor and ran out of time: the 12b answers instead of the job failing. */
+    if (why.includes("abort") && model === WRITE_MODEL && model !== QUICK_MODEL) {
+      console.log(`  ${model} did not answer in time: writing with ${QUICK_MODEL} instead`);
+      fits = { at: Date.now(), ok: false, why: `${model} timed out a moment ago` };
+      return ask(prompt, { ...opts, model: QUICK_MODEL });
+    }
+    if (!why.includes("abort") && (opts.waited ?? 0) < OLLAMA_WAITS) {
+      const n = (opts.waited ?? 0) + 1;
+      console.log(`  Ollama is not answering (${why}); it may be updating itself. Waiting ${Math.round(OLLAMA_WAIT_MS / 1000)} s (${n} of ${OLLAMA_WAITS})`);
+      await new Promise((r) => setTimeout(r, OLLAMA_WAIT_MS));
+      try {
+        await (await import("./ensure.ts")).ensureOllama();
+      } catch {
+        /* starting it is a courtesy; the next try says whether it is back */
+      }
+      clearTimeout(timer);
+      return ask(prompt, { ...opts, model: asked, waited: n });
+    }
     throw new Error(
       why.includes("abort")
         ? `${model} did not answer in time. A cold 26b takes a while on first load — try again, or set WRITE_MODEL to the 12b.`
@@ -115,6 +203,7 @@ export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskRes
     eval_count?: number;
   };
 
+  answered.set(model, (answered.get(model) ?? 0) + 1);
   return {
     text: json.message?.content ?? "",
     model,

@@ -180,7 +180,7 @@ function readDesk(): Desk {
   const events = db
     .prepare(
       `SELECT link_id, what, detail, at FROM events
-        WHERE what IN ('auto.published', 'draft.list', 'draft.publish', 'draft.unlist', 'draft.remove', 'draft.removed', 'job.taken', 'job.failed', 'job.stuck')
+        WHERE what IN ('auto.published', 'draft.list', 'draft.publish', 'draft.unlist', 'draft.remove', 'draft.removed', 'link.dismissed', 'job.taken', 'job.failed', 'job.stuck')
         ORDER BY id`,
     )
     .all() as unknown as EventRec[];
@@ -203,7 +203,7 @@ function readDesk(): Desk {
       lastListedOrLive.set(e.link_id, e.at);
     }
     if (e.what === "draft.remove") lastTakenDown.set(e.link_id, e.at);
-    if (e.what === "draft.removed") removed.add(e.link_id);
+    if (e.what === "draft.removed" || e.what === "link.dismissed") removed.add(e.link_id);
     if (e.what === "job.failed") lastFailure.set(e.link_id, e.at);
   }
 
@@ -238,9 +238,10 @@ function statusOf(l: LinkRec, desk: Desk): { status: InsightStatus; archived?: "
     return { status: "draft" };
   }
   const job = desk.writeJob.get(l.id);
-  if (job?.state === "stuck") return { status: "stuck" };
   if (job && (job.state === "queued" || job.state === "running")) return { status: "writing" };
+  /* Removed from the Inbox by a person (link.dismissed), or its draft deleted: archived, not stuck. */
   if (desk.removed.has(l.id)) return { status: "archived", archived: "removed" };
+  if (job?.state === "stuck") return { status: "stuck" };
   return { status: "toread" };
 }
 
@@ -348,7 +349,9 @@ What the workstation said: ${whyLine(raw).full}` }; })();
       handle: handleOf(l, source),
       linkId: l.id,
       draftId: l.draft_id,
-      canRetry: status === "stuck" || (l.draft_id === null && l.state === "failed"),
+      /* Retrying a link refused for its language gives the same answer: it can only be removed. */
+      canRetry: (status === "stuck" || (l.draft_id === null && l.state === "failed")) && !/not English/i.test(raw ?? ""),
+      canDismiss: status === "stuck" || (l.draft_id === null && l.state === "failed"),
       problem: why?.line ?? null,
       problemFull: why?.full ?? null,
     });
@@ -377,6 +380,7 @@ What the workstation said: ${whyLine(raw).full}` }; })();
         linkId: null,
         draftId: null,
         canRetry: false,
+        canDismiss: false,
         problem: null,
         problemFull: null,
       });
@@ -834,7 +838,7 @@ routes.get("/", async (c) => {
   const inboxRows: InboxRow[] = linkRows
     .filter((r) => r.source.key === source && WAITING.includes(r.status))
     .slice(0, 4)
-    .map((r) => ({ linkId: r.linkId!, title: r.title, handle: r.handle, shared: r.shared!, cover: r.cover, href: r.href, status: r.status, canRetry: r.canRetry, problem: r.problem, problemFull: r.problemFull }));
+    .map((r) => ({ linkId: r.linkId!, title: r.title, handle: r.handle, shared: r.shared!, cover: r.cover, href: r.href, status: r.status, canRetry: r.canRetry, canDismiss: r.canDismiss, problem: r.problem, problemFull: r.problemFull }));
 
   const gscTable: Reading<Record<string, SearchFigures>> = specimen
     ? ok(specimenSearch(live.map((r) => r.path!)), "gsc", new Date().toISOString(), "Specimen data: made-up figures, shown only on a workstation.")
@@ -1001,6 +1005,30 @@ function retryRefusal(id: number): string | null {
   if (l.draft === null && (job?.state === "stuck" || l.state === "failed")) return null;
   return "That link is not stuck or unread; nothing was queued.";
 }
+
+/* ---------- POST /dismiss/:link ------------------------------------------------ */
+
+/**
+ * Take a stuck or unreadable link off the Inbox (Fini, 14 October 2026: a
+ * restricted post, a silent video and two links in Serbian sat there for
+ * days with nothing anybody could do but look at them). Its waiting jobs end,
+ * it is marked dismissed, and it shows under Archive as removed. The link
+ * itself is kept: nothing shared is forgotten, it is only no longer asked for.
+ */
+routes.post("/dismiss/:link", (c) => {
+  const id = Number(c.req.param("link"));
+  const l = Number.isInteger(id) ? (db.prepare("SELECT id, (SELECT MAX(id) FROM drafts WHERE link_id = links.id) AS draft FROM links WHERE id = ?").get(id) as { id: number; draft: number | null } | undefined) : undefined;
+  if (!l) throw new HTTPException(404, { message: "The desk has no such link." });
+  if (l.draft !== null) throw new HTTPException(409, { message: "It has an article. Take that down or delete it on its own page." });
+  const running = db.prepare("SELECT COUNT(*) c FROM jobs WHERE link_id = ? AND state = 'running'").get(id) as { c: number };
+  if (running.c) throw new HTTPException(409, { message: "It is being worked on at the workstation right now. Remove it when that ends." });
+
+  const by = me(c).name;
+  db.prepare("UPDATE jobs SET state = 'done', error = ?, runner = NULL, taken_at = NULL WHERE link_id = ? AND state IN ('queued', 'stuck')").run(`removed from the Inbox by ${by}`, id);
+  db.prepare("UPDATE links SET state = 'dismissed', updated_at = datetime('now') WHERE id = ?").run(id);
+  log("link.dismissed", { by }, id);
+  return c.json({ ok: true, linkId: id });
+});
 
 routes.post("/retry/:link", (c) => {
   const id = Number(c.req.param("link"));

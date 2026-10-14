@@ -1,4 +1,4 @@
-import { askJson, WRITE_MODEL } from "./llm.ts";
+import { answeredSoFar, askJson, modelsSince, WRITE_MODEL } from "./llm.ts";
 import { CLOSING_JOBS, pickClosing, shapeFor, template, type ClosingJob, type Format, type SourceFacts, type TemplateId } from "./templates.ts";
 import { serviceName, TOPICS, type TopicId } from "./catalogue.ts";
 import { countWords, howTo, proseOf, schemaFor, toPostBlocks, type PostBlock } from "./blocks.ts";
@@ -162,6 +162,7 @@ function window(text: string, words = 1200): string {
 export async function draft(input: DraftInput, opts: { model?: string; format?: Format | null } = {}): Promise<DraftResult> {
   const started = Date.now();
   const model = opts.model ?? WRITE_MODEL;
+  const asked = answeredSoFar();
 
   const facts: SourceFacts = {
     title: input.title,
@@ -418,7 +419,7 @@ Answer as JSON.`,
   };
 
   guard(post, input, tpl.floor);
-  return { post, template: tpl.id, because: chosen.because, model, ms: Date.now() - started, dropped, closing };
+  return { post, template: tpl.id, because: chosen.because, model: modelsSince(asked, model), ms: Date.now() - started, dropped, closing };
 }
 
 /**
@@ -506,6 +507,7 @@ export async function reclose(
 ): Promise<{ post: DraftPost; model: string; ms: number }> {
   const started = Date.now();
   const model = opts.model ?? WRITE_MODEL;
+  const asked = answeredSoFar();
 
   const body = [...post.body];
   const lastIndex = body.map((b) => typeof b === "string").lastIndexOf(true);
@@ -564,5 +566,5 @@ ${howTo([])}`,
 
   const next: DraftPost = { ...post, body: [...withoutClose, value] };
   guard(next, input, opts.floor);
-  return { post: next, model, ms: Date.now() - started };
+  return { post: next, model: modelsSince(asked, model), ms: Date.now() - started };
 }
