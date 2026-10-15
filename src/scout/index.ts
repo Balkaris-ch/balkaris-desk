@@ -474,13 +474,14 @@ export function overview(): {
   const finds = db
     .prepare(
       `SELECT f.*, s.name AS source,
-              (SELECT d.slug FROM drafts d WHERE d.link_id = f.link_id AND d.state = 'listed' ORDER BY d.id DESC LIMIT 1) AS liveSlug
+              (SELECT d.slug FROM drafts d WHERE d.link_id = f.link_id AND d.state = 'listed' ORDER BY d.id DESC LIMIT 1) AS liveSlug,
+              (SELECT j.state FROM jobs j WHERE j.link_id = f.link_id AND j.kind IN ('write', 'ingest') ORDER BY j.id DESC LIMIT 1) AS jobState
          FROM cc_scout_finds f JOIN cc_scout_sources s ON s.id = f.source_id
         WHERE f.found_at >= datetime('now', '-7 days') OR f.state IN ('found', 'offered')
         ORDER BY CASE f.state WHEN 'offered' THEN 0 WHEN 'found' THEN 1 WHEN 'queued' THEN 2 ELSE 3 END, f.score DESC
         LIMIT 120`,
     )
-    .all() as unknown as (FindRow & { source: string; liveSlug: string | null })[];
+    .all() as unknown as (FindRow & { source: string; liveSlug: string | null; jobState: string | null })[];
   const sources = db.prepare("SELECT * FROM cc_scout_sources ORDER BY CASE status WHEN 'active' THEN 0 WHEN 'trial' THEN 1 ELSE 2 END, score DESC").all() as unknown as (SourceRow & {
     finds: number;
     kept: number;
@@ -492,7 +493,8 @@ export function overview(): {
   return {
     settings: settings(),
     today: startedToday(),
-    finds: finds.map((f) => ({ ...f, published: !!f.liveSlug })),
+    /* A find the writer gave up on shows as failed; its reason is on the link, in Insights. */
+    finds: finds.map(({ jobState, ...f }) => ({ ...f, state: f.state === "queued" && jobState === "stuck" ? "failed" : f.state, published: !!f.liveSlug })),
     sources: sources.map((s) => ({ ...s, every: everyMinutes(s) })),
   };
 }

@@ -223,6 +223,21 @@ one short quoted phrase from the source, and put it in quotation marks if you do
   let thesis = "";
   let closing: { job: ClosingJob; because: string } = { job: "action", because: "not decided yet" };
 
+  /* The source as the lift check reads it (guard, below): checked section by
+     section too, so a copied sentence is sent back to the model with the words
+     it copied and rewritten there, instead of failing the whole draft at the
+     end. A news piece restates facts, and the 12b in particular kept a source's
+     sentence word for word three drafts running (15 October 2026). */
+  const sourceRuns = input.text.toLowerCase().replace(/\s+/g, " ");
+  const liftedRun = (prose: string): string | null => {
+    const mine = prose.toLowerCase().replace(/\s+/g, " ").split(" ");
+    for (let i = 0; i + 12 <= mine.length; i++) {
+      const run = mine.slice(i, i + 12).join(" ");
+      if (run.length > 40 && sourceRuns.includes(run)) return run;
+    }
+    return null;
+  };
+
   for (const beat of tpl.beats) {
     const lo = Math.round(beat.words * 0.6);
     const hi = Math.round(beat.words * 1.4);
@@ -318,6 +333,8 @@ shape that is not in the list above.`,
             throw new Error(`do not mention ${publication} in this paragraph — it belongs to the opening, not the close`);
           }
         }
+        const copied = liftedRun(proseOf(got.blocks));
+        if (copied) throw new Error(`these words are copied from the source: "${copied}". Say the same thing in your own words and sentence order`);
         const n = countWords(got.blocks);
         if (n < lo) throw new Error(`that is ${n} words and the section needs about ${beat.words}`);
         if (n > hi) throw new Error(`that is ${n} words, which is too long — the section needs about ${beat.words}`);
