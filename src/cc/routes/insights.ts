@@ -1046,3 +1046,54 @@ routes.post("/retry/:link", (c) => {
   log("link.retried", { by: me(c).name }, id);
   return c.json({ ok: true, linkId: id });
 });
+
+/* ---------- the Scout (src/scout/index.ts) ---------------------------------------
+ *
+ * GET  /scout                 its settings, today's count, the finds with their states, the sources with their scores
+ * POST /scout/settings        { mode?, perDay?, autoNews?, autoMin? }
+ * POST /scout/run             read the due sources and decide now, ahead of the half-hourly run
+ * POST /scout/finds/:id       { action: "news" | "standard" | "skip" }
+ * POST /scout/sources         { url }        add a source: a feed, a YouTube channel feed, a subreddit, or a site whose feed the desk can find
+ * POST /scout/sources/:id     { status: "active" | "paused" }
+ */
+routes.get("/scout", async (c) => c.json((await import("../../scout/index.ts")).overview()));
+
+routes.post("/scout/settings", async (c) => {
+  const sc = await import("../../scout/index.ts");
+  const b = ((await c.req.json().catch(() => ({}))) ?? {}) as Record<string, unknown>;
+  const next: Record<string, unknown> = {};
+  for (const k of ["mode", "perDay", "autoNews", "autoMin"]) if (b[k] !== undefined) next[k] = b[k];
+  const s = sc.saveSettings(next);
+  log("scout.settings", { by: me(c).name, ...next });
+  return c.json({ ok: true, settings: s });
+});
+
+routes.post("/scout/run", async (c) => {
+  const { runNow } = await import("../scheduler.ts");
+  return runNow("scout") ? c.json({ ok: true, line: "The Scout is reading its sources now." }) : c.json({ error: "The Scout is switched off under Automations, or already running." }, 409);
+});
+
+routes.post("/scout/finds/:id", async (c) => {
+  const sc = await import("../../scout/index.ts");
+  const id = Number(c.req.param("id"));
+  const action = String(((await c.req.json().catch(() => ({}))) as { action?: unknown }).action ?? "");
+  if (!Number.isInteger(id)) throw new HTTPException(404, { message: "No such find." });
+  if (action === "skip") return sc.skipFind(id, me(c).name) ? c.json({ ok: true, line: "Skipped." }) : c.json({ error: "It was already decided." }, 409);
+  if (action !== "news" && action !== "standard") throw new HTTPException(400, { message: "Say news, standard or skip." });
+  const out = await sc.queueFind(id, action, me(c), me(c).name);
+  return out.ok ? c.json({ ok: true, line: out.line }) : c.json({ error: out.line }, 409);
+});
+
+routes.post("/scout/sources", async (c) => {
+  const sc = await import("../../scout/index.ts");
+  const url = String(((await c.req.json().catch(() => ({}))) as { url?: unknown }).url ?? "").slice(0, 500);
+  const out = await sc.addSource(url);
+  return out.ok ? c.json({ ok: true, line: out.line }) : c.json({ error: out.line }, 400);
+});
+
+routes.post("/scout/sources/:id", async (c) => {
+  const sc = await import("../../scout/index.ts");
+  const status = String(((await c.req.json().catch(() => ({}))) as { status?: unknown }).status ?? "");
+  if (status !== "active" && status !== "paused") throw new HTTPException(400, { message: "Say active or paused." });
+  return sc.setSourceStatus(Number(c.req.param("id")), status) ? c.json({ ok: true }) : c.json({ error: "No such source." }, 404);
+});

@@ -1,0 +1,245 @@
+/* Insights › Scout (ScoutPanel). Tokens only: both themes follow. */
+
+.dk-scout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.dk-scout-settings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-scout-modes {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--x8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.dk-scout-modes legend {
+  margin-bottom: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+@media (max-width: 900px) {
+  .dk-scout-modes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.dk-scout-mode {
+  display: flex;
+  gap: var(--x10);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  cursor: pointer;
+}
+
+.dk-scout-mode:has(input:checked) {
+  border-color: var(--green-4);
+  background: var(--tab-on);
+}
+
+.dk-scout-mode input {
+  margin-top: var(--x2);
+  accent-color: var(--green-2);
+}
+
+.dk-scout-mode span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+}
+
+.dk-scout-mode b {
+  color: var(--ink);
+}
+
+.dk-scout-mode small {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-scout-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x16);
+}
+
+.dk-scout-numbers label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-scout-numbers input,
+.dk-scout-add input {
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.dk-scout-numbers input {
+  width: calc(var(--x56) * 1.6);
+}
+
+.dk-scout-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-scout-today,
+.dk-scout-empty {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-scout-said {
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-scout-said--bad,
+.dk-scout-err {
+  color: var(--red);
+  font-size: var(--t-small);
+}
+
+.dk-scout-finds {
+  display: flex;
+  flex-direction: column;
+}
+
+.dk-scout-find {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--x12);
+  padding: var(--x10) 0;
+  border-bottom: var(--x1) solid var(--line);
+}
+
+.dk-scout-find:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 760px) {
+  .dk-scout-find {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+}
+
+.dk-scout-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--x32);
+  height: var(--x32);
+  border-radius: var(--r-pill);
+  background: var(--tone-ground, var(--card-3));
+  color: var(--tone, var(--ink-2));
+  font-weight: var(--w-semi);
+  font-variant-numeric: tabular-nums;
+}
+
+.dk-scout-what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+  min-width: 0;
+}
+
+.dk-scout-title {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-scout-title:hover {
+  text-decoration: underline;
+}
+
+.dk-scout-meta {
+  display: block;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-scout-state {
+  color: var(--tone, var(--ink-3));
+  font-size: var(--t-small);
+  white-space: nowrap;
+}
+
+.dk-scout-acts {
+  display: inline-flex;
+  gap: var(--x4);
+}
+
+.dk-scout-live {
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-scout-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x8);
+  margin-bottom: var(--x14);
+}
+
+.dk-scout-add input {
+  flex: 1;
+  min-width: calc(var(--x56) * 4);
+}
+
+.dk-scout-table {
+  overflow-x: auto;
+}
+
+.dk-scout-table table {
+  width: 100%;
+  font-size: var(--t-small);
+}
+
+.dk-scout-table th {
+  padding: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  font-weight: var(--w-medium);
+  letter-spacing: var(--track-label);
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.dk-scout-table td {
+  padding: var(--x8);
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-2);
+  vertical-align: top;
+}
+
+.dk-scout-table td:first-child {
+  max-width: calc(var(--x56) * 6);
+}

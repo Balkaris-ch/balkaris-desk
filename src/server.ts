@@ -1200,6 +1200,18 @@ interface TgCallback {
  * unanswered one leaves a spinner on the button.
  */
 async function chooseFormat(q: TgCallback): Promise<void> {
+  /* A Scout offer's button (News / Article / Skip): src/scout/index.ts. */
+  if (/^s:\d+:/.test(q.data ?? "")) {
+    try {
+      const chat = q.message?.chat.id;
+      if (!chat || !mayUse(chat, q.from.id).ok) return void (await answer(q.id));
+      const { answerOffer } = await import("./scout/index.ts");
+      return void (await answer(q.id, (await answerOffer(q.data ?? "", chat, { id: q.from.id, name: q.from.first_name ?? q.from.username ?? "someone" })) ?? undefined));
+    } catch (e) {
+      log("telegram.callback.failed", e instanceof Error ? e.message : String(e));
+      return void (await answer(q.id));
+    }
+  }
   try {
     const chat = q.message?.chat.id;
     const m = /^f:(\d+):([a-z]+)$/.exec(q.data ?? "");
@@ -1309,6 +1321,21 @@ app.post("/tg/:secret", async (c) => {
       if (command) {
         const { insightsSummary, inboxLines, topArticles } = await import("./botdata.ts");
         await send(chat, command === "insights" ? insightsSummary() : command === "inbox" ? inboxLines() : await topArticles());
+        return;
+      }
+
+      /* The Scout (src/scout/index.ts): /scout shows its state; "here" makes this chat the one that gets its offers and news; a mode word switches it, the owner only. */
+      const scout = /^\/scout(?:@\w+)?(?:\s+(here|auto|mix|select|off))?\b/i.exec(text);
+      if (scout) {
+        const sc = await import("./scout/index.ts");
+        const word = scout[1]?.toLowerCase();
+        const isOwner = msg.from?.id !== undefined && getPerson(msg.from.id)?.owner === true;
+        if (word === "here") sc.saveSettings({ chat });
+        else if (word && !isOwner) {
+          await send(chat, "Only the owner switches the Scout's mode.");
+          return;
+        } else if (word) sc.saveSettings({ mode: word as "auto" | "mix" | "select" | "off" });
+        await send(chat, `${word === "here" ? "This chat now gets the Scout's offers and news.\n\n" : ""}${sc.statusText()}`);
         return;
       }
 

@@ -106,8 +106,8 @@ console.log("\n1. a bare link");
 await share(ME, "https://example.test/one");
 let q = last("editMessageText");
 check("the reply ends on the question", String(q?.body.text).includes("How should I write it?"), String(q?.body.text).split("\n").at(-1));
-check("with four buttons", keysOf(q).length === 4, keysOf(q).map((k) => k.text).join(" | "));
-check("each carrying the link and a format", keysOf(q).every((k) => /^f:1:(standard|deep|technical|simple)$/.test(k.callback_data)));
+check("with five buttons (News added 15 October)", keysOf(q).length === 5, keysOf(q).map((k) => k.text).join(" | "));
+check("each carrying the link and a format", keysOf(q).every((k) => /^f:1:(standard|deep|technical|simple|news)$/.test(k.callback_data)));
 check("the link has no format yet", row(1).format === null);
 check("the bot's message is remembered", row(1).tg_msg !== null && Boolean(row(1).tg_text?.includes("Article one")));
 check("its job is held", job(1).not_before !== null && job(1).not_before! > job(1).now, `${job(1).not_before} > ${job(1).now}`);
@@ -138,7 +138,7 @@ check("two messages only: reading it, then what it is", sent.length - before ===
 
 console.log("\n4. nobody answers");
 await share(ME, "https://example.test/three");
-check("held, and asking", job(3).not_before !== null && keysOf(last("editMessageText")).length === 4);
+check("held, and asking", job(3).not_before !== null && keysOf(last("editMessageText")).length === 5);
 db.prepare("UPDATE jobs SET not_before = datetime('now', '-1 seconds') WHERE link_id = 3").run();
 got = await next();
 await wait(500);

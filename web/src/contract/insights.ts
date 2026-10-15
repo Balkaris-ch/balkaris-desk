@@ -13,7 +13,7 @@ import type { DayPoint, EarlySignals, Range, Reading, Stat } from "./common";
  */
 
 /** The strip under the tiles. Radar is the overview; every other tab is a filter of the same rows. */
-export type InsightTab = "radar" | "inbox" | "drafts" | "review" | "published" | "performance" | "opportunities" | "archive";
+export type InsightTab = "radar" | "inbox" | "drafts" | "review" | "published" | "performance" | "opportunities" | "scout" | "archive";
 
 /**
  * Where a piece stands. The first six are `ContentStatus` keys of the Badge

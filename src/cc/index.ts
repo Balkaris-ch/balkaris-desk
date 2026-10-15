@@ -70,6 +70,7 @@ const collectors: [string, () => Promise<{ jobs: Job[] }>][] = [
   ["The Vercel collector", () => import("./vercel/index.ts")],
   ["The SEO engine", () => import("./seo/index.ts")],
   ["The project highlights", () => import("./highlights.ts")],
+  ["The Scout", () => import("../scout/index.ts")],
 ];
 
 /* Written out one by one, not built from a name, so the typechecker follows

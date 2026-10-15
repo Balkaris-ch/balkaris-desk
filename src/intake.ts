@@ -88,6 +88,7 @@ export const formatKeys = (linkId: number): Keyboard => [
     { text: FORMATS.technical.button, data: `f:${linkId}:technical` },
     { text: FORMATS.simple.button, data: `f:${linkId}:simple` },
   ],
+  [{ text: FORMATS.news.button, data: `f:${linkId}:news` }],
 ];
 
 const ASK = "How should I write it? <i>No answer in a minute and a half and I write it the standard way.</i>";

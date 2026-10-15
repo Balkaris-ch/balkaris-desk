@@ -12,13 +12,15 @@ import { PerformancePanel } from "@/components/insights/PerformancePanel";
 import { QuickActions, RecommendationsPanel } from "@/components/insights/RecommendationsPanel";
 import { TopPanel } from "@/components/insights/TopPanel";
 import { TrafficPanel } from "@/components/insights/TrafficPanel";
-import { api } from "@/lib/api";
+import { api, ask } from "@/lib/api";
+import type { ScoutPayload } from "@/contract/scout";
+import { ScoutPanel } from "@/components/insights/ScoutPanel";
 import { parseRange } from "@/lib/format";
 import "@/components/insights/insights.css";
 
 export const metadata = { title: "Insights" };
 
-const TABS: InsightTab[] = ["radar", "inbox", "drafts", "review", "published", "performance", "opportunities", "archive"];
+const TABS: InsightTab[] = ["radar", "inbox", "drafts", "review", "published", "performance", "opportunities", "scout", "archive"];
 
 /** Which statuses each filtering tab holds. */
 const TAB_STATUS: Partial<Record<InsightTab, InsightStatus[]>> = {
@@ -67,6 +69,9 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
   const range = parseRange(view.range);
   const data = await api<InsightsPayload>("/api/v1/insights", { range, month: view.month, source: view.source, type: view.type, specimen: view.specimen });
 
+  /* The Scout's own request, only on its tab: a failure there costs the tab, never the screen. */
+  const scout = tab === "scout" ? await ask<ScoutPayload>("/api/v1/insights/scout") : null;
+
   const c = data.counts;
   const tabs: TabItem[] = [
     { key: "radar", label: "Radar", icon: "pulse", href: hrefOf(view, { tab: undefined }) },
@@ -76,6 +81,7 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
     { key: "published", label: "Published", href: hrefOf(view, { tab: "published", status: undefined }) },
     { key: "performance", label: "Performance", href: hrefOf(view, { tab: "performance" }) },
     { key: "opportunities", label: "Opportunities", count: c.opportunities, href: hrefOf(view, { tab: "opportunities" }) },
+    { key: "scout", label: "Scout", icon: "search", href: hrefOf(view, { tab: "scout", status: undefined }) },
     { key: "archive", label: "Archive", href: hrefOf(view, { tab: "archive", status: undefined }) },
   ];
 
@@ -150,6 +156,8 @@ export default async function InsightsPage({ searchParams }: { searchParams: Pro
         <PerformancePanel data={data} rows={filtered(data.table.rows, view, ["published", "review"])} />
       ) : tab === "opportunities" ? (
         <OpportunitiesPanel data={data} />
+      ) : tab === "scout" ? (
+        scout?.ok ? <ScoutPanel data={scout.value} /> : <p className="dk-scout-empty">The Scout did not answer: {scout?.message ?? "nothing came back"}.</p>
       ) : (
         <InsightsTable
           title={TAB_TITLE[tab] ?? "Insights"}

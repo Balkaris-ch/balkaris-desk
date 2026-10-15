@@ -488,6 +488,7 @@ const JOB_AREAS = new Map<string, readonly string[]>(
     engine: ["hosting", "site-health"],
     /* Visitors. */
     highlights: ["content"],
+    scout: ["insights"],
     "ga4-live": ["traffic", "conversions", "overview"],
     "ga4-warm": ["traffic", "conversions", "overview"],
     "clarity-daily": ["traffic", "conversions", "overview"],

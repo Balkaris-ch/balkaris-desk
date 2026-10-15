@@ -45,7 +45,7 @@ import type { TopicId } from "./catalogue.ts";
  * or plain is a decision about its reader, and the person who shared the link
  * is the one who knows who that is. Nothing here guesses it.
  */
-export type TemplateId = "commentary" | "explainer" | "practice" | "deep" | "technical" | "simple";
+export type TemplateId = "commentary" | "explainer" | "practice" | "deep" | "technical" | "simple" | "news";
 
 export interface Beat {
   /** The `##` in the finished article. `null` means it runs on from the last. */
@@ -150,7 +150,34 @@ const CLOSE: Beat[] = [
   last(40),
 ];
 
+/* News (Fini, 15 October 2026: a segment of its own, fed by the Scout and by
+   anyone who shares a link with the word "news"). Short and timely: what
+   happened, credited, then why it matters here. Named companies and people
+   are kept to what the source reports: a news piece about somebody in trouble
+   is where Swiss defamation law bites, so no opinion on them, only on what it
+   means for a business reading it. */
+const NEWS: Template = {
+  id: "news",
+  name: "News",
+  note: "Asked for, or found by the Scout: short and timely",
+  standfirst: "One sentence: what happened, and who it matters to.",
+  register: `THIS IS A NEWS PIECE.
+- Report what happened as the source reports it: who, what, when, attributed to the source by name. Nothing is added that the source does not say.
+- About a named company or person, state facts only, never a judgement of them: no "scandal", "disgrace", "failed", "lied" unless the source says it of them, and then quoted and attributed.
+- Our view is about what it means for a business reading it, never about the people involved.
+- Short sentences. Dates and figures exactly as the source gives them.`,
+  questions: 2,
+  floor: 220,
+  beats: [
+    { heading: null, brief: "What happened, in four or five sentences, attributed to the source by name: who, what, when. This is the ONLY place the source is summarised.", words: 85 },
+    { heading: "Why it matters", brief: "What this changes for a business in Switzerland that uses or is considering this kind of technology. Concrete, no hype; one short paragraph and, if it helps, two or three consequences as a list.", words: 95, allow: ["list"] },
+    { heading: "What to watch", brief: "What to look out for next, or what a business should check now. One short paragraph.", words: 60 },
+    last(30),
+  ],
+};
+
 const TEMPLATES: Record<TemplateId, Template> = {
+  news: NEWS,
   /* Something happened. Most shared links are this. */
   commentary: {
     id: "commentary",
@@ -463,13 +490,14 @@ export function pick(s: SourceFacts): { id: TemplateId; because: string } {
    and waits a minute and a half before writing the standard way, so a link
    shared and forgotten is still written. */
 
-export type Format = "standard" | "deep" | "technical" | "simple";
+export type Format = "standard" | "deep" | "technical" | "simple" | "news";
 
 export const FORMATS: Record<Format, { button: string; as: string; word: RegExp | null }> = {
   standard: { button: "Standard", as: "the standard way", word: /\b(standard|normal|usual)\b/i },
   deep: { button: "Long read", as: "as a long read", word: /\b(long|longer|long[ -]?read|in[ -]depth|deep(er)?( dive)?|detailed)\b/i },
   technical: { button: "Technical", as: "from the technical side", word: /\b(tech|technical|for (devs|developers|engineers))\b/i },
   simple: { button: "In plain words", as: "short and in plain words", word: /\b(simple|simpler|plain|short|shorter|eli5|for (a )?(kid|child|5[ -]?(yo|year[ -]old)))\b/i },
+  news: { button: "News", as: "as news", word: /\b(news|breaking)\b/i },
 };
 
 export const isFormat = (v: unknown): v is Format => typeof v === "string" && v in FORMATS;
@@ -484,7 +512,7 @@ export const isFormat = (v: unknown): v is Format => typeof v === "string" && v 
  */
 export function formatIn(typed: string): Format | null {
   const words = typed.replace(/https?:\/\/\S+/gi, " ");
-  for (const f of ["technical", "simple", "deep", "standard"] as const) {
+  for (const f of ["news", "technical", "simple", "deep", "standard"] as const) {
     if (FORMATS[f].word?.test(words)) return f;
   }
   return null;
