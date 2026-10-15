@@ -297,7 +297,8 @@ const EVERY_AREA: Record<string, string> = {
   traffic: "view",
   seo: "edit",
   pages: "view",
-  content: "view",
+  /* Edit on Content chooses the project highlights (15 October 2026). */
+  content: "edit",
   conversions: "view",
   leads: "view",
   experiments: "edit",
@@ -310,7 +311,7 @@ const EVERY_AREA: Record<string, string> = {
   "team/members": "view",
 };
 check(
-  "every area's page is open to them, with edit on Insights, SEO, Experiments, Automations and the AI Operator",
+  "every area's page is open to them, with edit on Insights, SEO, Content, Experiments, Automations and the AI Operator",
   Object.keys(EVERY_AREA).length === grants.AREAS.length && Object.entries(EVERY_AREA).every(([k, level]) => me.access.pages[k] === level) && grants.AREAS.find((x) => x.key === "seo")!.pages.every((p) => me.access.pages[p.key] === "edit"),
   JSON.stringify(Object.entries(EVERY_AREA).filter(([k, level]) => me.access.pages[k] !== level).map(([k]) => `${k}: ${me.access.pages[k]}`)),
 );
