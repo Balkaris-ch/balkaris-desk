@@ -129,7 +129,21 @@ async function tick(): Promise<void> {
   if (running) return;
   const now = Date.now();
   const first = asked.shift();
-  const next = (first && jobs.get(first)) || [...jobs.values()].find((j) => due(j, row(j.name), now));
+  /* The job that has waited longest past its time goes first. It used to be the
+     first due job in the order they were registered, and the frequent ones near
+     the top (the 2-minute probe, the engine, GA4 live) were due on nearly every
+     30-second tick: a job registered last, such as the Scout, waited for hours
+     (15 October 2026: registered, enabled, never started). */
+  const overdue = (j: Job): number => {
+    const r = row(j.name);
+    const last = r?.last_start ? Date.parse(r.last_start) : null;
+    return now - (last !== null ? last + j.every * 1000 : bootedAt + (j.delay ?? 20) * 1000);
+  };
+  const next =
+    (first && jobs.get(first)) ||
+    [...jobs.values()]
+      .filter((j) => due(j, row(j.name), now))
+      .sort((a, b) => overdue(b) - overdue(a))[0];
   if (!next) return;
   await runOne(next);
 }
