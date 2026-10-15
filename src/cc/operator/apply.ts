@@ -683,3 +683,13 @@ export const proposalRow = (id: number): ProposalRow | null => {
   const p = proposalById(id);
   return p ? shape(p, liveWords()) : null;
 };
+
+/**
+ * Any other change to the website's overrides file, through the same door:
+ * the same lock, the same refusal on a development copy, every other entry
+ * kept as it is. Used by the project highlights (cc/highlights.ts), which
+ * write the file's `highlights` key.
+ */
+export function changeOverridesFile(mutate: (o: Record<string, unknown>) => void, subject: string, body: string, by: Person): Promise<{ sha: string; changed: boolean }> {
+  return change((o) => void mutate(o as unknown as Record<string, unknown>), subject, body, by);
+}

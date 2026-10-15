@@ -162,7 +162,8 @@ export const AREAS: readonly Area[] = [
     pages: [{ key: "content", label: "Content" }],
     api: [`${V}/content`],
     console: ["/console"],
-    levels: ["none", "view"],
+    /* Edit chooses the project highlights, which commits to the website (cc/highlights.ts). */
+    levels: ["none", "view", "edit"],
   },
   {
     key: "conversions",
@@ -486,6 +487,7 @@ const JOB_AREAS = new Map<string, readonly string[]>(
     "vercel-status": ["hosting", "site-health"],
     engine: ["hosting", "site-health"],
     /* Visitors. */
+    highlights: ["content"],
     "ga4-live": ["traffic", "conversions", "overview"],
     "ga4-warm": ["traffic", "conversions", "overview"],
     "clarity-daily": ["traffic", "conversions", "overview"],

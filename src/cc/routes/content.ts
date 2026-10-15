@@ -725,3 +725,43 @@ const SPECIMEN_BING = (): Reading<BingKeywordRow[]> =>
     Date.now(),
     SPECIMEN_NOTE,
   );
+
+/* ---------- the project highlights (cc/highlights.ts) --------------------------- */
+
+/**
+ * GET  /highlights   the live projects with their views and dates, the
+ *                    settings, the order those settings give now, and what
+ *                    the website was last given.
+ * POST /highlights   { places: { home|digital|growth|studio: { mode, pick[] } }, perPractice }
+ *                    saves the settings and commits the order to the website.
+ *                    Committing changes the live site, so it takes the right to
+ *                    publish, as an article does.
+ */
+routes.get("/highlights", async (c) => {
+  const hl = await import("../highlights.ts");
+  const s = hl.settings();
+  const { list, error } = await hl.projects();
+  return c.json({ settings: s, projects: list, resolved: hl.resolve(list, s), written: hl.written(), error });
+});
+
+routes.post("/highlights", async (c) => {
+  const hl = await import("../highlights.ts");
+  const who = me(c);
+  if (!who.canPublish) return c.json({ error: "Changing the highlights commits to the website, so it takes the right to publish (an email Vercel knows, and edit on Insights)." }, 403);
+  const body = (await c.req.json().catch(() => null)) as Partial<import("../highlights.ts").Settings> | null;
+  if (!body || typeof body !== "object" || !body.places) return c.json({ error: "Send { places, perPractice }." }, 400);
+  /* Saved through the same reading as a stored setting, so whatever was sent is cleaned the same way. */
+  hl.saveSettings({ places: body.places, perPractice: Number(body.perPractice ?? 2) } as import("../highlights.ts").Settings);
+  const s = hl.settings();
+  hl.saveSettings(s);
+  const { list, error } = await hl.projects();
+  if (error) return c.json({ error }, 409);
+  try {
+    const r = hl.resolve(list, s);
+    const out = await hl.publishHighlights(r, who);
+    return c.json({ ok: true, line: out.line, resolved: r });
+  } catch (e) {
+    const status = typeof (e as { status?: unknown }).status === "number" ? ((e as { status: number }).status as 409) : 502;
+    return c.json({ error: e instanceof Error ? e.message : String(e) }, status);
+  }
+});

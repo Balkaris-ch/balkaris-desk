@@ -4,7 +4,9 @@ import { SparkBars } from "@/components/charts";
 import { Grid } from "@/components/ui/Grid";
 import { Icon } from "@/components/ui/icons";
 import { Tile, Tiles } from "@/components/ui/Tile";
-import { api } from "@/lib/api";
+import { api, ask } from "@/lib/api";
+import type { HighlightsPayload } from "@/contract/highlights";
+import { HighlightsPanel } from "@/components/content/HighlightsPanel";
 import {
   BingPanel,
   CoveragePanel,
@@ -33,6 +35,8 @@ type Search = Promise<Record<string, string | string[] | undefined>>;
 export default async function ContentPage({ searchParams }: { searchParams: Search }) {
   const view = readView(await searchParams);
   const data = await api<ContentPayload>("/api/v1/content", { range: view.range, specimen: view.specimen ? 1 : null });
+  /* Its own request: a failure there costs this one card, never the screen. */
+  const highlights = await ask<HighlightsPayload>("/api/v1/content/highlights");
   const t = data.tiles;
   const lim = data.limits;
 
@@ -91,6 +95,8 @@ export default async function ContentPage({ searchParams }: { searchParams: Sear
         <BingPanel reading={data.bing} view={view} />
         <QuickActions crawl={data.crawl} canCreate={data.canCreate} view={view} />
       </Grid>
+
+      {highlights.ok ? <HighlightsPanel data={highlights.value} /> : null}
     </>
   );
 }

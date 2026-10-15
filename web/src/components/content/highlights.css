@@ -1,0 +1,170 @@
+/* Project highlights (HighlightsPanel). Tokens only: both themes follow. */
+
+.dk-hl-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-hl-count select {
+  height: var(--ctl-sm);
+  padding: 0 var(--x8);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.dk-hl-note {
+  margin-bottom: var(--x12);
+  color: var(--ink-3);
+}
+
+.dk-hl-places {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--gap);
+}
+
+@media (max-width: 1200px) {
+  .dk-hl-places {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .dk-hl-places {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-hl-place {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x10);
+  padding: var(--x14);
+  border: var(--x1) solid var(--line);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+}
+
+.dk-hl-head h3 {
+  font-size: var(--t-title);
+}
+
+.dk-hl-head p {
+  margin-top: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-hl-modes {
+  display: inline-flex;
+  gap: var(--x2);
+  padding: var(--x2);
+  border-radius: var(--r-field);
+  background: var(--card);
+}
+
+.dk-hl-mode {
+  flex: 1;
+  height: var(--ctl-xs);
+  padding: 0 var(--x10);
+  border-radius: var(--r-chip);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  font-weight: var(--w-medium);
+}
+
+.dk-hl-mode:hover {
+  background: var(--hover);
+  color: var(--ink);
+}
+
+.dk-hl-mode--on,
+.dk-hl-mode--on:hover {
+  background: var(--tab-on);
+  color: var(--ink);
+}
+
+.dk-hl-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+}
+
+.dk-hl-row {
+  display: flex;
+  align-items: center;
+  gap: var(--x10);
+  min-height: var(--table-row);
+  padding: var(--x4) var(--x8);
+  border-radius: var(--r-chip);
+}
+
+.dk-hl-row--shown {
+  background: var(--green-3);
+}
+
+.dk-hl-dot {
+  display: inline-flex;
+  flex: none;
+  width: var(--x16);
+  color: var(--green);
+}
+
+.dk-hl-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.dk-hl-name a {
+  overflow: hidden;
+  color: var(--ink);
+  font-weight: var(--w-medium);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dk-hl-name a:hover {
+  text-decoration: underline;
+}
+
+.dk-hl-meta {
+  color: var(--ink-3);
+  font-size: var(--t-label);
+}
+
+.dk-hl-move {
+  display: inline-flex;
+  flex: none;
+}
+
+.dk-hl-why {
+  margin-top: auto;
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-hl-why b {
+  color: var(--ink);
+  font-weight: var(--w-semi);
+}
+
+.dk-hl-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x12);
+  margin-top: var(--x16);
+}
+
+.dk-hl-said {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
