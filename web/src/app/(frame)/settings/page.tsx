@@ -1,3 +1,4 @@
+import type { AiState } from "@/contract/ai";
 import type { SettingsPayload, SettingsTab } from "@/contract/settings";
 import { PageHead } from "@/components/shell/PageHead";
 import { Tabs, type TabItem } from "@/components/ui/Tabs";
@@ -7,7 +8,7 @@ import { PeopleSection } from "@/components/settings/People";
 import { SourcesSection } from "@/components/settings/Sources";
 import { TabsInView } from "@/components/settings/TabsInView";
 import { WritingSection } from "@/components/settings/Writing";
-import { api } from "@/lib/api";
+import { api, ask, me } from "@/lib/api";
 import "@/components/settings/settings.css";
 
 export const metadata = { title: "Settings" };
@@ -32,6 +33,8 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
   const tab: SettingsTab = TABS.find((t) => t === asked) ?? "people";
 
   const data = await api<SettingsPayload>("/api/v1/settings");
+  /* The AI switch has its own request, only on its tab: a failure there costs the card, never the screen. */
+  const [ai, who] = tab === "writing" ? await Promise.all([ask<AiState>("/api/v1/ai"), me()]) : [null, null];
   const steps = data.sources.state === "ok" ? data.sources.value.steps.length : null;
   const domain = data.access.state === "ok" ? data.access.value.domain : "balkaris.ch";
 
@@ -61,7 +64,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Sea
       {tab === "people" ? <PeopleSection people={data.people} domain={domain} /> : null}
       {tab === "sources" ? <SourcesSection sources={data.sources} account={data.account} keyEvents={data.keyEvents} quota={data.quota} /> : null}
       {tab === "access" ? <AccessSection me={data.me} people={data.people} access={data.access} /> : null}
-      {tab === "writing" ? <WritingSection writing={data.writing} runner={data.runner} /> : null}
+      {tab === "writing" ? <WritingSection writing={data.writing} runner={data.runner} ai={ai} owner={who?.owner === true} /> : null}
       {tab === "about" ? <AboutSection versions={data.versions} server={data.server} /> : null}
     </>
   );

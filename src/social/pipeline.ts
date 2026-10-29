@@ -116,7 +116,7 @@ For each slide IN ORDER, say what it actually shows and what it argues — read
 the words that are on the image. One short paragraph per slide, numbered from
 ${i + 1}. Do not invent a slide that is not here and do not summarise them all
 together.`,
-      { model: QUICK_MODEL, images, temperature: 0.2, timeoutMs: 180_000 },
+      { model: QUICK_MODEL, images, temperature: 0.2, timeoutMs: 180_000, purpose: "carousel" },
     );
     reads.push(res.text.trim());
   }

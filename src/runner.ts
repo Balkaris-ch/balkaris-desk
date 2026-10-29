@@ -6,7 +6,7 @@ import { classify, expandUrl, resolve } from "./social/resolve.ts";
 import { fetchMedia, probe } from "./social/media.ts";
 import { makePreview } from "./social/preview.ts";
 import { draft, type DraftInput } from "./draft.ts";
-import { health, WRITE_MODEL } from "./llm.ts";
+import { health, useDesk, WRITE_MODEL } from "./llm.ts";
 import { match } from "./match.ts";
 import { takeSocial } from "./social/pipeline.ts";
 import { proseOf } from "./blocks.ts";
@@ -51,6 +51,7 @@ function secret(): string {
 }
 
 const SECRET = secret();
+useDesk(DESK, SECRET);
 
 /** Quiet when there is nothing, patient when the box is down. */
 const IDLE_MS = 20_000;

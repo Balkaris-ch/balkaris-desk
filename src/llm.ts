@@ -1,11 +1,16 @@
 /**
- * The one door to a model, and it only opens onto this machine.
+ * The one door to a model.
  *
- * Fini, 22 September 2026: no Anthropic keys here. So there is no Anthropic
- * client in this repo, no `ANTHROPIC_API_KEY` in `.env.example`, and `ask()`
- * throws on a model name that is not local rather than quietly reaching for a
- * paid API the way sm-fixed's provider can. A blog post from the desk costs
- * electricity; that is the whole reason the desk exists.
+ * Fini, 22 September 2026: no Anthropic keys here, and that still holds for
+ * THIS machine: no key on the workstation, and `ask()` throws on a hosted
+ * model name rather than reaching for a paid API by itself. Fini, 29 October
+ * 2026: the desk may write with Anthropic when the owner switches it on. So
+ * `ask()` first asks the desk which is switched on (GET /runner/ai, at most
+ * once a minute). On "anthropic" the call goes to the desk (POST
+ * /runner/ai/ask), which calls Claude with the key that stays on the box and
+ * counts every dollar against the month's budget (src/ai/claude.ts). Anything
+ * but an answer from there (switched back, budget spent, Claude failing, the
+ * desk away) and the call is answered here by Ollama, as it always was.
  *
  * Ollama's `format` takes a JSON Schema and constrains generation to it, so a
  * structured answer is a parse and not a hope. It is not perfect — a small
@@ -37,6 +42,69 @@ export interface AskOptions {
   images?: string[];
   /** How many times this call has already waited for Ollama to come back. Internal. */
   waited?: number;
+  /** For the desk's spend record when Anthropic answers: "write", "operator", "carousel". */
+  purpose?: string;
+  /** Ollama only, whatever the switch says. Internal: the fallback after Anthropic failed. */
+  local?: boolean;
+}
+
+/* ---------- the switch: local or Anthropic -------------------------------- */
+
+let desk: { url: string; secret: string } | null = null;
+/** The runner tells this module where the desk is, once, at start. Without it every call is local. */
+export function useDesk(url: string, secret: string): void {
+  desk = { url: url.replace(/\/$/, ""), secret };
+}
+
+let mode: { at: number; provider: "local" | "anthropic" } | null = null;
+export async function aiProvider(): Promise<"local" | "anthropic"> {
+  if (!desk) return "local";
+  if (mode && Date.now() - mode.at < 60_000) return mode.provider;
+  let p: "local" | "anthropic" = "local";
+  try {
+    const res = await fetch(`${desk.url}/runner/ai`, { headers: { authorization: `Bearer ${desk.secret}` }, signal: AbortSignal.timeout(10_000) });
+    if (res.ok) p = ((await res.json()) as { provider?: string }).provider === "anthropic" ? "anthropic" : "local";
+  } catch {
+    /* the desk away: write locally */
+  }
+  if (p !== mode?.provider) console.log(p === "anthropic" ? "  the desk says: write with Anthropic" : "  the desk says: write locally");
+  mode = { at: Date.now(), provider: p };
+  return p;
+}
+
+/** The call, answered by Claude through the desk. Null means "answer it locally". */
+async function viaDesk(prompt: string, opts: AskOptions): Promise<AskResult | null> {
+  if (!desk) return null;
+  try {
+    const res = await fetch(`${desk.url}/runner/ai/ask`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${desk.secret}` },
+      body: JSON.stringify({
+        prompt,
+        system: opts.system,
+        schema: opts.schema ?? null,
+        images: opts.images,
+        quick: opts.model === QUICK_MODEL,
+        purpose: opts.purpose,
+      }),
+      signal: AbortSignal.timeout(Math.max(opts.timeoutMs ?? 0, 300_000) + 30_000),
+    });
+    if (res.status === 409) {
+      mode = { at: Date.now(), provider: "local" };
+      console.log(`  Anthropic is off now (${((await res.json().catch(() => ({}))) as { why?: string }).why ?? "switched back"}): writing locally`);
+      return null;
+    }
+    if (!res.ok) {
+      console.log(`  Claude did not answer (${((await res.json().catch(() => ({}))) as { error?: string }).error ?? res.status}): writing this one locally`);
+      return null;
+    }
+    const r = (await res.json()) as AskResult;
+    answered.set(r.model, (answered.get(r.model) ?? 0) + 1);
+    return { text: r.text, model: r.model, ms: r.ms, tokensIn: r.tokensIn, tokensOut: r.tokensOut };
+  } catch (e) {
+    console.log(`  the desk did not pass the call to Claude (${e instanceof Error ? e.message : String(e)}): writing this one locally`);
+    return null;
+  }
 }
 
 /* Ollama updates itself (Fini, 14 October 2026: keep it so). While it does,
@@ -117,6 +185,11 @@ async function writeModelFits(): Promise<{ ok: boolean; why: string }> {
 }
 
 export async function ask(prompt: string, opts: AskOptions = {}): Promise<AskResult> {
+  if (!opts.local && !opts.waited && (await aiProvider()) === "anthropic") {
+    const got = await viaDesk(prompt, opts);
+    if (got) return got;
+    opts = { ...opts, local: true };
+  }
   const asked = opts.model ?? WRITE_MODEL;
   let model = asked;
   if (asked === WRITE_MODEL && WRITE_MODEL !== QUICK_MODEL) {

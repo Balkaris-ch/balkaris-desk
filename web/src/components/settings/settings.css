@@ -652,3 +652,171 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Settings › Writing › AI writer (AiWriter). Tokens only: both themes follow. */
+
+.dk-ai-wrap {
+  margin-bottom: var(--gap);
+}
+
+.dk-ai-spend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  margin: var(--x12) 0 var(--x16);
+}
+
+.dk-ai-bar {
+  height: var(--x8);
+  overflow: hidden;
+  border-radius: var(--r-pill);
+  background: var(--card-3);
+}
+
+.dk-ai-bar span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--green-2);
+}
+
+.dk-ai-bar .dk-ai-bar--warn {
+  background: var(--amber);
+}
+
+.dk-ai-bar .dk-ai-bar--bad {
+  background: var(--red);
+}
+
+.dk-ai-spend-line,
+.dk-ai-note {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-ai-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x16);
+}
+
+.dk-ai-choice {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--x8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+@media (max-width: 640px) {
+  .dk-ai-choice {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dk-ai-choice legend {
+  margin-bottom: var(--x8);
+  color: var(--ink-3);
+  font-size: var(--t-label);
+  letter-spacing: var(--track-label);
+  text-transform: uppercase;
+}
+
+.dk-ai-option {
+  display: flex;
+  gap: var(--x10);
+  padding: var(--x12);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  cursor: pointer;
+}
+
+.dk-ai-option:has(input:checked) {
+  border-color: var(--green-4);
+  background: var(--tab-on);
+}
+
+.dk-ai-choice:disabled .dk-ai-option {
+  cursor: default;
+}
+
+.dk-ai-option input {
+  margin-top: var(--x2);
+  accent-color: var(--green-2);
+}
+
+.dk-ai-option span {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x2);
+}
+
+.dk-ai-option b {
+  color: var(--ink);
+}
+
+.dk-ai-option small {
+  color: var(--ink-3);
+  font-size: var(--t-small);
+  line-height: var(--lh-snug);
+}
+
+.dk-ai-numbers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--x16);
+}
+
+.dk-ai-numbers label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--x4);
+  color: var(--ink-3);
+  font-size: var(--t-small);
+}
+
+.dk-ai-numbers input,
+.dk-ai-numbers select {
+  height: var(--ctl-sm);
+  padding: 0 var(--x10);
+  border: var(--x1) solid var(--line-2);
+  border-radius: var(--r-field);
+  background: var(--card-2);
+  color: var(--ink);
+}
+
+.dk-ai-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--x12);
+}
+
+.dk-ai-said {
+  color: var(--green);
+  font-size: var(--t-small);
+}
+
+.dk-ai-said--bad {
+  color: var(--red);
+}
+
+.dk-ai-recent {
+  display: flex;
+  flex-direction: column;
+  margin: var(--x16) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--t-small);
+}
+
+.dk-ai-recent li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto auto;
+  gap: var(--x12);
+  padding: var(--x6) 0;
+  border-top: var(--x1) solid var(--line);
+  color: var(--ink-2);
+}

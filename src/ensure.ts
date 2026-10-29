@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
-import { OLLAMA_URL } from "./llm.ts";
+import { aiProvider, OLLAMA_URL } from "./llm.ts";
 
 /**
  * Turn the machine on.
@@ -318,6 +318,9 @@ export async function ensureFor(kind: string): Promise<{ ok: boolean; why?: stri
       ? { ok: true }
       : { ok: false, why: "ComfyUI would not start, so there is no cover yet" };
   }
+  /* Writing with Anthropic (src/llm.ts): the card stays with whoever has it, ComfyUI included.
+     Ollama is only the fallback then, and a call that falls back starts it itself. */
+  if (kind === "write" && (await aiProvider()) === "anthropic") return { ok: true };
   await freeComfy();
   return (await ensureOllama()) ? { ok: true } : { ok: false, why: "Ollama would not start" };
 }

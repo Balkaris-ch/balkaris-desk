@@ -1,3 +1,4 @@
+import type { AiState } from "@/contract/ai";
 import type { Reading } from "@/contract/common";
 import type { SettingsRunner, SettingsWriting } from "@/contract/settings";
 import { Badge } from "@/components/ui/Badge";
@@ -7,6 +8,8 @@ import { Read } from "@/components/ui/Read";
 import { Stamp } from "@/components/ui/Stamp";
 import { StatusDot } from "@/components/ui/StatusDot";
 import { ago, fullDate, num } from "@/lib/format";
+import type { Answer } from "@/lib/api";
+import { AiWriter } from "./AiWriter";
 import { Code, Facts, Prose } from "./parts";
 
 function PublishingCard({ writing }: { writing: Reading<SettingsWriting> }) {
@@ -125,12 +128,35 @@ function RunnerCard({ runner }: { runner: Reading<SettingsRunner> }) {
   );
 }
 
-/** WRITING: whether articles publish themselves, and the machine that writes them. */
-export function WritingSection({ writing, runner }: { writing: Reading<SettingsWriting>; runner: Reading<SettingsRunner> }) {
+/** WRITING: what writes (local or Anthropic), whether articles publish themselves, and the machine that writes them. */
+export function WritingSection({
+  writing,
+  runner,
+  ai,
+  owner,
+}: {
+  writing: Reading<SettingsWriting>;
+  runner: Reading<SettingsRunner>;
+  ai: Answer<AiState> | null;
+  owner: boolean;
+}) {
   return (
-    <Grid cols="1.25fr 1fr">
-      <PublishingCard writing={writing} />
-      <RunnerCard runner={runner} />
-    </Grid>
+    <>
+      {ai ? (
+        <div className="dk-ai-wrap">
+          {ai.ok ? (
+            <AiWriter ai={ai.value} owner={owner} />
+          ) : (
+            <Card title="AI writer" icon="cpu">
+              <p className="dk-ai-note">The AI switch could not be read: {ai.message}</p>
+            </Card>
+          )}
+        </div>
+      ) : null}
+      <Grid cols="1.25fr 1fr">
+        <PublishingCard writing={writing} />
+        <RunnerCard runner={runner} />
+      </Grid>
+    </>
   );
 }

@@ -1121,6 +1121,38 @@ runner.post("/op/result/:id", async (c) => {
   }
 });
 
+/* ---------- the AI switch (src/ai/claude.ts) ----------------------------------
+   The workstation asks GET /ai about once a minute: "local" and it uses
+   Ollama as always; "anthropic" and it sends each model call to POST /ai/ask,
+   where the desk calls Claude with the key that never leaves this box. A 409
+   means "write locally after all" (switched back, budget spent, no key).    */
+
+runner.get("/ai", async (c) => {
+  try {
+    const ai = await import("./ai/claude.ts");
+    const e = ai.effective();
+    return c.json({ provider: e.provider, why: e.why, model: ai.settings().model });
+  } catch (e) {
+    console.error("ai: reading the switch failed:", e);
+    return c.json({ provider: "local", why: "the desk could not read its AI switch" });
+  }
+});
+
+runner.post("/ai/ask", async (c) => {
+  const q = (await c.req.json().catch(() => null)) as { prompt?: string; system?: string; schema?: Record<string, unknown> | null; images?: string[]; quick?: boolean; purpose?: string } | null;
+  if (!q || typeof q.prompt !== "string" || !q.prompt) return c.json({ error: "Send { prompt }." }, 400);
+  const ai = await import("./ai/claude.ts");
+  const e = ai.effective();
+  if (e.provider !== "anthropic") return c.json({ use: "local", why: e.why ?? "the switch is on local" }, 409);
+  try {
+    return c.json(await ai.claudeAsk({ prompt: q.prompt, system: q.system, schema: q.schema, images: q.images, quick: q.quick, purpose: q.purpose }));
+  } catch (err) {
+    const why = err instanceof Error ? err.message : String(err);
+    console.warn(`ai: Claude failed (${why.slice(0, 200)}); the workstation writes it locally`);
+    return c.json({ error: why.slice(0, 300) }, 502);
+  }
+});
+
 runner.all("/fetch/*", (c) => import("./cc/seo/web/door.ts").then((m) => m.fetchDoor(c), () => c.json({ task: null, error: "The fetch door did not load. The reason is in the desk's log." }, 503)));
 app.route("/runner", runner);
 
@@ -1336,6 +1368,23 @@ app.post("/tg/:secret", async (c) => {
           return;
         } else if (word) sc.saveSettings({ mode: word as "auto" | "mix" | "select" | "off" });
         await send(chat, `${word === "here" ? "This chat now gets the Scout's offers and news.\n\n" : ""}${sc.statusText()}`);
+        return;
+      }
+
+      /* The AI switch (src/ai/claude.ts): /ai shows what writes and the month's spend; /ai local or /ai anthropic switches it, the owner only. */
+      const aiCmd = /^\/ai(?:@\w+)?(?:\s+(local|anthropic|claude))?\b/i.exec(text);
+      if (aiCmd) {
+        const ai = await import("./ai/claude.ts");
+        const word = aiCmd[1]?.toLowerCase();
+        if (word && !(msg.from?.id !== undefined && getPerson(msg.from.id)?.owner === true)) {
+          await send(chat, "Only the owner switches what the desk writes with.");
+          return;
+        }
+        if (word) {
+          const next = ai.saveSettings({ provider: word === "local" ? "local" : "anthropic" });
+          log("ai.settings", { by: getPerson(msg.from!.id)?.name ?? "Telegram", ...next });
+        }
+        await send(chat, ai.statusText());
         return;
       }
 

@@ -122,6 +122,7 @@ async function answer(o: OperatorWork, t: Handed, say: (line: string) => void): 
       ...(t.schema ? { schema: t.schema } : {}),
       temperature: t.temperature,
       timeoutMs: t.timeoutMs,
+      purpose: "operator",
     });
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
